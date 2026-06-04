@@ -3051,8 +3051,8 @@ export default function FolgasView({
                   {/* Brand hapvida logo */}
                   <div className="flex items-center gap-2.5">
                     <svg className="w-10 h-10" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M50 85C50 85 85 58 85 36C85 19 71 10 57 10C48 10 42 15 40 18C38 15 32 10 23 10C9 10 -5 19 -5 36C-5 58 50 85 50 85Z" fill="#0079C1"/>
-                      <path d="M50 72C50 72 75 50 75 34C75 22 65 15 55 15C48 15 42 19 40 22C38 19 32 15 25 15C15 15 5 22 5 34C5 50 50 72 50 72Z" fill="#00AAA0"/>
+                      <path d="M50 85C50 85 85 58 85 36C85 19 71 10 57 10C48 10 52 18 50 20C48 18 52 10 43 10C29 10 15 19 15 36C15 58 50 85 50 85Z" fill="#0079C1"/>
+                      <path d="M50 72C50 72 75 50 75 34C75 22 65 15 55 15C48 15 52 19 50 21C48 19 52 15 45 15C35 15 25 22 25 34C25 50 50 72 50 72Z" fill="#00AAA0"/>
                     </svg>
                     <div>
                       <span className="font-extrabold text-2xl tracking-tight leading-none block">
@@ -3406,13 +3406,14 @@ export default function FolgasView({
                       </div>
                     );
                   })() : (
-                    ['Diurno A', 'Diurno B', 'Noturno A', 'Noturno B'].map((shiftName) => {
+                    ['Diurno A', 'Diurno B', 'Noturno A', 'Noturno B', 'Diarista'].map((shiftName) => {
                     const belongsToShift = (colab: Colaborador, sName: string) => {
                       const eq = colab.equipe?.toLowerCase() || '';
                       if (sName === 'Diurno A') return eq === 'diurno a' || eq === 'turno diurno a' || eq.includes('diurno a');
                       if (sName === 'Diurno B') return eq === 'diurno b' || eq === 'turno diurno b' || eq.includes('diurno b');
                       if (sName === 'Noturno A') return eq === 'noturno a' || eq === 'turno noturno a' || eq.includes('noturno a');
                       if (sName === 'Noturno B') return eq === 'noturno b' || eq === 'turno noturno b' || eq.includes('noturno b');
+                      if (sName === 'Diarista') return eq === 'diário' || eq === 'diario' || eq === 'diarista' || eq.includes('diário') || eq.includes('diario') || eq.includes('diarista');
                       return false;
                     };
 

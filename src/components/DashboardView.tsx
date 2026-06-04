@@ -3,22 +3,30 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import { 
   Users, Stethoscope, AlertTriangle, UserCheck, 
-  CalendarClock, TrendingUp, Hospital, Building2 
+  CalendarClock, TrendingUp, Hospital, Building2, Palmtree 
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts';
-import { Colaborador, Absenteismo } from '../types';
+import { Colaborador, Absenteismo, Ferias } from '../types';
 import { CID_NATIVO } from '../data/mockData';
 
 interface DashboardViewProps {
   colaboradores: Colaborador[];
   absenteismo: Absenteismo[];
   onNavigate: (view: string) => void;
+  dynamicSelos?: string[];
+  ferias?: Ferias[];
 }
 
-export default function DashboardView({ colaboradores, absenteismo, onNavigate }: DashboardViewProps) {
+export default function DashboardView({ 
+  colaboradores, 
+  absenteismo, 
+  onNavigate,
+  dynamicSelos = [],
+  ferias = []
+}: DashboardViewProps) {
   
   // 1. KPI Helpers
   const totalActivos = colaboradores.length;
@@ -51,9 +59,45 @@ export default function DashboardView({ colaboradores, absenteismo, onNavigate }
   }, [absenteismo]);
 
   // Special committees and commissions counts
-  const totalEtica = useMemo(() => colaboradores.filter(c => c.selo_etica === 'Sim').length, [colaboradores]);
-  const totalBrigada = useMemo(() => colaboradores.filter(c => c.selo_brigadista === 'Sim' || c.brigada > 0).length, [colaboradores]);
-  const totalCipa = useMemo(() => colaboradores.filter(c => c.selo_cipa === 'Sim' || c.eleicao > 0).length, [colaboradores]);
+  const totalEtica = useMemo(() => {
+    return colaboradores.filter(c => c.selo_etica === 'Sim' || c.selos_adicionais?.includes('Comissão de Ética')).length;
+  }, [colaboradores]);
+
+  const totalBrigada = useMemo(() => {
+    return colaboradores.filter(c => c.selo_brigadista === 'Sim' || c.brigada > 0 || c.selos_adicionais?.includes('Brigadista') || c.selos_adicionais?.includes('Brigadistas Emergência')).length;
+  }, [colaboradores]);
+
+  const totalCipa = useMemo(() => {
+    return colaboradores.filter(c => c.selo_cipa === 'Sim' || c.eleicao > 0 || c.selos_adicionais?.includes('CIPA') || c.selos_adicionais?.includes('Membros da CIPA')).length;
+  }, [colaboradores]);
+
+  // Active vacations tracker indicator
+  const totalFeriasAtivas = useMemo(() => {
+    if (!ferias || ferias.length === 0) return 0;
+    const hoje = new Date().toISOString().split('T')[0];
+    return ferias.filter(f => f.status === 'Aprovado' && hoje >= f.dataInicio && hoje <= f.dataFim).length;
+  }, [ferias]);
+
+  // Render any custom dynamic seals
+  const dynamicSeloCards = useMemo(() => {
+    if (!dynamicSelos || dynamicSelos.length === 0) return null;
+    return dynamicSelos.map(selo => {
+      const count = colaboradores.filter(c => c.selos_adicionais?.includes(selo)).length;
+      const initials = selo.substring(0, 3).toUpperCase();
+      return (
+        <div key={`ds-card-${selo}`} className="bg-white p-4 rounded-xl border border-sky-100 shadow-xs flex items-center gap-3.5 hover:border-sky-200 transition">
+          <div className="w-10 h-10 bg-sky-50 text-sky-650 rounded-lg flex items-center justify-center shrink-0">
+            <span className="font-extrabold text-xs font-sans text-sky-650">{initials}</span>
+          </div>
+          <div>
+            <span className="text-[10px] text-slate-400 font-bold uppercase block tracking-wider truncate max-w-[130px]" title={selo}>{selo}</span>
+            <span className="text-lg font-black text-sky-950">{count} <span className="text-[10px] font-bold text-sky-700 font-sans">Membro{count !== 1 ? 's' : ''}</span></span>
+            <span className="text-[9px] text-slate-450 font-semibold block uppercase font-sans">Selo Dinâmico</span>
+          </div>
+        </div>
+      );
+    });
+  }, [dynamicSelos, colaboradores]);
 
   // Turnover tracking via termination date
   const totalDesligamentos = useMemo(() => {
@@ -174,7 +218,7 @@ export default function DashboardView({ colaboradores, absenteismo, onNavigate }
       </div>
 
       {/* Primary KPI Grid: HR & Absenteismo Indicators */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5">
         
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4 hover:shadow-md transition">
           <div className="w-12 h-12 bg-sky-50 text-sky-600 rounded-xl flex items-center justify-center shrink-0">
@@ -194,7 +238,23 @@ export default function DashboardView({ colaboradores, absenteismo, onNavigate }
           <div>
             <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block">Afastamentos INSS</span>
             <span className="text-2xl font-extrabold text-slate-800 tracking-tight">{totalInss}</span>
-            <span className="text-[10px] text-indigo-600 font-bold block bg-indigo-50 px-1 py-0.5 rounded border border-indigo-100 inline-block mt-0.5">Licença Ativa</span>
+            <span className="text-[10px] text-indigo-600 font-bold block bg-indigo-55 px-1 py-0.5 rounded border border-indigo-100 inline-block mt-0.5">Licença Ativa</span>
+          </div>
+        </div>
+
+        <div className="bg-white p-5 rounded-2xl border border-slate-250 shadow-sm flex items-center gap-4 hover:shadow-md transition">
+          <div className="w-12 h-12 bg-pink-50 text-pink-650 rounded-xl flex items-center justify-center shrink-0">
+            <Palmtree className="w-6 h-6 text-pink-600" />
+          </div>
+          <div>
+            <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block">Colaboradores de Férias</span>
+            <span className="text-2xl font-extrabold text-slate-800 tracking-tight text-pink-700">{totalFeriasAtivas} <span className="text-xs text-slate-450 font-bold">Ativa(s)</span></span>
+            <button 
+              onClick={() => onNavigate('ferias')} 
+              className="text-[9px] text-pink-600 hover:text-pink-700 font-extrabold block bg-pink-50 px-1.5 py-0.5 rounded border border-pink-100 mt-0.5 transition cursor-pointer"
+            >
+              Ver Períodos 🌴
+            </button>
           </div>
         </div>
 
@@ -206,7 +266,7 @@ export default function DashboardView({ colaboradores, absenteismo, onNavigate }
             <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block">Desligamentos (Turnover)</span>
             <span className="text-2xl font-extrabold text-slate-800 tracking-tight">{indiceDesligamento}</span>
             <span className="text-[10px] text-rose-600 font-bold block bg-rose-50 px-1 py-0.5 rounded border border-rose-100 inline-block mt-0.5">
-              {totalDesligamentos} Saída{totalDesligamentos !== 1 ? 's' : ''} Programada{totalDesligamentos !== 1 ? 's' : ''}
+              {totalDesligamentos} Saída{totalDesligamentos !== 1 ? 's' : ''}
             </span>
           </div>
         </div>
@@ -225,7 +285,7 @@ export default function DashboardView({ colaboradores, absenteismo, onNavigate }
       </div>
 
       {/* Secondary KPI Grid: Institutional Committees & Commissions */}
-      <div className="bg-slate-50 p-4.5 rounded-2xl border border-slate-200/60 grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="bg-slate-50 p-4.5 rounded-2xl border border-slate-200/60 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
         
         <div className="bg-white p-4 rounded-xl border border-purple-100 shadow-xs flex items-center gap-3.5 hover:border-purple-200 transition">
           <div className="w-10 h-10 bg-purple-50 text-purple-600 rounded-lg flex items-center justify-center shrink-0">
@@ -259,6 +319,8 @@ export default function DashboardView({ colaboradores, absenteismo, onNavigate }
             <span className="text-[9px] text-emerald-600 font-semibold block uppercase font-sans">Segurança Trabalho</span>
           </div>
         </div>
+
+        {dynamicSeloCards}
 
       </div>
 

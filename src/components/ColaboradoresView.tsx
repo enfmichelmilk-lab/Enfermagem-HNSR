@@ -190,6 +190,10 @@ Atenciosamente.
 Atenciosamente,
 **Recursos Humanos - Hapvida Hospital Nossa Senhora do Rosário**`;
 
+    const toField = dEmails[0] || 'rh@hnsr.com.br';
+    const ccField = ['rh@hnsr.com.br', ...dEmails.slice(1)].join(',');
+    const mailtoUrl = `mailto:${toField}?cc=${encodeURIComponent(ccField)}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+
     const singleEmailLog = {
       employee: "Resumo de Aniversariantes",
       date: "Multi",
@@ -198,11 +202,22 @@ Atenciosamente,
       indirectManager: "Recursos Humanos",
       indirectEmail: "rh@hnsr.com.br",
       subject,
-      body
+      body,
+      mailtoUrl
     };
 
     setSentBirthdayAlerts([singleEmailLog]);
-    alert(`Sucesso! Um único e-mail centralizado contendo todos os ${list.length} aniversariantes da semana foi preparado e simulado com sucesso para os gestores responsáveis.`);
+    
+    // Attempt to open the custom mail client automatically
+    setTimeout(() => {
+      try {
+        window.location.href = mailtoUrl;
+      } catch (e) {
+        console.warn("Direct redirection to mailto was blocked or failed:", e);
+      }
+    }, 100);
+
+    alert(`Sucesso! Preparamos e integramos o e-mail real com todos os ${list.length} aniversariantes da semana. Se o seu navegador ou sistema operacional possuir um cliente de e-mail padrão configurado, ele será aberto automaticamente. Caso contrário, você poderá usar os botões de abertura manual e cópia direta que estão disponíveis na seção de logs de transporte SMTP abaixo.`);
   };
 
   const handleProcessColaboradoresImport = () => {
@@ -790,25 +805,47 @@ Atenciosamente,
 
             {/* Email Logs visual simulation drawer */}
             {sentBirthdayAlerts && (
-              <div className="bg-slate-900 text-slate-100 p-4 rounded-xl font-mono text-[10.5px] space-y-3 max-h-56 overflow-y-auto shadow-inner border border-slate-800 animate-fadeIn">
-                <div className="flex justify-between items-center border-b border-slate-800 pb-1.5">
+              <div className="bg-slate-900 text-slate-100 p-4.5 rounded-xl font-mono text-[10.5px] space-y-4 max-h-72 overflow-y-auto shadow-inner border border-slate-800 animate-fadeIn">
+                <div className="flex justify-between items-center border-b border-slate-800 pb-2">
                   <span className="text-emerald-400 font-extrabold flex items-center gap-1">
                     <span>⚡ LOGS DE TRANSPORTE SMTP (Google Apps Script - MailApp Simulator)</span>
                   </span>
                   <button
                     onClick={() => setSentBirthdayAlerts(null)}
-                    className="text-slate-400 hover:text-slate-200 font-bold text-[9px] uppercase border border-slate-800 px-1.5 py-0.5 rounded cursor-pointer"
+                    className="text-slate-450 hover:text-slate-200 font-bold text-[9px] uppercase border border-slate-800 px-2 py-0.5 rounded cursor-pointer transition hover:bg-slate-800"
                   >
                     Ocultar
                   </button>
                 </div>
-                <div className="space-y-3 divide-y divide-slate-800/80">
+                <div className="space-y-4 divide-y divide-slate-800/80">
                   {sentBirthdayAlerts.map((log, index) => (
-                    <div key={index} className="pt-2 first:pt-0 space-y-1">
+                    <div key={index} className="pt-3 first:pt-0 space-y-2">
                       <p className="text-sky-400 font-bold">SMTP Client: MAIL TO direct_manager[{log.directEmail}] & indirect_manager[{log.indirectEmail}]</p>
-                      <p className="text-slate-300"><strong className="text-white">Assunto:</strong> {log.subject}</p>
+                      <p className="text-slate-350"><strong className="text-white">Assunto:</strong> {log.subject}</p>
                       <p className="text-slate-400 whitespace-pre-line leading-relaxed"><strong className="text-white">Mensagem:</strong> {log.body}</p>
                       <p className="text-emerald-400">✓ Alerta de aniversário enviado via MailApp.sendEmail() [Status: 200 OK]</p>
+                      
+                      <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-800/50">
+                        {log.mailtoUrl && (
+                          <a
+                            href={log.mailtoUrl}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 bg-sky-600 hover:bg-sky-500 hover:text-white text-white font-extrabold rounded text-[10px] uppercase transition no-underline shadow-xs cursor-pointer"
+                          >
+                            📧 Abrir no Aplicativo de Email (Gmail/Outlook)
+                          </a>
+                        )}
+                        <button
+                          onClick={() => {
+                            if (navigator.clipboard) {
+                              navigator.clipboard.writeText(log.body);
+                              alert("Mensagem copiada para a área de transferência com sucesso!");
+                            }
+                          }}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-250 font-extrabold rounded text-[10px] border border-slate-700 uppercase transition cursor-pointer"
+                        >
+                          📋 Copiar Conteúdo do Email
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>

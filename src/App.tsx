@@ -380,6 +380,8 @@ export default function App() {
             colaboradores={colaboradores} 
             absenteismo={absenteismo} 
             onNavigate={(view) => setActiveView(view)}
+            dynamicSelos={dynamicSelos}
+            ferias={ferias}
           />
         );
       case 'colaboradores':
