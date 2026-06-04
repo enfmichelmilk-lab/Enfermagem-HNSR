@@ -1,0 +1,163 @@
+{
+  "entities": {
+    "Usuario": {
+      "title": "Usuario",
+      "description": "User profiles who can log into the system",
+      "type": "object",
+      "properties": {
+        "nome": { "type": "string" },
+        "email": { "type": "string" },
+        "setor": { "type": "string" },
+        "perfil": { "type": "string" },
+        "status": { "type": "string", "enum": ["Ativo", "Inativo"] },
+        "senha": { "type": "string" },
+        "primeiroAcesso": { "type": "boolean" }
+      },
+      "required": ["nome", "email", "perfil", "status"]
+    },
+    "Colaborador": {
+      "title": "Colaborador",
+      "description": "Hospital nurse or caregiver profiles and balances",
+      "type": "object",
+      "properties": {
+        "nome": { "type": "string" },
+        "matricula": { "type": "string" },
+        "coren": { "type": "string" },
+        "cargo": { "type": "string" },
+        "equipe": { "type": "string" },
+        "horario": { "type": "string" },
+        "setor": { "type": "string" },
+        "gestordireto": { "type": "string" },
+        "gestorindireto": { "type": "string" },
+        "email": { "type": "string" },
+        "whatsapp": { "type": "string" },
+        "bancohoras": { "type": "number" },
+        "folgaenf": { "type": "number" },
+        "folgaferiado": { "type": "number" },
+        "brigada": { "type": "number" },
+        "eleicao": { "type": "number" },
+        "historico": { "type": "string" },
+        "selo_etica": { "type": "string", "enum": ["Sim", ["Não"]] },
+        "selo_brigadista": { "type": "string", "enum": ["Sim", ["Não"]] },
+        "selo_cipa": { "type": "string", "enum": ["Sim", ["Não"]] },
+        "datainicio": { "type": "string" },
+        "datanascimento": { "type": "string" },
+        "datarecisao": { "type": "string" },
+        "numreq": { "type": "string" },
+        "infosubst": { "type": "string" },
+        "inss_check": { "type": "string", "enum": ["Sim", ["Não"]] },
+        "inss_entrada": { "type": "string" },
+        "inss_retorno": { "type": "string" },
+        "inss_rep": { "type": "string" },
+        "inss_obs": { "type": "string" },
+        "selos_adicionais": { "type": "array" }
+      },
+      "required": ["nome", "matricula"]
+    },
+    "Absenteismo": {
+      "title": "Absenteismo",
+      "description": "Medical certificates and absences",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "tipo": { "type": "string", "enum": ["Atestado", "Licença / Outros"] },
+        "colaborador": { "type": "string" },
+        "matricula": { "type": "string" },
+        "setor": { "type": "string" },
+        "cargo": { "type": "string" },
+        "turno": { "type": "string" },
+        "inicio": { "type": "string" },
+        "duracao": { "type": "string" },
+        "termino": { "type": "string" },
+        "retorno": { "type": "string" },
+        "cid": { "type": "string" },
+        "patologia": { "type": "string" }
+      },
+      "required": ["id", "colaborador", "matricula", "tipo", "inicio", "duracao"]
+    },
+    "SolicitacaoFolga": {
+      "title": "SolicitacaoFolga",
+      "description": "Requests for day offs and scheduling slots",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "colaborador": { "type": "string" },
+        "matricula": { "type": "string" },
+        "tipo": { "type": "string", "enum": ["Folga de Escala", "Banco de Horas", "Folga Feriado", "Folga Brigada", "Folga Eleição"] },
+        "data": { "type": "string" },
+        "status": { "type": "string", "enum": ["Pendente", "Aprovado", "Recusado"] },
+        "solicitante": { "type": "string" },
+        "dataCriacao": { "type": "string" }
+      },
+      "required": ["id", "colaborador", "matricula", "tipo", "data", "status"]
+    },
+    "Ferias": {
+      "title": "Ferias",
+      "description": "Vacations periods scheduler",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "colaborador": { "type": "string" },
+        "matricula": { "type": "string" },
+        "dataInicio": { "type": "string" },
+        "dataFim": { "type": "string" },
+        "dataRetorno": { "type": "string" },
+        "duracao": { "type": "number" },
+        "status": { "type": "string", "enum": ["Pendente", "Aprovado", "Recusado"] },
+        "solicitante": { "type": "string" },
+        "dataCriacao": { "type": "string" }
+      },
+      "required": ["id", "colaborador", "matricula", "dataInicio", "duracao", "status"]
+    },
+    "Remanejamento": {
+      "title": "Remanejamento",
+      "description": "Shift swaps with sector destination",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "setor": { "type": "string" }
+      },
+      "required": ["id", "setor"]
+    },
+    "SeloDinamico": {
+      "title": "SeloDinamico",
+      "description": "Dynamic commission seals",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "nome": { "type": "string" }
+      },
+      "required": ["id", "nome"]
+    }
+  },
+  "firestore": {
+    "/usuarios/{userId}": {
+      "schema": "Usuario",
+      "description": "Collection of system authenticated and active users"
+    },
+    "/colaboradores/{matricula}": {
+      "schema": "Colaborador",
+      "description": "List of colaboradores and nurses with their balance and configurations"
+    },
+    "/absenteismo/{absenteismoId}": {
+      "schema": "Absenteismo",
+      "description": "Medical leave and absentee records"
+    },
+    "/solicitacoes/{solicitacaoId}": {
+      "schema": "SolicitacaoFolga",
+      "description": "List of active day-off requests"
+    },
+    "/ferias/{feriasId}": {
+      "schema": "Ferias",
+      "description": "Vacations allocations scheduler database"
+    },
+    "/remanejamentos/{remanejamentoId}": {
+      "schema": "Remanejamento",
+      "description": "Direct shift target swaps and sector modifications"
+    },
+    "/dynamic_selos/{seloId}": {
+      "schema": "SeloDinamico",
+      "description": "Dynamic seals"
+    }
+  }
+}

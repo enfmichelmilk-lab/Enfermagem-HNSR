@@ -1,0 +1,27 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Allow read/write access to all collections for our online hospital dashboard
+    match /usuarios/{document} {
+      allow read, write: if true;
+    }
+    match /colaboradores/{document} {
+      allow read, write: if true;
+    }
+    match /absenteismo/{document} {
+      allow read, write: if true;
+    }
+    match /solicitacoes/{document} {
+      allow read, write: if true;
+    }
+    match /ferias/{document} {
+      allow read, write: if true;
+    }
+    match /remanejamentos/{document} {
+      allow read, write: if true;
+    }
+    match /dynamic_selos/{document} {
+      allow read, write: if true;
+    }
+  }
+}

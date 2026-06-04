@@ -40,7 +40,7 @@ Caso você utilize ou deseje integrar o **Firebase Authentication** futuramente 
 
 ### Passo a Passo Direto:
 1. Acesse o **Console do Firebase** &rarr; [Firebase Console](https://console.firebase.google.com/).
-2. Selecione o projeto criado para o Hospital HNSR.
+2. Selecionar o projeto criado para o Hospital HNSR.
 3. No menu lateral esquerdo, acesse **Authentication** &rarr; aba **Settings** (Configurações) na parte superior.
 4. No submenu lateral dessa tela, selecione **Authorized domains** (Domínios autorizados).
 5. Clique em **Add domain** (Adicionar Domínio).
@@ -49,7 +49,41 @@ Caso você utilize ou deseje integrar o **Firebase Authentication** futuramente 
 
 ---
 
-## 🔗 4. Sincronização via GitHub e Publicação Node.js na Hostinger
+## 🔥 4. Sincronização em Tempo Real via Firebase (Acesso por Vários Dispositivos)
+
+Para que todos os seus diretores, enfermeiros e gestores visualizem as alterações ao mesmo tempo, de diferentes celulares, tablets ou computadores, o sistema agora está integrado ao **Firebase Firestore** na nuvem em tempo real!
+
+Para habilitar a sincronização na sua hospedagem da Hostinger, siga este passo a passo simples:
+
+### Passo 1: Obter a Configuração Web no Firebase
+1. Acesse o **Console do Firebase** &rarr; [Firebase Console](https://console.firebase.google.com/).
+2. Selecione o seu projeto do Firebase.
+3. Clique na **Engrenagem de Configuração (Project Settings)**, ao lado de "Project Overview" no canto superior esquerdo.
+4. Na aba **General**, role até a seção **Your apps** (Seus aplicativos).
+5. Se ainda não criou um aplicativo, clique em **Add App** (ícone Web `</>`), dê o nome "HNSR Escalas" e clique em registrar.
+6. Copie o objeto JavaScript de configuração fornecido, que se parece com isto:
+   ```json
+   {
+     "apiKey": "AIzaSy...",
+     "authDomain": "seu-app.firebaseapp.com",
+     "projectId": "seu-app-id",
+     "storageBucket": "seu-app.appspot.com",
+     "messagingSenderId": "123456789",
+     "appId": "1:123456:web:abcd"
+   }
+   ```
+
+### Passo 2: Configurar no código do seu repositório
+1. Abra o arquivo `/src/firebase-applet-config.json` no seu repositório.
+2. Substitua os campos em branco com as chaves que você copiou do Firebase Console e salve o arquivo.
+3. Faça o commit e envie (push) para o seu repositório do GitHub.
+4. Ao atualizar a Hostinger via sincronização automática, todos os navegadores que acessarem `EnfermagemHNSR.milksistemas.com` passarão a gravar e receber atualizações na nuvem instantaneamente!
+
+*Observação de Segurança:* É totalmente seguro deixar essas chaves no arquivo `.json` público enviado ao GitHub. Elas são chaves de identificação do cliente e estão protegidas pelas regras de banco de dados (`firestore.rules`) que criamos no projeto para garantir a integridade dos dados!
+
+---
+
+## 🔗 5. Sincronização via GitHub e Publicação Node.js na Hostinger
 
 Para que a publicação seja automática e prática:
 

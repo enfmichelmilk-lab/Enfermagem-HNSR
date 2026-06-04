@@ -21,74 +21,187 @@ import FolgasView from './components/FolgasView';
 import UsuariosView from './components/UsuariosView';
 import FeriasView from './components/FeriasView';
 import ComissoesView from './components/ComissoesView';
+import { subscribeCollection, saveDocument, removeDocument } from './lib/firebase';
 
 export default function App() {
   // 1. Unified State engines with intelligent Local Persistence mirroring Sheets database
   const [usuarioLogado, setUsuarioLogado] = useState<Usuario | null>(null);
   const [activeView, setActiveView] = useState<string>('dashboard');
 
-  const [usuarios, setUsuarios] = useState<Usuario[]>(() => {
-    const cached = localStorage.getItem('hnsr_usuarios_db');
-    const list: Usuario[] = cached ? JSON.parse(cached) : USUARIOS_INICIAIS;
-    return list.map(u => ({
-      ...u,
-      setor: mapSector(u.setor)
-    }));
-  });
+  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
+  const [colaboradores, setColaboradores] = useState<Colaborador[]>([]);
+  const [absenteismo, setAbsenteismo] = useState<Absenteismo[]>([]);
+  const [solicitacoes, setSolicitacoes] = useState<SolicitacaoFolga[]>([]);
+  const [ferias, setFerias] = useState<Ferias[]>([]);
+  const [dynamicSelos, setDynamicSelos] = useState<string[]>([]);
 
-  const [colaboradores, setColaboradores] = useState<Colaborador[]>(() => {
-    const cached = localStorage.getItem('hnsr_colaboradores_db');
-    const list: Colaborador[] = cached ? JSON.parse(cached) : COLABORADORES_INICIAIS;
-    return list.map(c => ({
-      ...c,
-      setor: mapSector(c.setor)
-    }));
-  });
-
-  const [absenteismo, setAbsenteismo] = useState<Absenteismo[]>(() => {
-    const cached = localStorage.getItem('hnsr_absenteismo_db');
-    const list: Absenteismo[] = cached ? JSON.parse(cached) : ABSENTEISMO_INICIAL;
-    return list.map(a => ({
-      ...a,
-      setor: mapSector(a.setor)
-    }));
-  });
-
-  const [solicitacoes, setSolicitacoes] = useState<SolicitacaoFolga[]>(() => {
-    const cached = localStorage.getItem('hnsr_solicitacoes_db');
-    return cached ? JSON.parse(cached) : SOLICITACOES_FOLGA_INICIAL;
-  });
-
-  const [ferias, setFerias] = useState<Ferias[]>(() => {
-    const cached = localStorage.getItem('hnsr_ferias_db');
-    return cached ? JSON.parse(cached) : [];
-  });
-
-  const [dynamicSelos, setDynamicSelos] = useState<string[]>(() => {
-    const cached = localStorage.getItem('hnsr_dynamic_selos');
-    return cached ? JSON.parse(cached) : [];
-  });
-
-  // 2. Local Storage Synchronizations on revisions
+  // 2. Real-Time Firestore Synchronization Subscriptions on Mount
   useEffect(() => {
-    localStorage.setItem('hnsr_usuarios_db', JSON.stringify(usuarios));
-  }, [usuarios]);
+    const unsub1 = subscribeCollection<Usuario>(
+      'usuarios',
+      (data) => {
+        setUsuarios(data.map(u => ({ ...u, setor: mapSector(u.setor) })));
+      },
+      'hnsr_usuarios_db',
+      USUARIOS_INICIAIS
+    );
 
-  useEffect(() => {
-    localStorage.setItem('hnsr_colaboradores_db', JSON.stringify(colaboradores));
-  }, [colaboradores]);
+    const unsub2 = subscribeCollection<Colaborador>(
+      'colaboradores',
+      (data) => {
+        setColaboradores(data.map(c => ({ ...c, setor: mapSector(c.setor) })));
+      },
+      'hnsr_colaboradores_db',
+      COLABORADORES_INICIAIS
+    );
 
-  useEffect(() => {
-    localStorage.setItem('hnsr_absenteismo_db', JSON.stringify(absenteismo));
-  }, [absenteismo]);
+    const unsub3 = subscribeCollection<Absenteismo>(
+      'absenteismo',
+      (data) => {
+        setAbsenteismo(data.map(a => ({ ...a, setor: mapSector(a.setor) })));
+      },
+      'hnsr_absenteismo_db',
+      ABSENTEISMO_INICIAL
+    );
 
-  useEffect(() => {
-    localStorage.setItem('hnsr_solicitacoes_db', JSON.stringify(solicitacoes));
-  }, [solicitacoes]);
+    const unsub4 = subscribeCollection<SolicitacaoFolga>(
+      'solicitacoes',
+      (data) => {
+        setSolicitacoes(data);
+      },
+      'hnsr_solicitacoes_db',
+      SOLICITACOES_FOLGA_INICIAL
+    );
 
-  useEffect(() => {
-    localStorage.setItem('hnsr_ferias_db', JSON.stringify(ferias));
-  }, [ferias]);
+    const unsub5 = subscribeCollection<Ferias>(
+      'ferias',
+      (data) => {
+        setFerias(data);
+      },
+      'hnsr_ferias_db',
+      []
+    );
+
+    const unsub6 = subscribeCollection<any>(
+      'dynamic_selos',
+      (data) => {
+        setDynamicSelos(data.map(item => item.id));
+      },
+      'hnsr_dynamic_selos',
+      []
+    );
+
+    return () => {
+      unsub1();
+      unsub2();
+      unsub3();
+      unsub4();
+      unsub5();
+      unsub6();
+    };
+  }, []);
+
+  // 3. Custom Sync Handler hooks filtering mutations and synchronizing up to Firestore
+  const handleUpdateUsuarios = async (val: React.SetStateAction<Usuario[]>) => {
+    const nextList = typeof val === 'function' ? (val as Function)(usuarios) : val;
+    for (const item of nextList) {
+      const match = usuarios.find(u => u.email === item.email);
+      if (!match || JSON.stringify(match) !== JSON.stringify(item)) {
+        await saveDocument('usuarios', item.email, item);
+      }
+    }
+    for (const item of usuarios) {
+      if (!nextList.some((n: any) => n.email === item.email)) {
+        await removeDocument('usuarios', item.email);
+      }
+    }
+    setUsuarios(nextList);
+    localStorage.setItem('hnsr_usuarios_db', JSON.stringify(nextList));
+  };
+
+  const handleUpdateColaboradores = async (val: React.SetStateAction<Colaborador[]>) => {
+    const nextList = typeof val === 'function' ? (val as Function)(colaboradores) : val;
+    for (const item of nextList) {
+      const match = colaboradores.find(c => c.matricula === item.matricula);
+      if (!match || JSON.stringify(match) !== JSON.stringify(item)) {
+        await saveDocument('colaboradores', item.matricula, item);
+      }
+    }
+    for (const item of colaboradores) {
+      if (!nextList.some((n: any) => n.matricula === item.matricula)) {
+        await removeDocument('colaboradores', item.matricula);
+      }
+    }
+    setColaboradores(nextList);
+    localStorage.setItem('hnsr_colaboradores_db', JSON.stringify(nextList));
+  };
+
+  const handleUpdateAbsenteismo = async (val: React.SetStateAction<Absenteismo[]>) => {
+    const nextList = typeof val === 'function' ? (val as Function)(absenteismo) : val;
+    for (const item of nextList) {
+      const match = absenteismo.find(a => a.id === item.id);
+      if (!match || JSON.stringify(match) !== JSON.stringify(item)) {
+        await saveDocument('absenteismo', item.id, item);
+      }
+    }
+    for (const item of absenteismo) {
+      if (!nextList.some((n: any) => n.id === item.id)) {
+        await removeDocument('absenteismo', item.id);
+      }
+    }
+    setAbsenteismo(nextList);
+    localStorage.setItem('hnsr_absenteismo_db', JSON.stringify(nextList));
+  };
+
+  const handleUpdateSolicitacoes = async (val: React.SetStateAction<SolicitacaoFolga[]>) => {
+    const nextList = typeof val === 'function' ? (val as Function)(solicitacoes) : val;
+    for (const item of nextList) {
+      const match = solicitacoes.find(s => s.id === item.id);
+      if (!match || JSON.stringify(match) !== JSON.stringify(item)) {
+        await saveDocument('solicitacoes', item.id, item);
+      }
+    }
+    for (const item of solicitacoes) {
+      if (!nextList.some((n: any) => n.id === item.id)) {
+        await removeDocument('solicitacoes', item.id);
+      }
+    }
+    setSolicitacoes(nextList);
+    localStorage.setItem('hnsr_solicitacoes_db', JSON.stringify(nextList));
+  };
+
+  const handleUpdateFerias = async (val: React.SetStateAction<Ferias[]>) => {
+    const nextList = typeof val === 'function' ? (val as Function)(ferias) : val;
+    for (const item of nextList) {
+      const match = ferias.find(f => f.id === item.id);
+      if (!match || JSON.stringify(match) !== JSON.stringify(item)) {
+        await saveDocument('ferias', item.id, item);
+      }
+    }
+    for (const item of ferias) {
+      if (!nextList.some((n: any) => n.id === item.id)) {
+        await removeDocument('ferias', item.id);
+      }
+    }
+    setFerias(nextList);
+    localStorage.setItem('hnsr_ferias_db', JSON.stringify(nextList));
+  };
+
+  const handleUpdateDynamicSelos = async (val: React.SetStateAction<string[]>) => {
+    const nextList = typeof val === 'function' ? (val as Function)(dynamicSelos) : val;
+    for (const item of nextList) {
+      if (!dynamicSelos.includes(item)) {
+        await saveDocument('dynamic_selos', item, { id: item, nome: item });
+      }
+    }
+    for (const item of dynamicSelos) {
+      if (!nextList.includes(item)) {
+        await removeDocument('dynamic_selos', item);
+      }
+    }
+    setDynamicSelos(nextList);
+    localStorage.setItem('hnsr_dynamic_selos', JSON.stringify(nextList));
+  };
 
   // Check if session keeps active on load
   useEffect(() => {
@@ -195,12 +308,12 @@ export default function App() {
             colaboradores={colaboradores} 
             absenteismo={absenteismo}
             usuarioLogado={usuarioLogado}
-            onUpdateColaboradores={setColaboradores}
+            onUpdateColaboradores={handleUpdateColaboradores}
             ferias={ferias}
-            onUpdateFerias={setFerias}
+            onUpdateFerias={handleUpdateFerias}
             dynamicSelos={dynamicSelos}
             usuarios={usuarios}
-            onUpdateUsuarios={setUsuarios}
+            onUpdateUsuarios={handleUpdateUsuarios}
           />
         );
       case 'absenteismo':
@@ -225,7 +338,7 @@ export default function App() {
           <AbsenteismoView 
             absenteismo={absenteismo} 
             colaboradores={colaboradores}
-            onUpdateAbsenteismo={setAbsenteismo}
+            onUpdateAbsenteismo={handleUpdateAbsenteismo}
           />
         );
       case 'folgas':
@@ -235,8 +348,8 @@ export default function App() {
             colaboradores={colaboradores} 
             absenteismo={absenteismo}
             usuarioLogado={usuarioLogado}
-            onUpdateSolicitacoes={setSolicitacoes}
-            onUpdateColaboradores={setColaboradores}
+            onUpdateSolicitacoes={handleUpdateSolicitacoes}
+            onUpdateColaboradores={handleUpdateColaboradores}
             ferias={ferias}
           />
         );
@@ -246,7 +359,7 @@ export default function App() {
             ferias={ferias}
             colaboradores={colaboradores}
             usuarioLogado={usuarioLogado}
-            onUpdateFerias={setFerias}
+            onUpdateFerias={handleUpdateFerias}
           />
         );
       case 'comissoes':
@@ -254,8 +367,8 @@ export default function App() {
           <ComissoesView
             colaboradores={colaboradores}
             dynamicSelos={dynamicSelos}
-            onUpdateColaboradores={setColaboradores}
-            onUpdateDynamicSelos={setDynamicSelos}
+            onUpdateColaboradores={handleUpdateColaboradores}
+            onUpdateDynamicSelos={handleUpdateDynamicSelos}
             usuarioLogado={usuarioLogado}
           />
         );
@@ -264,7 +377,7 @@ export default function App() {
           <UsuariosView 
             usuarios={usuarios} 
             usuarioLogado={usuarioLogado}
-            onUpdateUsuarios={setUsuarios}
+            onUpdateUsuarios={handleUpdateUsuarios}
             onResetSystem={handleResetSystem}
           />
         );
@@ -283,7 +396,7 @@ export default function App() {
         <LoginView 
           usuarios={usuarios} 
           onLoginSuccess={handleLoginSuccess}
-          onUpdateUsuarios={setUsuarios}
+          onUpdateUsuarios={handleUpdateUsuarios}
         />
       ) : (
         <div className="min-h-screen bg-slate-100 flex font-sans">

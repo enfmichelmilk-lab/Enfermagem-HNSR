@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Calendar, CheckCircle, XCircle, Clock, Award, 
   HelpCircle, UserCheck, Timer, FilePlus, Sparkles, 
@@ -14,6 +14,7 @@ import {
 import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend as RechartsLegend, ResponsiveContainer } from 'recharts';
 import { SolicitacaoFolga, Colaborador, Usuario, Absenteismo, Ferias } from '../types';
 import { SETORES_HOSPITALARES } from '../data/mockData';
+import { subscribeCollection, saveDocument, removeDocument } from '../lib/firebase';
 
 const equipesDisponiveis = ['Todos', 'Diurno A', 'Diurno B', 'Noturno A', 'Noturno B', 'Diarista'];
 
@@ -147,11 +148,24 @@ export default function FolgasView({
   const [selectedDay2, setSelectedDay2] = useState(1);
   const [compareRoleMode, setCompareRoleMode] = useState<'enfermeiros' | 'tecnicos_auxiliares'>('enfermeiros');
 
-  // Load initial remanejamentos from localStorage
-  const [remanejamentos, setRemanejamentos] = useState<Record<string, string>>(() => {
-    const cached = localStorage.getItem('hnsr_remanejamentos_db');
-    return cached ? JSON.parse(cached) : {};
-  });
+  // Load initial remanejamentos from Firestore cloud and keep updated in real-time
+  const [remanejamentos, setRemanejamentos] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    const unsubscribe = subscribeCollection<any>(
+      'remanejamentos',
+      (data) => {
+        const mapped: Record<string, string> = {};
+        data.forEach((item) => {
+          mapped[item.id] = item.setor;
+        });
+        setRemanejamentos(mapped);
+      },
+      'hnsr_remanejamentos_db',
+      []
+    );
+    return () => unsubscribe();
+  }, []);
 
   const handleExportClick = (tipo: 'com' | 'sem') => {
     // Generate CSV content of the comparison tables
@@ -2741,12 +2755,14 @@ export default function FolgasView({
                     <button
                       type="button"
                       onClick={() => {
+                        const remId = `${modalTargetColab.matricula}-${modalTargetDate}`;
                         const updated = { ...remanejamentos };
-                        delete updated[`${modalTargetColab.matricula}-${modalTargetDate}`];
+                        delete updated[remId];
                         setRemanejamentos(updated);
                         localStorage.setItem('hnsr_remanejamentos_db', JSON.stringify(updated));
+                        removeDocument('remanejamentos', remId);
                       }}
-                      className="w-full bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 font-extrabold py-1.5 text-center rounded-lg transition-colors cursor-pointer text-[11px]"
+                      className="w-full bg-rose-50 hover:bg-rose-105 border border-rose-200 text-rose-700 font-extrabold py-1.5 text-center rounded-lg transition-colors cursor-pointer text-[11px]"
                     >
                       Remover Remanejamento
                     </button>
@@ -2758,9 +2774,11 @@ export default function FolgasView({
                       onChange={(e) => {
                         const val = e.target.value;
                         if (val) {
-                          const updated = { ...remanejamentos, [`${modalTargetColab.matricula}-${modalTargetDate}`]: val };
+                          const remId = `${modalTargetColab.matricula}-${modalTargetDate}`;
+                          const updated = { ...remanejamentos, [remId]: val };
                           setRemanejamentos(updated);
                           localStorage.setItem('hnsr_remanejamentos_db', JSON.stringify(updated));
+                          saveDocument('remanejamentos', remId, { id: remId, setor: val });
 
                           const dayNum = parseInt(modalTargetDate.split('-')[2]);
                           const { isWorkDay } = checkRosteredStatus(modalTargetColab, dayNum);
