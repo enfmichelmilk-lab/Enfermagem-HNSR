@@ -1,0 +1,6 @@
+{
+  "name": "Gestão RH Enfermagem HNSR",
+  "description": "Sistema de Gestão de RH, Absenteísmo e Escala de Folgas para Enfermagem HNSR, desenvolvido por Milk Sistemas.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
