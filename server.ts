@@ -5,12 +5,11 @@
 
 import express from "express";
 import path from "path";
-import { createServer as createViteServer } from "vite";
 
 async function startServer() {
   const app = express();
-  // Standard port as required by proxy mapping
-  const PORT = 3000;
+  // Read dynamic port assigned by Hostinger, falling back to 3000 on development
+  const PORT = Number(process.env.PORT) || 3000;
 
   // JSON payload parser
   app.use(express.json());
@@ -22,6 +21,8 @@ async function startServer() {
 
   // Hot Reload and Dev Server integrations or Static serving in production
   if (process.env.NODE_ENV !== "production" && process.env.DISABLE_HMR !== "true") {
+    // Dynamic import of development-only dependency Vite to prevent execution crashes on Hostinger
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
@@ -37,7 +38,7 @@ async function startServer() {
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`Server running on port ${PORT}`);
   });
 }
 
