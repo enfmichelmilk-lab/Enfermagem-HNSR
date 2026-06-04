@@ -8,7 +8,7 @@ Este documento contém o passo a passo completo e simplificado para publicar o s
 
 Para garantir a compatibilidade tanto no **AI Studio** quanto na **Hostinger (ou qualquer VPS/Hospedagem Node.js)**, configuramos o ecossistema ideal de produção:
 1. **Servidor Express Isolado (`server.ts`)**: Um backend em Node.js de produção que serve os arquivos estáticos compilados do React (`dist/`) e oferece portas de escuta dinâmicas.
-2. **Build Bundler (`package.json`)**: Configurado com `esbuild` para gerar um arquivo único e empacotado em `dist/server.cjs` para evitar erros de importação ES Modules no Node clássico da Hostinger.
+2. **Build Bundler (`package.json`)**: Configurado com `esbuild` para gerar um arquivo único e empacotado em `server.js` na raiz do diretório para evitar erros de importação ES Modules no Node clássico da Hostinger e maximizar a compatibilidade de inicialização.
 3. **Persistência Segura**: O sistema de segurança e filtros de login mantém os dados sincronizados localmente (`localStorage`), garantindo que a escala do hospital rode rápido e resiliente.
 
 ---
@@ -62,11 +62,11 @@ Para que a publicação seja automática e prática:
 2. Conecte sua conta do GitHub ou configure o repositório Git para puxar o código do repositório HNSR.
 3. Defina as seguintes diretrizes de inicialização no painel da Hostinger:
    - **Pasta de Origem / Root**: `/`
-   - **Arquivo de Inicialização (Startup File)**: `dist/server.cjs` (Esse arquivo é gerado automaticamente no build completo)
+   - **Arquivo de Inicialização (Startup File)**: `server.js` (Esse arquivo é gerado automaticamente na raiz no build completo)
    - **Pasta de Build/Saída**: `dist`
 4. Na seção de scripts ou comandos NPM do painel da Hostinger, execute os passos de instalação de dependências e compilação:
    - Executar: **`npm install`** (Instala as dependências de backend e frontend)
-   - Executar: **`npm run build`** (Compila os recursos do frontend React otimizado com o Vite e empacota o Express em `dist/server.cjs` via `esbuild`)
+   - Executar: **`npm run build`** (Compila os recursos do frontend React otimizado com o Vite e empacota o Express em `server.js` na raiz via `esbuild`)
 5. Clique em **Iniciar / Start Application**.
 
 Pronto! Seu sistema de enfermagem estará escutando no site **EnfermagemHNSR.milksistemas.com** com segurança máxima, isolamento de rotas e desempenho profissional!
