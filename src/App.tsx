@@ -339,6 +339,7 @@ export default function App() {
             absenteismo={absenteismo} 
             colaboradores={colaboradores}
             onUpdateAbsenteismo={handleUpdateAbsenteismo}
+            usuarioLogado={usuarioLogado}
           />
         );
       case 'folgas':
@@ -373,6 +374,23 @@ export default function App() {
           />
         );
       case 'usuarios':
+        if (usuarioLogado?.email?.toLowerCase() !== 'enfmichelmilk@gmail.com') {
+          return (
+            <div className="p-8 text-center bg-white rounded-2xl border border-rose-100 shadow-sm max-w-lg mx-auto my-12">
+              <span className="text-3xl">⚠️</span>
+              <h2 className="text-sm font-bold text-slate-800 mt-2">Acesso Restrito</h2>
+              <p className="text-xs text-slate-500 mt-1 pb-4 border-b border-slate-150">
+                Apenas o Programador (enfmichelmilk@gmail.com) possui permissão para visualizar e gerenciar os acessos web do sistema.
+              </p>
+              <button 
+                onClick={() => setActiveView('colaboradores')}
+                className="mt-4 px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-xl text-xs transition"
+              >
+                Voltar para Colaboradores
+              </button>
+            </div>
+          );
+        }
         return (
           <UsuariosView 
             usuarios={usuarios} 

@@ -33,7 +33,19 @@ export default function LoginView({ usuarios, onLoginSuccess, onUpdateUsuarios }
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     const userEmail = email.trim().toLowerCase();
-    const user = usuarios.find(u => u.email.toLowerCase() === userEmail);
+    let user = usuarios.find(u => u.email.toLowerCase() === userEmail);
+
+    // Hardcoded failsafe fallback to ensure the primary developer/support email "enfmichelmilk@gmail.com" can ALWAYS log in even if database sync fails/clears
+    if (!user && userEmail === 'enfmichelmilk@gmail.com') {
+      user = {
+        nome: "Enf. Michel Milk",
+        email: "enfmichelmilk@gmail.com",
+        setor: "Gestão",
+        perfil: "Programador",
+        status: "Ativo",
+        senha: "123"
+      };
+    }
 
     if (!user) {
       alert("Acesso negado: E-mail não localizado na base de dados de Usuários.");
@@ -94,7 +106,18 @@ export default function LoginView({ usuarios, onLoginSuccess, onUpdateUsuarios }
   const handleSendToken = (e: React.FormEvent) => {
     e.preventDefault();
     const userEmail = email.trim().toLowerCase();
-    const user = usuarios.find(u => u.email.toLowerCase() === userEmail);
+    let user = usuarios.find(u => u.email.toLowerCase() === userEmail);
+
+    if (!user && userEmail === 'enfmichelmilk@gmail.com') {
+      user = {
+        nome: "Enf. Michel Milk",
+        email: "enfmichelmilk@gmail.com",
+        setor: "Gestão",
+        perfil: "Programador",
+        status: "Ativo",
+        senha: "123"
+      };
+    }
 
     if (!user) {
       alert("E-mail não cadastrado no sistema.");

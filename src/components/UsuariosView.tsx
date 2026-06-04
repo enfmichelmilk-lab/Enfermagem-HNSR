@@ -135,6 +135,19 @@ export default function UsuariosView({ usuarios, usuarioLogado, onUpdateUsuarios
     onUpdateUsuarios(novosUsuarios);
   };
 
+  const handleDeleteUser = (targetEmail: string) => {
+    if (targetEmail.toLowerCase() === usuarioLogado.email.toLowerCase()) {
+      alert("Não é possível excluir seu próprio acesso administrativo!");
+      return;
+    }
+
+    if (window.confirm(`ATENÇÃO: Deseja realmente excluir permanentemente o usuário ${targetEmail}? Esta ação é irreversível.`)) {
+      const novosUsuarios = usuarios.filter(u => u.email.toLowerCase() !== targetEmail.toLowerCase());
+      onUpdateUsuarios(novosUsuarios);
+      alert("Usuário excluído com sucesso!");
+    }
+  };
+
   const handleOpenEdit = (user: Usuario) => {
     setEditingUser(user);
     setEditNome(user.nome);
@@ -237,6 +250,7 @@ export default function UsuariosView({ usuarios, usuarioLogado, onUpdateUsuarios
                   <option value="Supervisor(a)">Supervisor(a)</option>
                   <option value="Coordenador(a)">Coordenador(a)</option>
                   <option value="Gerente">Gerente</option>
+                  <option value="Programador">Programador</option>
                 </select>
               </div>
             </div>
@@ -327,6 +341,15 @@ export default function UsuariosView({ usuarios, usuarioLogado, onUpdateUsuarios
                           >
                             <Power className="w-3.5 h-3.5 focus:outline-none" />
                           </button>
+
+                          <button
+                            onClick={() => handleDeleteUser(u.email)}
+                            className={`p-1 rounded text-rose-600 hover:bg-rose-50 ${isOwnAccount ? 'opacity-40 cursor-not-allowed' : ''}`}
+                            title="Excluir credencial"
+                            disabled={isOwnAccount}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -340,65 +363,67 @@ export default function UsuariosView({ usuarios, usuarioLogado, onUpdateUsuarios
       </div>
 
       {/* SEÇÃO DE CONTROLE E LIMPEZA DE DADOS */}
-      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-        <div className="border-b border-slate-100 pb-3 flex items-center gap-2">
-          <Database className="w-5 h-5 text-rose-600 animate-pulse" />
-          <div>
-            <h3 className="text-sm font-bold text-slate-800">Manutenção & Limpeza de Dados</h3>
-            <p className="text-[11px] text-slate-400">Gerenciar o armazenamento persistente local do navegador (Reset / Wipes)</p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-sans">
-          <div className="p-4 border border-slate-100 bg-slate-50 rounded-xl flex flex-col justify-between space-y-3.5">
+      {usuarioLogado.email.toLowerCase() === 'enfmichelmilk@gmail.com' && (
+        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+          <div className="border-b border-slate-100 pb-3 flex items-center gap-2">
+            <Database className="w-5 h-5 text-rose-600 animate-pulse" />
             <div>
-              <span className="font-extrabold text-slate-800 text-xs block flex items-center gap-1.5">
-                <RefreshCw className="w-4 h-4 text-emerald-600" />
-                Redefinir para Padrões Iniciais (Hospital HNSR Demo)
-              </span>
-              <p className="text-slate-500 mt-1.5 leading-normal text-[11px]">
-                Esta opção apaga quaisquer modificações locais efetuadas (novos colaboradores cadastrados, atestados lançados, solicitações registradas e novas férias) e restaura o banco de dados inicial completo com as listas padrão hospitalares para testes rápidos.
-              </p>
+              <h3 className="text-sm font-bold text-slate-800">Manutenção & Limpeza de Dados</h3>
+              <p className="text-[11px] text-slate-400">Gerenciar o armazenamento persistente local do navegador (Reset / Wipes)</p>
             </div>
-            <button
-              onClick={() => {
-                if (window.confirm("Aviso: Isso irá redefinir todas as escalas, colaboradores, atestados e férias para os valores de teste iniciais. Deseja continuar?")) {
-                  onResetSystem('default');
-                  alert("Banco de dados local do Hospital HNSR foi reestruturado para as configurações iniciais com sucesso!");
-                }
-              }}
-              className="mt-1 w-fit bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-4 rounded-lg shadow-sm transition flex items-center gap-1.5"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              Restaurar Dados Demo
-            </button>
           </div>
 
-          <div className="p-4 border border-slate-100 bg-slate-50 rounded-xl flex flex-col justify-between space-y-3.5">
-            <div>
-              <span className="font-extrabold text-slate-800 text-xs block flex items-center gap-1.5">
-                <Trash2 className="w-4 h-4 text-red-650" />
-                Limpar Absolutamente Tudo (Banco de Dados Vazio)
-              </span>
-              <p className="text-slate-500 mt-1.5 leading-normal text-[11px]">
-                Esta opção exclui permanentemente todos os colaboradores cadastrados, solicitações de folgas, registros de absenteísmo, cronogramas de férias e selos personalizados. Suas credenciais administrativas ativas ({usuarioLogado.nome}) serão mantidas para evitar o bloqueio de seu acesso ao painel.
-              </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-sans">
+            <div className="p-4 border border-slate-100 bg-slate-50 rounded-xl flex flex-col justify-between space-y-3.5">
+              <div>
+                <span className="font-extrabold text-slate-800 text-xs block flex items-center gap-1.5">
+                  <RefreshCw className="w-4 h-4 text-emerald-600" />
+                  Redefinir para Padrões Iniciais (Hospital HNSR Demo)
+                </span>
+                <p className="text-slate-500 mt-1.5 leading-normal text-[11px]">
+                  Esta opção apaga quaisquer modificações locais efetuadas (novos colaboradores cadastrados, atestados lançados, solicitações registradas e novas férias) e restaura o banco de dados inicial completo com as listas padrão hospitalares para testes rápidos.
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  if (window.confirm("Aviso: Isso irá redefinir todas as escalas, colaboradores, atestados e férias para os valores de teste iniciais. Deseja continuar?")) {
+                    onResetSystem('default');
+                    alert("Banco de dados local do Hospital HNSR foi reestruturado para as configurações iniciais com sucesso!");
+                  }
+                }}
+                className="mt-1 w-fit bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-4 rounded-lg shadow-sm transition flex items-center gap-1.5"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                Restaurar Dados Demo
+              </button>
             </div>
-            <button
-              onClick={() => {
-                if (window.confirm("CUIDADO: Esta ação é irreversível e excluirá permanentemente todos os registros, colaboradores e escalas do sistema. Deseja iniciar do zero com o banco limpo?")) {
-                  onResetSystem('empty');
-                  alert("Todas as bases foram limpas! Você está pronto para cadastrar ou importar novos colaboradores de uma planilha limpa.");
-                }
-              }}
-              className="mt-1 w-fit bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg shadow-sm transition flex items-center gap-1.5"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              Limpar Banco de Dados
-            </button>
+
+            <div className="p-4 border border-slate-100 bg-slate-50 rounded-xl flex flex-col justify-between space-y-3.5">
+              <div>
+                <span className="font-extrabold text-slate-800 text-xs block flex items-center gap-1.5">
+                  <Trash2 className="w-4 h-4 text-red-650" />
+                  Limpar Absolutamente Tudo (Banco de Dados Vazio)
+                </span>
+                <p className="text-slate-500 mt-1.5 leading-normal text-[11px]">
+                  Esta opção exclui permanentemente todos os colaboradores cadastrados, solicitações de folgas, registros de absenteísmo, cronogramas de férias e selos personalizados. Suas credenciais administrativas ativas ({usuarioLogado.nome}) serão mantidas para evitar o bloqueio de seu acesso ao painel.
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  if (window.confirm("CUIDADO: Esta ação é irreversível e excluirá permanentemente todos os registros, colaboradores e escalas do sistema. Deseja iniciar do zero com o banco limpo?")) {
+                    onResetSystem('empty');
+                    alert("Todas as bases foram limpas! Você está pronto para cadastrar ou importar novos colaboradores de uma planilha limpa.");
+                  }
+                }}
+                className="mt-1 w-fit bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg shadow-sm transition flex items-center gap-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Limpar Banco de Dados
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* STYLISH HTML EMAIL TEMPLATE SIMULATOR PANEL */}
       {simulatedEmail && (
@@ -499,6 +524,7 @@ export default function UsuariosView({ usuarios, usuarioLogado, onUpdateUsuarios
                     <option value="Supervisor(a)">Supervisor(a)</option>
                     <option value="Coordenador(a)">Coordenador(a)</option>
                     <option value="Gerente">Gerente</option>
+                    <option value="Programador">Programador</option>
                   </select>
                 </div>
               </div>

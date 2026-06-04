@@ -138,7 +138,7 @@ export function subscribeCollection<T>(
 
 // 3. Document Writer Helpers
 export async function saveDocument(collectionName: string, docId: string, data: any): Promise<void> {
-  const cleanId = String(docId).replace(/\./g, '_'); // sanitize ID dots
+  const cleanId = String(docId); // Keep ID exactly as provided (e.g. emails with dots)
   if (!db) {
     // Write directly to backup storage
     const cached = localStorage.getItem(`hnsr_${collectionName}_db`);
@@ -168,7 +168,7 @@ export async function saveDocument(collectionName: string, docId: string, data: 
 }
 
 export async function removeDocument(collectionName: string, docId: string): Promise<void> {
-  const cleanId = String(docId).replace(/\./g, '_');
+  const cleanId = String(docId);
   if (!db) {
     const cached = localStorage.getItem(`hnsr_${collectionName}_db`);
     let items = cached ? JSON.parse(cached) : [];

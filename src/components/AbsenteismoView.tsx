@@ -9,16 +9,22 @@ import {
   PlusCircle, Trash2, TrendingDown, ClipboardList, RefreshCw, X, FileText, Edit, Pencil 
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
-import { Absenteismo, Colaborador } from '../types';
+import { Absenteismo, Colaborador, Usuario } from '../types';
 import { CID_NATIVO, SETORES_HOSPITALARES, EQUIPES_ESCALA } from '../data/mockData';
 
 interface AbsenteismoViewProps {
   absenteismo: Absenteismo[];
   colaboradores: Colaborador[];
   onUpdateAbsenteismo: (novosAbs: Absenteismo[]) => void;
+  usuarioLogado?: Usuario;
 }
 
-export default function AbsenteismoView({ absenteismo, colaboradores, onUpdateAbsenteismo }: AbsenteismoViewProps) {
+export default function AbsenteismoView({ 
+  absenteismo, 
+  colaboradores, 
+  onUpdateAbsenteismo,
+  usuarioLogado
+}: AbsenteismoViewProps) {
   // Search query inputs
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedMeses, setSelectedMeses] = useState<string[]>([]);
@@ -427,13 +433,15 @@ export default function AbsenteismoView({ absenteismo, colaboradores, onUpdateAb
           <p className="text-sm text-slate-500 font-medium">Lançamento de Licenças Médicas, Rastreabilidade CID-10 e Diagnósticos Estatísticos</p>
         </div>
         <div className="flex gap-2.5 flex-wrap">
-          <button
-            onClick={() => setIsOpenImportModal(true)}
-            className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold py-2.5 px-4 rounded-xl text-sm shadow-sm flex items-center gap-2 transition duration-150 cursor-pointer"
-          >
-            <FileText className="w-4 h-4 text-slate-500" />
-            <span>Importar Lista (Excel)</span>
-          </button>
+          {usuarioLogado?.email?.toLowerCase() === 'enfmichelmilk@gmail.com' && (
+            <button
+              onClick={() => setIsOpenImportModal(true)}
+              className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold py-2.5 px-4 rounded-xl text-sm shadow-sm flex items-center gap-2 transition duration-150 cursor-pointer"
+            >
+              <FileText className="w-4 h-4 text-slate-500" />
+              <span>Importar Lista (Excel)</span>
+            </button>
+          )}
           <button
             onClick={() => {
               setModalMode('create');

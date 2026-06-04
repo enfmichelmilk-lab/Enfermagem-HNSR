@@ -18,7 +18,7 @@ export default function Sidebar({ usuario, activeView, onNavigate, onLogout }: S
   // Access check rule from JS.html
   const isAuthorizedAdmin = () => {
     const perfil = usuario.perfil ? usuario.perfil.toLowerCase() : "";
-    const authList = ["supervisor(a)", "supervisor", "coordenador(a)", "coordenador", "gerente", "adm", "administrador"];
+    const authList = ["supervisor(a)", "supervisor", "coordenador(a)", "coordenador", "gerente", "adm", "administrador", "programador"];
     return authList.some(role => perfil.includes(role));
   };
 
@@ -147,8 +147,8 @@ export default function Sidebar({ usuario, activeView, onNavigate, onLogout }: S
           </button>
         </li>
 
-        {/* Conditionally Display Administrator Tab */}
-        {isAuthorizedAdmin() && (
+        {/* Conditionally Display Administrator Tab (Only and exclusively to enfmichelmilk@gmail.com) */}
+        {usuario.email?.toLowerCase() === 'enfmichelmilk@gmail.com' && (
           <li>
             <button
               onClick={() => onNavigate('usuarios')}

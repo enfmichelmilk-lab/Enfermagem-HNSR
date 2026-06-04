@@ -702,13 +702,15 @@ Atenciosamente,
           <p className="text-sm text-slate-500 font-medium">Controle de Horários, Prontuários, Gestores e Saldo de Banco de Horas</p>
         </div>
         <div className="flex gap-2.5 flex-wrap">
-          <button
-            onClick={() => setIsOpenImportModal(true)}
-            className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold py-2.5 px-4 rounded-xl text-sm shadow-sm flex items-center gap-2 transition duration-150 cursor-pointer"
-          >
-            <FileText className="w-4 h-4 text-slate-500" />
-            <span>Importar Lista (Excel)</span>
-          </button>
+          {usuarioLogado?.email?.toLowerCase() === 'enfmichelmilk@gmail.com' && (
+            <button
+              onClick={() => setIsOpenImportModal(true)}
+              className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold py-2.5 px-4 rounded-xl text-sm shadow-sm flex items-center gap-2 transition duration-150 cursor-pointer"
+            >
+              <FileText className="w-4 h-4 text-slate-500" />
+              <span>Importar Lista (Excel)</span>
+            </button>
+          )}
           <button
             onClick={() => handleOpenModal(null)}
             className="bg-sky-600 hover:bg-sky-700 text-white font-bold py-2.5 px-5 rounded-xl text-sm shadow-md shadow-sky-600/10 flex items-center gap-2 transition duration-150 cursor-pointer"

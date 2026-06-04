@@ -155,19 +155,45 @@ export default function ComissoesView({
           </p>
         </div>
         
-        <button
-          onClick={() => {
-            if (!isAuthorizedAdmin()) {
-              alert("Apenas coordenadores ou supervisores possuem autorização para criar novos selos.");
-              return;
-            }
-            setIsNewSeloModalOpen(true);
-          }}
-          className="bg-amber-500 hover:bg-amber-600 border border-amber-400 text-white font-extrabold py-2.5 px-4 rounded-xl text-xs flex items-center gap-1.5 transition duration-150 cursor-pointer active:scale-95 shadow-md shadow-amber-500/10"
-        >
-          <PlusCircle className="w-4 h-4" />
-          <span>Criar Novo Selo</span>
-        </button>
+        <div className="flex gap-2.5 flex-wrap">
+          {usuarioLogado?.email?.toLowerCase() === 'enfmichelmilk@gmail.com' && (
+            <button
+              onClick={() => {
+                if (window.confirm("ATENÇÃO: Deseja realmente resetar TODOS os selos e comissões de todos os colaboradores e remover todos os selos personalizados permanentemente? Esta ação é irreversível.")) {
+                  const resetColaboradores = colaboradores.map(c => ({
+                    ...c,
+                    selo_etica: 'Não' as const,
+                    selo_brigadista: 'Não' as const,
+                    selo_cipa: 'Não' as const,
+                    selos_adicionais: []
+                  }));
+                  onUpdateColaboradores(resetColaboradores);
+                  onUpdateDynamicSelos([]);
+                  setActiveSelo('Comissão de Ética');
+                  alert("Todas as comissões, selos nativos e selos personalizados foram redefinidos para o estado padrão com sucesso!");
+                }
+              }}
+              className="bg-red-650 hover:bg-red-700 border border-red-500 text-white font-extrabold py-2.5 px-4 rounded-xl text-xs flex items-center gap-1.5 transition duration-150 cursor-pointer active:scale-95 shadow-md shadow-red-550/10"
+            >
+              <Trash2 className="w-4 h-4" />
+              <span>Resetar Selos</span>
+            </button>
+          )}
+
+          <button
+            onClick={() => {
+              if (!isAuthorizedAdmin()) {
+                alert("Apenas coordenadores ou supervisores possuem autorização para criar novos selos.");
+                return;
+              }
+              setIsNewSeloModalOpen(true);
+            }}
+            className="bg-amber-500 hover:bg-amber-600 border border-amber-400 text-white font-extrabold py-2.5 px-4 rounded-xl text-xs flex items-center gap-1.5 transition duration-150 cursor-pointer active:scale-95 shadow-md shadow-amber-500/10"
+          >
+            <PlusCircle className="w-4 h-4" />
+            <span>Criar Novo Selo</span>
+          </button>
+        </div>
       </div>
 
       {/* Main Grid Content */}
