@@ -63,7 +63,7 @@ export const USUARIOS_INICIAIS: Usuario[] = [
     setor: "Gestão",
     perfil: "Programador",
     status: "Ativo",
-    senha: "123" // Default simple password to make testing extremely easy!
+    senha: "@M05G05l9"
   },
   {
     nome: "Enf. Ana Souza",

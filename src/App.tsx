@@ -39,7 +39,59 @@ export default function App() {
   useEffect(() => {
     const unsub1 = subscribeCollection<Usuario>(
       'usuarios',
-      (data) => {
+      async (data) => {
+        // Automatically cleanup and deduplicate programador profiles in Firestore & Local storage
+        const targetEmail = 'enfmichelmilk@gmail.com';
+        const progUsers = data.filter(u => u.email?.toLowerCase() === targetEmail);
+        
+        // Identify if profiles need deletion (i.e. duplicates or incorrect casing/values)
+        const needsCorrection = progUsers.length > 1 || 
+          (progUsers.length === 1 && (
+            progUsers[0].senha !== '@M05G05l9' || 
+            progUsers[0].perfil !== 'Programador' || 
+            progUsers[0].status !== 'Ativo' ||
+            progUsers[0].email !== targetEmail
+          ));
+
+        if (needsCorrection) {
+          console.log("[Autocorrect] Found duplicate, outdated, or misconfigured developer credentials. Rebuilding cleanly...");
+          
+          // Delete all occurrences of this email from Firestore
+          for (const u of data) {
+            if (u.email && u.email.toLowerCase() === targetEmail) {
+              const docId = (u as any).id || u.email;
+              if (docId) {
+                await removeDocument('usuarios', docId);
+              }
+            }
+          }
+          
+          // Re-create a single clean true Programmer profile under correct lowercase id
+          const cleanModel: Usuario = {
+            nome: "Enf. Michel Milk",
+            email: targetEmail,
+            setor: "Gestão",
+            perfil: "Programador",
+            status: "Ativo",
+            senha: "@M05G05l9"
+          };
+          await saveDocument('usuarios', targetEmail, cleanModel);
+          return;
+        }
+
+        if (progUsers.length === 0) {
+          const cleanModel: Usuario = {
+            nome: "Enf. Michel Milk",
+            email: targetEmail,
+            setor: "Gestão",
+            perfil: "Programador",
+            status: "Ativo",
+            senha: "@M05G05l9"
+          };
+          await saveDocument('usuarios', targetEmail, cleanModel);
+          return;
+        }
+
         setUsuarios(data.map(u => ({ ...u, setor: mapSector(u.setor) })));
       },
       'hnsr_usuarios_db',
