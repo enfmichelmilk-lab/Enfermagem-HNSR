@@ -138,7 +138,11 @@ export function subscribeCollection<T>(
 
 // 3. Document Writer Helpers
 export async function saveDocument(collectionName: string, docId: string, data: any): Promise<void> {
-  const cleanId = String(docId); // Keep ID exactly as provided (e.g. emails with dots)
+  const cleanId = String(docId).trim(); // Keep ID exactly as provided (e.g. emails with dots)
+  if (!cleanId) {
+    console.warn(`[Firebase] Action ignored: Attempted to save document in "${collectionName}" with an empty ID.`);
+    return;
+  }
   if (!db) {
     // Write directly to backup storage
     const cached = localStorage.getItem(`hnsr_${collectionName}_db`);
@@ -168,7 +172,11 @@ export async function saveDocument(collectionName: string, docId: string, data: 
 }
 
 export async function removeDocument(collectionName: string, docId: string): Promise<void> {
-  const cleanId = String(docId);
+  const cleanId = String(docId).trim();
+  if (!cleanId) {
+    console.warn(`[Firebase] Action ignored: Attempted to remove document from "${collectionName}" with an empty ID.`);
+    return;
+  }
   if (!db) {
     const cached = localStorage.getItem(`hnsr_${collectionName}_db`);
     let items = cached ? JSON.parse(cached) : [];

@@ -49,7 +49,22 @@ export default function App() {
     const unsub2 = subscribeCollection<Colaborador>(
       'colaboradores',
       (data) => {
-        setColaboradores(data.map(c => ({ ...c, setor: mapSector(c.setor) })));
+        // Detect and automatically clean up any corrupted profiles without a valid matricula
+        const invalidColabs = data.filter(c => !c.matricula || c.matricula.trim() === "");
+        if (invalidColabs.length > 0) {
+          console.log("[Seeding/Sync] Auto-cleaning invalid/empty-matricula collaborators:", invalidColabs);
+          invalidColabs.forEach(async (c) => {
+            const docId = (c as any).id || c.email || c.matricula;
+            if (docId) {
+              await removeDocument('colaboradores', docId);
+            }
+          });
+          const cleanData = data.filter(c => c.matricula && c.matricula.trim() !== "");
+          setColaboradores(cleanData.map(c => ({ ...c, setor: mapSector(c.setor) })));
+          localStorage.setItem('hnsr_colaboradores_db', JSON.stringify(cleanData));
+        } else {
+          setColaboradores(data.map(c => ({ ...c, setor: mapSector(c.setor) })));
+        }
       },
       'hnsr_colaboradores_db',
       COLABORADORES_INICIAIS
@@ -122,14 +137,27 @@ export default function App() {
   const handleUpdateColaboradores = async (val: React.SetStateAction<Colaborador[]>) => {
     const nextList = typeof val === 'function' ? (val as Function)(colaboradores) : val;
     for (const item of nextList) {
-      const match = colaboradores.find(c => c.matricula === item.matricula);
+      const match = colaboradores.find(c => 
+        (c.matricula && item.matricula && c.matricula === item.matricula) ||
+        ((c as any).id && (item as any).id && (c as any).id === (item as any).id)
+      );
       if (!match || JSON.stringify(match) !== JSON.stringify(item)) {
-        await saveDocument('colaboradores', item.matricula, item);
+        const docId = item.matricula || (item as any).id || item.email;
+        if (docId) {
+          await saveDocument('colaboradores', docId, item);
+        }
       }
     }
     for (const item of colaboradores) {
-      if (!nextList.some((n: any) => n.matricula === item.matricula)) {
-        await removeDocument('colaboradores', item.matricula);
+      const isStillPresent = nextList.some((n: any) => 
+        (n.matricula && item.matricula && n.matricula === item.matricula) ||
+        (n.id && (item as any).id && n.id === (item as any).id)
+      );
+      if (!isStillPresent) {
+        const docId = item.matricula || (item as any).id || item.email;
+        if (docId) {
+          await removeDocument('colaboradores', docId);
+        }
       }
     }
     setColaboradores(nextList);
