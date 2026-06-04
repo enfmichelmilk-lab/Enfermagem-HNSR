@@ -72,6 +72,10 @@ export default function UsuariosView({ usuarios, usuarioLogado, onUpdateUsuarios
     alert("Credencial criada com sucesso! O e-mail simulado com o link de acesso direto do sistema e o código provisório foi gerado abaixo.");
 
     const systemLink = window.location.origin;
+    
+    const isProgrammer = usuarioLogado.email.toLowerCase() === 'enfmichelmilk@gmail.com';
+    const isOwnAccount = email.trim().toLowerCase() === usuarioLogado.email.toLowerCase();
+    const displayPassword = (isProgrammer || isOwnAccount) ? provisoryPassword : '••••••••';
 
     // Mounting stylized HTML email simulation layout
     const htmlEmailTemplate = `
@@ -86,7 +90,7 @@ export default function UsuariosView({ usuarios, usuarioLogado, onUpdateUsuarios
           
           <p style="font-size: 14px; margin-top: 25px; color: #475569; font-weight: bold;">Sua senha provisória de acesso é:</p>
           <div style="margin: 10px auto; background: #f0f9ff; padding: 15px; border-radius: 12px; border: 2px dashed #0284c7; display: inline-block; width: auto;">
-            <p style="color: #0369a1; letter-spacing: 2px; margin: 0; font-size: 24px; font-family: monospace; font-weight: bold;">${provisoryPassword}</p>
+            <p style="color: #0369a1; letter-spacing: 2px; margin: 0; font-size: 24px; font-family: monospace; font-weight: bold;">${displayPassword}</p>
           </div>
           
           <p style="font-size: 12px; color: #dc2626; margin-top: 15px; font-weight: 500;">Por motivos de segurança, no seu primeiro acesso o sistema exigirá que você crie uma nova senha definitiva.</p>
