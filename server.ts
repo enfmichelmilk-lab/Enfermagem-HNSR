@@ -8,8 +8,10 @@ import path from "path";
 
 async function startServer() {
   const app = express();
-  // Read dynamic port assigned by Hostinger, falling back to 3000 on development
-  const PORT = Number(process.env.PORT) || 3000;
+  // Hostinger/Passenger can pass a port number or a socket path (string) via process.env.PORT.
+  // We must not cast it directly to Number unless it represents a purely numeric port.
+  const rawPort = process.env.PORT;
+  const PORT = rawPort && !isNaN(Number(rawPort)) ? Number(rawPort) : rawPort || 3000;
 
   // JSON payload parser
   app.use(express.json());
@@ -37,9 +39,17 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on port ${PORT}`);
-  });
+  // Listen routing depending on whether PORT is a number (TCP) or a string (socket path)
+  if (typeof PORT === "number") {
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server running on port ${PORT}`);
+    });
+  } else {
+    // Socket path (for Passenger or similar hosting proxies)
+    app.listen(PORT, () => {
+      console.log(`Server running on socket path ${PORT}`);
+    });
+  }
 }
 
 startServer().catch((err) => {
