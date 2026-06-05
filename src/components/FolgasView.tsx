@@ -425,8 +425,11 @@ export default function FolgasView({
   const [modalExistingFolga, setModalExistingFolga] = useState<SolicitacaoFolga | null>(null);
   
   // Form input inside the modal
-  const [modalTipoFolga, setModalTipoFolga] = useState<'Folga de Escala' | 'Banco de Horas' | 'Folga Feriado' | 'Folga Brigada' | 'Folga Eleição'>('Folga de Escala');
+  const [modalTipoFolga, setModalTipoFolga] = useState<'Folga de Escala' | 'Banco de Horas' | 'Folga Feriado' | 'Folga Enfermagem' | 'Folga Brigada' | 'Folga Eleição' | 'Integração' | 'Falta'>('Folga de Escala');
   const [modalImmediateApproval, setModalImmediateApproval] = useState(true);
+
+  // Toggle for extra metadata columns to adjust horizontal space
+  const [showAppSupportColumns, setShowAppSupportColumns] = useState(true);
 
   // Month Navigation Helper
   const handlePrevMonth = () => {
@@ -687,23 +690,29 @@ export default function FolgasView({
   // Abbreviations Helper
   const getShorthand = (tipo: string): string => {
     switch (tipo) {
-      case 'Folga de Escala': return 'FS';
+      case 'Folga de Escala': return 'F';
       case 'Banco de Horas': return 'BH';
       case 'Folga Feriado': return 'FF';
-      case 'Folga Brigada': return 'FB';
-      case 'Folga Eleição': return 'FE';
-      default: return 'FS';
+      case 'Folga Enfermagem': return 'FE';
+      case 'Folga Brigada': return 'B';
+      case 'Folga Eleição': return 'E';
+      case 'Integração': return 'I';
+      case 'Falta': return 'A';
+      default: return 'F';
     }
   };
 
   // Full labels translation
   const getFullLabel = (tipo: string) => {
     switch (tipo) {
-      case 'Folga de Escala': return 'Folga de Escala (FS)';
+      case 'Folga de Escala': return 'Folga (F)';
       case 'Banco de Horas': return 'Banco de Horas (BH)';
       case 'Folga Feriado': return 'Folga Feriado (FF)';
-      case 'Folga Brigada': return 'Folga Brigada (FB)';
-      case 'Folga Eleição': return 'Folga Eleitoral (FE)';
+      case 'Folga Enfermagem': return 'Folga Enfermagem (FE)';
+      case 'Folga Brigada': return 'Brigada de Incêndio (B)';
+      case 'Folga Eleição': return 'Eleição (E)';
+      case 'Integração': return 'Integração (I)';
+      case 'Falta': return 'Ausente - Falta s/ justificativa (A)';
       default: return tipo;
     }
   };
@@ -735,6 +744,10 @@ export default function FolgasView({
         alert(`Aviso: O colaborador selecionado não possui saldo positivo de Banco de Horas (${modalTargetColab.bancohoras}h).`);
         return;
       }
+      if (modalTipoFolga === 'Folga Enfermagem' && modalTargetColab.folgaenf <= 0) {
+        alert(`Aviso: O colaborador possui saldo insuficiente para Folga Enfermagem (${modalTargetColab.folgaenf} dia[s]).`);
+        return;
+      }
       if (modalTipoFolga === 'Folga Feriado' && modalTargetColab.folgaferiado <= 0) {
         alert(`Aviso: O colaborador possui saldo insuficiente para Folga Feriado (${modalTargetColab.folgaferiado} dia[s]).`);
         return;
@@ -744,7 +757,7 @@ export default function FolgasView({
         return;
       }
       if (modalTipoFolga === 'Folga Eleição' && modalTargetColab.eleicao <= 0) {
-        alert(`Aviso: Saldo insuficiente de Folga Eleitoral (${modalTargetColab.eleicao} dia[s]).`);
+        alert(`Aviso: Saldo insuficiente de Eleição (${modalTargetColab.eleicao} dia[s]).`);
         return;
       }
       // Enforce at most 2 Folga de Escala (FS) per month
@@ -759,7 +772,7 @@ export default function FolgasView({
         ).length;
 
         if (existingCount >= 2) {
-          alert(`Erro: O limite máximo de 2 Folgas de Escala (FS) por direito ao mês foi atingido para este colaborador neste mês (${parts[1]}/${parts[0]}).`);
+          alert(`Erro: O limite máximo de 2 Folgas de Escala por direito ao mês foi atingido para este colaborador neste mês (${parts[1]}/${parts[0]}).`);
           return;
         }
       }
@@ -786,7 +799,7 @@ export default function FolgasView({
 
       if (modalTipoFolga === 'Banco de Horas') {
         updatedColab.bancohoras = Math.max(0, modalTargetColab.bancohoras - 12);
-      } else if (modalTipoFolga === 'Folga de Escala') {
+      } else if (modalTipoFolga === 'Folga Enfermagem') {
         updatedColab.folgaenf = Math.max(0, modalTargetColab.folgaenf - 1);
       } else if (modalTipoFolga === 'Folga Feriado') {
         updatedColab.folgaferiado = Math.max(0, modalTargetColab.folgaferiado - 1);
@@ -826,7 +839,7 @@ export default function FolgasView({
       ).length;
 
       if (existingCount >= 2) {
-        alert(`Erro: Não é possível aprovar. O colaborador já possui o limite máximo de 2 Folgas de Escala (FS) aprovadas para este mês (${parts[1]}/${parts[0]}).`);
+        alert(`Erro: Não é possível aprovar. O colaborador já possui o limite máximo de 2 Folgas de Escala aprovadas para este mês (${parts[1]}/${parts[0]}).`);
         return;
       }
     }
@@ -838,7 +851,7 @@ export default function FolgasView({
 
       if (sol.tipo === 'Banco de Horas') {
         updatedColab.bancohoras = Math.max(0, targetColab.bancohoras - 12);
-      } else if (sol.tipo === 'Folga de Escala') {
+      } else if (sol.tipo === 'Folga Enfermagem') {
         updatedColab.folgaenf = Math.max(0, targetColab.folgaenf - 1);
       } else if (sol.tipo === 'Folga Feriado') {
         updatedColab.folgaferiado = Math.max(0, targetColab.folgaferiado - 1);
@@ -882,7 +895,7 @@ export default function FolgasView({
 
           if (sol.tipo === 'Banco de Horas') {
             updatedColab.bancohoras = targetColab.bancohoras + 12;
-          } else if (sol.tipo === 'Folga de Escala') {
+          } else if (sol.tipo === 'Folga Enfermagem') {
             updatedColab.folgaenf = targetColab.folgaenf + 1;
           } else if (sol.tipo === 'Folga Feriado') {
             updatedColab.folgaferiado = targetColab.folgaferiado + 1;
@@ -1121,14 +1134,21 @@ export default function FolgasView({
 
                     {/* Table */}
                     <div className="overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 max-w-full">
-                      <table className="min-w-full border-collapse text-[11px] text-slate-600 table-fixed leading-tight">
+                      <table 
+                        style={{ minWidth: showAppSupportColumns ? '1550px' : '1300px' }}
+                        className="border-collapse text-[11px] text-slate-600 table-fixed leading-tight"
+                      >
                         
                         <thead className="bg-slate-100 text-slate-700 tracking-wide font-extrabold border-b border-slate-200">
                           <tr>
                             <th className="w-44 text-left p-2.5 bg-slate-100 border-r border-slate-200 sticky left-0 z-15 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Colaborador</th>
-                            <th className="w-18 text-center p-2 border-r border-slate-200 sticky left-[176px] z-15 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] bg-slate-100">Escala</th>
-                            <th className="w-20 text-center p-2 border-r border-slate-200 sticky left-[248px] z-15 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] bg-slate-100">Matrícula</th>
-                            <th className="w-24 text-center p-2 border-r border-slate-200 sticky left-[328px] z-15 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] bg-slate-100">Cargo</th>
+                            {showAppSupportColumns && (
+                              <>
+                                <th className="w-18 text-center p-2 border-r border-slate-200 sticky left-[176px] z-15 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] bg-slate-100">Escala</th>
+                                <th className="w-20 text-center p-2 border-r border-slate-200 sticky left-[248px] z-15 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] bg-slate-100">Matrícula</th>
+                                <th className="w-24 text-center p-2 border-r border-slate-200 sticky left-[328px] z-15 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] bg-slate-100">Cargo</th>
+                              </>
+                            )}
                             {Array.from({ length: daysInMonth }, (_, index) => {
                               const dNum = index + 1;
                               const { letter, isWeekend } = getDayOfWeekDetails(dNum);
@@ -1159,17 +1179,21 @@ export default function FolgasView({
                                     <div className="text-[9px] text-slate-400 font-medium tracking-tight mt-0.5">{colab.setor}</div>
                                   </td>
 
-                                  <td className="p-2 text-center font-bold text-slate-600 border-b border-r border-slate-200 bg-white sticky left-[176px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] whitespace-nowrap">
-                                    {colab.equipe.replace('Turno ', '').replace('Diurno', 'D').replace('Noturno', 'N')}
-                                  </td>
+                                  {showAppSupportColumns && (
+                                    <>
+                                      <td className="p-2 text-center font-bold text-slate-600 border-b border-r border-slate-200 bg-white sticky left-[176px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] whitespace-nowrap">
+                                        {colab.equipe.replace('Turno ', '').replace('Diurno', 'D').replace('Noturno', 'N')}
+                                      </td>
 
-                                  <td className="p-2 text-center text-slate-500 font-mono border-b border-r border-slate-200 bg-white sticky left-[248px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] whitespace-nowrap">
-                                    {colab.matricula}
-                                  </td>
+                                      <td className="p-2 text-center text-slate-500 font-mono border-b border-r border-slate-200 bg-white sticky left-[248px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] whitespace-nowrap">
+                                        {colab.matricula}
+                                      </td>
 
-                                  <td className="p-2 text-center text-slate-500 font-medium border-b border-r border-slate-200 bg-white sticky left-[328px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] whitespace-nowrap text-ellipsis overflow-hidden">
-                                    {colab.cargo}
-                                  </td>
+                                      <td className="p-2 text-center text-slate-500 font-medium border-b border-r border-slate-200 bg-white sticky left-[328px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] whitespace-nowrap text-ellipsis overflow-hidden">
+                                        {colab.cargo}
+                                      </td>
+                                    </>
+                                  )}
 
                                   {Array.from({ length: daysInMonth }, (_, index) => {
                                     const dNum = index + 1;
@@ -1263,7 +1287,7 @@ export default function FolgasView({
                             })
                           ) : (
                             <tr>
-                              <td colSpan={4 + daysInMonth} className="p-6 text-center text-slate-450 font-bold bg-white leading-normal">
+                              <td colSpan={showAppSupportColumns ? 4 + daysInMonth : 1 + daysInMonth} className="p-6 text-center text-slate-450 font-bold bg-white leading-normal">
                                 <span>Nenhum profissional localizado nesta equipe para a visualização atual.</span>
                               </td>
                             </tr>
@@ -1277,9 +1301,13 @@ export default function FolgasView({
                                 <span>Total Técnico + Auxiliar</span>
                               </div>
                             </td>
-                            <td className="p-2 text-center border-b border-r border-slate-200 bg-sky-50 sticky left-[176px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] font-extrabold">---</td>
-                            <td className="p-2 text-center border-b border-r border-slate-200 bg-sky-50 sticky left-[248px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] font-extrabold">---</td>
-                            <td className="p-2 text-center border-b border-r border-slate-200 bg-sky-50 sticky left-[328px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] font-extrabold overflow-hidden text-ellipsis whitespace-nowrap text-[10px]">Ativos no Dia</td>
+                            {showAppSupportColumns && (
+                              <>
+                                <td className="p-2 text-center border-b border-r border-slate-200 bg-sky-50 sticky left-[176px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] font-extrabold">---</td>
+                                <td className="p-2 text-center border-b border-r border-slate-200 bg-sky-50 sticky left-[248px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] font-extrabold">---</td>
+                                <td className="p-2 text-center border-b border-r border-slate-200 bg-sky-50 sticky left-[328px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] font-extrabold overflow-hidden text-ellipsis whitespace-nowrap text-[10px]">Ativos no Dia</td>
+                              </>
+                            )}
                             {Array.from({ length: daysInMonth }, (_, index) => {
                               const dNum = index + 1;
                               const count = shiftColabs.filter(colab => {
@@ -1309,13 +1337,20 @@ export default function FolgasView({
           ) : (
             /* Standard view for nurse */
             <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-inner bg-slate-50 max-w-full">
-              <table className="min-w-full border-collapse text-[11px] text-slate-600 table-fixed leading-tight">
+              <table 
+                style={{ minWidth: showAppSupportColumns ? '1550px' : '1300px' }}
+                className="border-collapse text-[11px] text-slate-600 table-fixed leading-tight"
+              >
                 <thead className="bg-slate-100 text-slate-700 tracking-wide font-extrabold border-b border-slate-200">
                   <tr>
                     <th className="w-44 text-left p-2.5 bg-slate-100 border-r border-slate-200 sticky left-0 z-15 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Colaborador</th>
-                    <th className="w-18 text-center p-2 border-r border-slate-200 sticky left-[176px] z-15 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] bg-slate-100">Escala</th>
-                    <th className="w-20 text-center p-2 border-r border-slate-200 sticky left-[248px] z-15 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] bg-slate-100">Matrícula</th>
-                    <th className="w-24 text-center p-2 border-r border-slate-200 sticky left-[328px] z-15 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] bg-slate-100">Cargo</th>
+                    {showAppSupportColumns && (
+                      <>
+                        <th className="w-18 text-center p-2 border-r border-slate-200 sticky left-[176px] z-15 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] bg-slate-100">Escala</th>
+                        <th className="w-20 text-center p-2 border-r border-slate-200 sticky left-[248px] z-15 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] bg-slate-100">Matrícula</th>
+                        <th className="w-24 text-center p-2 border-r border-slate-200 sticky left-[328px] z-15 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] bg-slate-100">Cargo</th>
+                      </>
+                    )}
                     {Array.from({ length: daysInMonth }, (_, index) => {
                       const dNum = index + 1;
                       const { letter, isWeekend } = getDayOfWeekDetails(dNum);
@@ -1355,15 +1390,19 @@ export default function FolgasView({
                               </div>
                               <div className="text-[9px] text-slate-400 font-medium tracking-tight mt-0.5">{colab.setor}</div>
                             </td>
-                            <td className="p-2 text-center font-bold text-slate-600 border-b border-r border-slate-200 bg-white sticky left-[176px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] whitespace-nowrap">
-                              {colab.equipe.replace('Turno ', '').replace('Diurno', 'D').replace('Noturno', 'N')}
-                            </td>
-                            <td className="p-2 text-center text-slate-500 font-mono border-b border-r border-slate-200 bg-white sticky left-[248px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] whitespace-nowrap">
-                              {colab.matricula}
-                            </td>
-                            <td className="p-2 text-center text-slate-500 font-medium border-b border-r border-slate-200 bg-white sticky left-[328px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] whitespace-nowrap text-ellipsis overflow-hidden">
-                              {colab.cargo}
-                            </td>
+                            {showAppSupportColumns && (
+                              <>
+                                <td className="p-2 text-center font-bold text-slate-600 border-b border-r border-slate-200 bg-white sticky left-[176px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] whitespace-nowrap">
+                                  {colab.equipe.replace('Turno ', '').replace('Diurno', 'D').replace('Noturno', 'N')}
+                                </td>
+                                <td className="p-2 text-center text-slate-500 font-mono border-b border-r border-slate-200 bg-white sticky left-[248px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] whitespace-nowrap">
+                                  {colab.matricula}
+                                </td>
+                                <td className="p-2 text-center text-slate-500 font-medium border-b border-r border-slate-200 bg-white sticky left-[328px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] whitespace-nowrap text-ellipsis overflow-hidden">
+                                  {colab.cargo}
+                                </td>
+                              </>
+                            )}
                             {Array.from({ length: daysInMonth }, (_, index) => {
                               const dNum = index + 1;
                               const dateStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(dNum).padStart(2, '0')}`;
@@ -1429,7 +1468,7 @@ export default function FolgasView({
                       })
                     ) : (
                       <tr>
-                        <td colSpan={4 + daysInMonth} className="p-12 text-center text-slate-400 font-bold bg-white leading-normal">
+                        <td colSpan={showAppSupportColumns ? 4 + daysInMonth : 1 + daysInMonth} className="p-12 text-center text-slate-400 font-bold bg-white leading-normal">
                           <Users className="w-10 h-10 text-slate-300 mx-auto mb-2" />
                           <span>Nenhum profissional localizado para esta visualização de escala.</span>
                         </td>
@@ -1694,7 +1733,10 @@ export default function FolgasView({
                       
                       {/* Grid Spreadsheet Scrollable Wrapper */}
                       <div className="md:col-span-10 overflow-x-auto border border-slate-200 rounded-xl shadow-xs max-w-full font-sans">
-                        <table className="w-full border-collapse table-fixed text-[9px] select-none">
+                        <table 
+                          style={{ minWidth: showAppSupportColumns ? '1550px' : '1000px' }}
+                          className="border-collapse table-fixed text-[9px] select-none"
+                        >
                           
                           {/* Headers */}
                           <thead>
@@ -1703,10 +1745,14 @@ export default function FolgasView({
                               <th className="w-11 p-1 border-r border-slate-250 bg-slate-100">BH</th>
                               <th className="w-8 p-1 border-r border-slate-250 bg-slate-100">FF</th>
                               <th className="w-8 p-1 border-r border-slate-250 bg-slate-100">FS</th>
-                              <th className="w-13 p-1 border-r border-slate-250 bg-slate-100 text-slate-500 font-semibold">Matrícula</th>
-                              <th className="w-13 p-1 border-r border-slate-250 bg-slate-100 text-slate-500 font-semibold">Coren</th>
-                              <th className="w-14 p-1 border-r border-slate-250 bg-slate-100">Cargo</th>
-                              <th className="w-13 p-1 border-r border-slate-300 bg-slate-150 font-semibold">Horário</th>
+                              {showAppSupportColumns && (
+                                <>
+                                  <th className="w-13 p-1 border-r border-slate-250 bg-slate-100 text-slate-500 font-semibold">Matrícula</th>
+                                  <th className="w-13 p-1 border-r border-slate-250 bg-slate-100 text-slate-500 font-semibold">Coren</th>
+                                  <th className="w-14 p-1 border-r border-slate-250 bg-slate-100">Cargo</th>
+                                  <th className="w-13 p-1 border-r border-slate-300 bg-slate-150 font-semibold">Horário</th>
+                                </>
+                              )}
                               
                               {/* Day Numbers header */}
                               {Array.from({ length: daysInMonth }, (_, index) => {
@@ -1738,10 +1784,14 @@ export default function FolgasView({
                               <td className="p-1 border-r border-slate-200"></td>
                               <td className="p-1 border-r border-slate-200"></td>
                               <td className="p-1 border-r border-slate-200"></td>
-                              <td className="p-1 border-r border-slate-200"></td>
-                              <td className="p-1 border-r border-slate-200"></td>
-                              <td className="p-1 border-r border-slate-200"></td>
-                              <td className="p-1 border-r border-slate-300 bg-slate-100"></td>
+                              {showAppSupportColumns && (
+                                <>
+                                  <td className="p-1 border-r border-slate-200"></td>
+                                  <td className="p-1 border-r border-slate-200"></td>
+                                  <td className="p-1 border-r border-slate-200"></td>
+                                  <td className="p-1 border-r border-slate-300 bg-slate-100"></td>
+                                </>
+                              )}
 
                               {Array.from({ length: daysInMonth }, (_, index) => {
                                 const dNum = index + 1;
@@ -1793,25 +1843,29 @@ export default function FolgasView({
                                       {colab.folgaenf || ''}
                                     </td>
 
-                                    {/* Matrícula */}
-                                    <td className="p-1 text-center text-slate-400 font-mono border-r border-slate-200 whitespace-nowrap text-[8px]">
-                                      {colab.matricula}
-                                    </td>
+                                    {showAppSupportColumns && (
+                                      <>
+                                        {/* Matrícula */}
+                                        <td className="p-1 text-center text-slate-400 font-mono border-r border-slate-200 whitespace-nowrap text-[8px]">
+                                          {colab.matricula}
+                                        </td>
 
-                                    {/* Coren */}
-                                    <td className="p-1 text-center text-slate-400 font-mono border-r border-slate-200 whitespace-nowrap text-[8px]">
-                                      {colab.coren || 'N/D'}
-                                    </td>
+                                        {/* Coren */}
+                                        <td className="p-1 text-center text-slate-400 font-mono border-r border-slate-200 whitespace-nowrap text-[8px]">
+                                          {colab.coren || 'N/D'}
+                                        </td>
 
-                                    {/* Cargo */}
-                                    <td className="p-1 text-center border-r border-slate-200 whitespace-nowrap text-[8px] font-bold text-slate-600" title={colab.cargo}>
-                                      {formatCargoAbbreviated(colab.cargo)}
-                                    </td>
+                                        {/* Cargo */}
+                                        <td className="p-1 text-center border-r border-slate-200 whitespace-nowrap text-[8px] font-bold text-slate-600" title={colab.cargo}>
+                                          {formatCargoAbbreviated(colab.cargo)}
+                                        </td>
 
-                                    {/* Horário */}
-                                    <td className="p-1 text-center border-r border-slate-300 bg-slate-50/60 font-mono text-[7.5px] font-semibold text-slate-500 whitespace-nowrap">
-                                      {colab.horario || '19:00/07:05'}
-                                    </td>
+                                        {/* Horário */}
+                                        <td className="p-1 text-center border-r border-slate-300 bg-slate-50/60 font-mono text-[7.5px] font-semibold text-slate-500 whitespace-nowrap">
+                                          {colab.horario || '19:00/07:05'}
+                                        </td>
+                                      </>
+                                    )}
 
                                     {/* Days Columns */}
                                     {Array.from({ length: daysInMonth }, (_, index) => {
@@ -1889,13 +1943,21 @@ export default function FolgasView({
                                         if (isApproved) {
                                           let badgeStyle = 'bg-emerald-100 text-emerald-800 border-emerald-250'; // standard F
                                           if (shorthand === 'FF') {
-                                            badgeStyle = 'bg-sky-100 text-sky-800 border-sky-250 font-black';
+                                            badgeStyle = 'bg-sky-100 text-sky-850 border-sky-250 font-black';
                                           } else if (shorthand === 'BH') {
-                                            badgeStyle = 'bg-amber-100 text-amber-800 border-amber-250';
-                                          } else if (shorthand === 'FE' || shorthand === 'FB') {
+                                            badgeStyle = 'bg-amber-100 text-amber-850 border-amber-250';
+                                          } else if (shorthand === 'FE') {
                                             badgeStyle = 'bg-purple-100 text-purple-850 border-purple-250';
+                                          } else if (shorthand === 'B') {
+                                            badgeStyle = 'bg-rose-150 text-rose-850 border-rose-300';
+                                          } else if (shorthand === 'E') {
+                                            badgeStyle = 'bg-teal-100 text-teal-850 border-teal-250';
+                                          } else if (shorthand === 'I') {
+                                            badgeStyle = 'bg-blue-100 text-blue-800 border-blue-200';
+                                          } else if (shorthand === 'A') {
+                                            badgeStyle = 'bg-red-100 text-red-800 border-red-200';
                                           } else if (shorthand === 'AT') {
-                                            badgeStyle = 'bg-rose-100 text-rose-850 border-rose-250';
+                                            badgeStyle = 'bg-rose-105 text-rose-850 border-rose-250';
                                           }
 
                                           return (
@@ -1958,7 +2020,7 @@ export default function FolgasView({
                               })
                             ) : (
                               <tr>
-                                <td colSpan={8 + daysInMonth} className="p-8 text-center text-slate-400 bg-slate-50 italic font-medium font-sans">
+                                <td colSpan={showAppSupportColumns ? 8 + daysInMonth : 4 + daysInMonth} className="p-8 text-center text-slate-400 bg-slate-50 italic font-medium font-sans">
                                   Nenhum profissional cadastrado com as condições especificadas para o Quadro Superior (A).
                                 </td>
                               </tr>
@@ -1974,10 +2036,14 @@ export default function FolgasView({
                               <td className="p-1 border-r border-slate-205 text-slate-400 text-[8px]">---</td>
                               <td className="p-1 border-r border-slate-205 text-slate-400 text-[8px]">---</td>
                               <td className="p-1 border-r border-slate-205 text-slate-400 text-[8px]">---</td>
-                              <td className="p-1 border-r border-slate-205 text-slate-400 text-[8px]">---</td>
-                              <td className="p-1 border-r border-slate-205 text-slate-400 text-[8px]">---</td>
-                              <td className="p-1 border-r border-slate-205 text-slate-400 text-[8px]">---</td>
-                              <td className="p-1 border-r border-slate-300 bg-slate-100/50 text-slate-400 text-[8px]">---</td>
+                              {showAppSupportColumns && (
+                                <>
+                                  <td className="p-1 border-r border-slate-205 text-slate-400 text-[8px]">---</td>
+                                  <td className="p-1 border-r border-slate-205 text-slate-400 text-[8px]">---</td>
+                                  <td className="p-1 border-r border-slate-205 text-slate-400 text-[8px]">---</td>
+                                  <td className="p-1 border-r border-slate-300 bg-slate-100/50 text-slate-400 text-[8px]">---</td>
+                                </>
+                              )}
                               
                               {Array.from({ length: daysInMonth }, (_, index) => {
                                 const dNum = index + 1;
@@ -2163,8 +2229,11 @@ export default function FolgasView({
                     <div className="grid grid-cols-1 md:grid-cols-12 gap-5 font-sans">
                       
                       {/* Grid Spreadsheet Scrollable Wrapper */}
-                      <div className="md:col-span-10 overflow-x-auto border border-slate-200 rounded-xl shadow-xs max-w-full">
-                        <table className="w-full border-collapse table-fixed text-[9px] select-none">
+                      <div className="md:col-span-10 overflow-x-auto border border-slate-200 rounded-xl shadow-xs max-w-full font-sans">
+                        <table 
+                          style={{ minWidth: showAppSupportColumns ? '1550px' : '1000px' }}
+                          className="border-collapse table-fixed text-[9px] select-none"
+                        >
                           
                           {/* Headers */}
                           <thead>
@@ -2173,10 +2242,14 @@ export default function FolgasView({
                               <th className="w-11 p-1 border-r border-slate-250 bg-slate-100">BH</th>
                               <th className="w-8 p-1 border-r border-slate-250 bg-slate-100">FF</th>
                               <th className="w-8 p-1 border-r border-slate-250 bg-slate-100">FS</th>
-                              <th className="w-13 p-1 border-r border-slate-250 bg-slate-100 text-slate-500 font-semibold">Matrícula</th>
-                              <th className="w-13 p-1 border-r border-slate-250 bg-slate-100 text-slate-500 font-semibold">Coren</th>
-                              <th className="w-14 p-1 border-r border-slate-250 bg-slate-100 font-semibold font-sans">Cargo</th>
-                              <th className="w-13 p-1 border-r border-slate-300 bg-slate-150 font-semibold">Horário</th>
+                              {showAppSupportColumns && (
+                                <>
+                                  <th className="w-13 p-1 border-r border-slate-250 bg-slate-100 text-slate-500 font-semibold">Matrícula</th>
+                                  <th className="w-13 p-1 border-r border-slate-250 bg-slate-100 text-slate-500 font-semibold">Coren</th>
+                                  <th className="w-14 p-1 border-r border-slate-250 bg-slate-100 font-semibold font-sans">Cargo</th>
+                                  <th className="w-13 p-1 border-r border-slate-300 bg-slate-150 font-semibold">Horário</th>
+                                </>
+                              )}
                               
                               {/* Day Numbers header */}
                               {Array.from({ length: daysInMonth }, (_, index) => {
@@ -2208,10 +2281,14 @@ export default function FolgasView({
                               <td className="p-1 border-r border-slate-200"></td>
                               <td className="p-1 border-r border-slate-205"></td>
                               <td className="p-1 border-r border-slate-200"></td>
-                              <td className="p-1 border-r border-slate-200"></td>
-                              <td className="p-1 border-r border-slate-200"></td>
-                              <td className="p-1 border-r border-slate-200"></td>
-                              <td className="p-1 border-r border-slate-300 bg-slate-100"></td>
+                              {showAppSupportColumns && (
+                                <>
+                                  <td className="p-1 border-r border-slate-200"></td>
+                                  <td className="p-1 border-r border-slate-200"></td>
+                                  <td className="p-1 border-r border-slate-200"></td>
+                                  <td className="p-1 border-r border-slate-300 bg-slate-100"></td>
+                                </>
+                              )}
 
                               {Array.from({ length: daysInMonth }, (_, index) => {
                                 const dNum = index + 1;
@@ -2263,25 +2340,29 @@ export default function FolgasView({
                                       {colab.folgaenf || ''}
                                     </td>
 
-                                    {/* Matrícula */}
-                                    <td className="p-1 text-center text-slate-400 font-mono border-r border-slate-200 whitespace-nowrap text-[8px]">
-                                      {colab.matricula}
-                                    </td>
+                                    {showAppSupportColumns && (
+                                      <>
+                                        {/* Matrícula */}
+                                        <td className="p-1 text-center text-slate-400 font-mono border-r border-slate-200 whitespace-nowrap text-[8px]">
+                                          {colab.matricula}
+                                        </td>
 
-                                    {/* Coren */}
-                                    <td className="p-1 text-center text-slate-400 font-mono border-r border-slate-200 whitespace-nowrap text-[8px]">
-                                      {colab.coren || 'N/D'}
-                                    </td>
+                                        {/* Coren */}
+                                        <td className="p-1 text-center text-slate-400 font-mono border-r border-slate-200 whitespace-nowrap text-[8px]">
+                                          {colab.coren || 'N/D'}
+                                        </td>
 
-                                    {/* Cargo */}
-                                    <td className="p-1 text-center border-r border-slate-200 whitespace-nowrap text-[8px] font-bold text-slate-600 font-sans" title={colab.cargo}>
-                                      {formatCargoAbbreviated(colab.cargo)}
-                                    </td>
+                                        {/* Cargo */}
+                                        <td className="p-1 text-center border-r border-slate-200 whitespace-nowrap text-[8px] font-bold text-slate-600 font-sans" title={colab.cargo}>
+                                          {formatCargoAbbreviated(colab.cargo)}
+                                        </td>
 
-                                    {/* Horário */}
-                                    <td className="p-1 text-center border-r border-slate-300 bg-slate-50/65 font-mono text-[7.5px] font-semibold text-slate-500 whitespace-nowrap">
-                                      {colab.horario || '19:00/07:05'}
-                                    </td>
+                                        {/* Horário */}
+                                        <td className="p-1 text-center border-r border-slate-300 bg-slate-50/65 font-mono text-[7.5px] font-semibold text-slate-500 whitespace-nowrap">
+                                          {colab.horario || '19:00/07:05'}
+                                        </td>
+                                      </>
+                                    )}
 
                                     {/* Days Columns */}
                                     {Array.from({ length: daysInMonth }, (_, index) => {
@@ -2359,13 +2440,21 @@ export default function FolgasView({
                                         if (isApproved) {
                                           let badgeStyle = 'bg-emerald-100 text-emerald-800 border-emerald-250'; // standard F
                                           if (shorthand === 'FF') {
-                                            badgeStyle = 'bg-sky-100 text-sky-800 border-sky-250 font-black';
+                                            badgeStyle = 'bg-sky-100 text-sky-850 border-sky-250 font-black';
                                           } else if (shorthand === 'BH') {
-                                            badgeStyle = 'bg-amber-100 text-amber-800 border-amber-250';
-                                          } else if (shorthand === 'FE' || shorthand === 'FB') {
+                                            badgeStyle = 'bg-amber-100 text-amber-850 border-amber-250';
+                                          } else if (shorthand === 'FE') {
                                             badgeStyle = 'bg-purple-100 text-purple-850 border-purple-200';
+                                          } else if (shorthand === 'B') {
+                                            badgeStyle = 'bg-rose-150 text-rose-850 border-rose-350';
+                                          } else if (shorthand === 'E') {
+                                            badgeStyle = 'bg-teal-100 text-teal-850 border-teal-250';
+                                          } else if (shorthand === 'I') {
+                                            badgeStyle = 'bg-blue-100 text-blue-800 border-blue-200';
+                                          } else if (shorthand === 'A') {
+                                            badgeStyle = 'bg-red-100 text-red-800 border-red-200';
                                           } else if (shorthand === 'AT') {
-                                            badgeStyle = 'bg-rose-100 text-rose-850 border-rose-250';
+                                            badgeStyle = 'bg-rose-105 text-rose-850 border-rose-250';
                                           }
 
                                           return (
@@ -2428,7 +2517,7 @@ export default function FolgasView({
                               })
                             ) : (
                               <tr>
-                                <td colSpan={8 + daysInMonth} className="p-8 text-center text-slate-400 bg-slate-50 italic font-medium font-sans">
+                                <td colSpan={showAppSupportColumns ? 8 + daysInMonth : 4 + daysInMonth} className="p-8 text-center text-slate-400 bg-slate-50 italic font-medium font-sans">
                                   Nenhum profissional cadastrado com as condições especificadas para o Quadro Inferior (B).
                                 </td>
                               </tr>
@@ -2444,10 +2533,14 @@ export default function FolgasView({
                               <td className="p-1 border-r border-slate-200 text-slate-400 text-[8px]">---</td>
                               <td className="p-1 border-r border-slate-205 text-slate-400 text-[8px]">---</td>
                               <td className="p-1 border-r border-slate-205 text-slate-400 text-[8px]">---</td>
-                              <td className="p-1 border-r border-slate-205 text-slate-400 text-[8px]">---</td>
-                              <td className="p-1 border-r border-slate-205 text-slate-400 text-[8px]">---</td>
-                              <td className="p-1 border-r border-slate-205 text-slate-400 text-[8px]">---</td>
-                              <td className="p-1 border-r border-slate-300 bg-slate-100/50 text-slate-400 text-[8px]">---</td>
+                              {showAppSupportColumns && (
+                                <>
+                                  <td className="p-1 border-r border-slate-205 text-slate-400 text-[8px]">---</td>
+                                  <td className="p-1 border-r border-slate-205 text-slate-400 text-[8px]">---</td>
+                                  <td className="p-1 border-r border-slate-205 text-slate-400 text-[8px]">---</td>
+                                  <td className="p-1 border-r border-slate-300 bg-slate-100/50 text-slate-400 text-[8px]">---</td>
+                                </>
+                              )}
                               
                               {Array.from({ length: daysInMonth }, (_, index) => {
                                 const dNum = index + 1;
@@ -2863,23 +2956,23 @@ export default function FolgasView({
                 <span className="text-[10px] text-slate-500 uppercase font-extrabold tracking-wider block">Ativos Disponíveis deste Profissional</span>
                 <div className="grid grid-cols-5 gap-1.5 text-center text-[10px] font-bold">
                   <div className="bg-white p-1.5 border border-slate-200/60 rounded-lg">
-                    <span className="block text-slate-400 text-[8px]">BANCO</span>
+                    <span className="block text-slate-400 text-[8px]">BH</span>
                     <span className="text-xs font-extrabold text-sky-700">{modalTargetColab.bancohoras}h</span>
                   </div>
                   <div className="bg-white p-1.5 border border-slate-200/60 rounded-lg">
-                    <span className="block text-slate-400 text-[8px]">FOLGA</span>
+                    <span className="block text-slate-400 text-[8px]">FE</span>
                     <span className="text-xs font-extrabold text-indigo-700">{modalTargetColab.folgaenf}d</span>
                   </div>
                   <div className="bg-white p-1.5 border border-slate-200/60 rounded-lg">
-                    <span className="block text-slate-400 text-[8px]">FERIADO</span>
+                    <span className="block text-slate-400 text-[8px]">FF</span>
                     <span className="text-xs font-extrabold text-violet-700">{modalTargetColab.folgaferiado}d</span>
                   </div>
                   <div className="bg-white p-1.5 border border-slate-200/60 rounded-lg">
-                    <span className="block text-slate-400 text-[8px]">BRIGADA</span>
+                    <span className="block text-slate-400 text-[8px]">B</span>
                     <span className="text-xs font-extrabold text-rose-700">{modalTargetColab.brigada}d</span>
                   </div>
                   <div className="bg-white p-1.5 border border-slate-200/60 rounded-lg">
-                    <span className="block text-slate-400 text-[8px]">ELEIÇÃO</span>
+                    <span className="block text-slate-400 text-[8px]">E</span>
                     <span className="text-xs font-extrabold text-amber-700">{modalTargetColab.eleicao}d</span>
                   </div>
                 </div>
@@ -3014,11 +3107,14 @@ export default function FolgasView({
                       onChange={(e) => setModalTipoFolga(e.target.value as any)}
                       className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 font-bold focus:outline-none focus:bg-white focus:border-sky-500 transition-colors"
                     >
-                      <option value="Folga de Escala">Folga de Escala (FS)</option>
-                      <option value="Banco de Horas">Banco de Horas (BH) - Consome 12 horas</option>
-                      <option value="Folga Feriado">Folga Feriado (FF)</option>
-                      <option value="Folga Brigada">Folga Brigada (FB)</option>
-                      <option value="Folga Eleição">Folga Eleitoral (FE)</option>
+                      <option value="Folga de Escala">Folga (F)</option>
+                      <option value="Banco de Horas">Banco de Horas (BH) - Consome 12h [Saldo: {modalTargetColab?.bancohoras}h]</option>
+                      <option value="Folga Feriado">Folga Feriado (FF) [Saldo: {modalTargetColab?.folgaferiado}d]</option>
+                      <option value="Folga Enfermagem">Folga Enfermagem (FE) [Saldo: {modalTargetColab?.folgaenf}d]</option>
+                      <option value="Folga Brigada">Brigada de Incêndio (B) [Saldo: {modalTargetColab?.brigada}d]</option>
+                      <option value="Folga Eleição">Eleição (E) [Saldo: {modalTargetColab?.eleicao}d]</option>
+                      <option value="Integração">Integração (I)</option>
+                      <option value="Falta">Ausente - Falta s/ justificativa (A)</option>
                     </select>
                   </div>
 

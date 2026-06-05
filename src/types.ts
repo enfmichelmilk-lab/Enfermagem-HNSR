@@ -68,7 +68,7 @@ export interface SolicitacaoFolga {
   id: string;
   colaborador: string;
   matricula: string;
-  tipo: 'Folga de Escala' | 'Banco de Horas' | 'Folga Feriado' | 'Folga Brigada' | 'Folga Eleição';
+  tipo: 'Folga de Escala' | 'Banco de Horas' | 'Folga Feriado' | 'Folga Enfermagem' | 'Folga Brigada' | 'Folga Eleição' | 'Integração' | 'Falta';
   data: string; // YYYY-MM-DD
   status: 'Pendente' | 'Aprovado' | 'Recusado';
   solicitante: string;
