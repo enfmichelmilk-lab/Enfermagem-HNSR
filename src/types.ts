@@ -88,3 +88,31 @@ export interface Ferias {
   dataCriacao: string;
 }
 
+export interface ChamadaSetorMetric {
+  setor: string; // UTI (9º andar), CC / CME, etc.
+  totalPacientes: number;
+  pacientesAcamados: number;
+  pacientesVM: number;
+  altasPrevistas: number;
+}
+
+export interface ColaboradorChamadaStatus {
+  matricula: string;
+  nome: string;
+  cargo: string;
+  setorOriginal: string;
+  status: 'Presente' | 'Atestado' | 'Falta' | 'Férias' | 'Folga';
+  remanejadoPara?: string; // e.g. 'CC / CME'
+  info?: string; // description of leave
+}
+
+export interface Chamada {
+  id: string;
+  data: string; // YYYY-MM-DD
+  turno: string; // e.g. "Diurno A", "Diurno B", etc.
+  enfermeiroReferencia: string;
+  statusColaboradores: ColaboradorChamadaStatus[];
+  metricasSetor: { [setorName: string]: ChamadaSetorMetric };
+  dataCriacao: string;
+}
+

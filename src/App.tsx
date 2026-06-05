@@ -11,7 +11,7 @@ import {
   SOLICITACOES_FOLGA_INICIAL,
   mapSector
 } from './data/mockData';
-import { Usuario, Colaborador, Absenteismo, SolicitacaoFolga, Ferias } from './types';
+import { Usuario, Colaborador, Absenteismo, SolicitacaoFolga, Ferias, Chamada } from './types';
 import LoginView from './components/LoginView';
 import Sidebar from './components/Sidebar';
 import DashboardView from './components/DashboardView';
@@ -21,6 +21,7 @@ import FolgasView from './components/FolgasView';
 import UsuariosView from './components/UsuariosView';
 import FeriasView from './components/FeriasView';
 import ComissoesView from './components/ComissoesView';
+import ChamadaView from './components/ChamadaView';
 import { subscribeCollection, saveDocument, removeDocument } from './lib/firebase';
 
 export default function App() {
@@ -34,6 +35,7 @@ export default function App() {
   const [solicitacoes, setSolicitacoes] = useState<SolicitacaoFolga[]>([]);
   const [ferias, setFerias] = useState<Ferias[]>([]);
   const [dynamicSelos, setDynamicSelos] = useState<string[]>([]);
+  const [chamadas, setChamadas] = useState<Chamada[]>([]);
 
   // 2. Real-Time Firestore Synchronization Subscriptions on Mount
   useEffect(() => {
@@ -158,6 +160,15 @@ export default function App() {
       []
     );
 
+    const unsub7 = subscribeCollection<Chamada>(
+      'chamadas',
+      (data) => {
+        setChamadas(data);
+      },
+      'hnsr_chamadas_db',
+      []
+    );
+
     return () => {
       unsub1();
       unsub2();
@@ -165,6 +176,7 @@ export default function App() {
       unsub4();
       unsub5();
       unsub6();
+      unsub7();
     };
   }, []);
 
@@ -283,6 +295,23 @@ export default function App() {
     localStorage.setItem('hnsr_dynamic_selos', JSON.stringify(nextList));
   };
 
+  const handleUpdateChamadas = async (val: React.SetStateAction<Chamada[]>) => {
+    const nextList = typeof val === 'function' ? (val as Function)(chamadas) : val;
+    for (const item of nextList) {
+      const match = chamadas.find(c => c.id === item.id);
+      if (!match || JSON.stringify(match) !== JSON.stringify(item)) {
+        await saveDocument('chamadas', item.id, item);
+      }
+    }
+    for (const item of chamadas) {
+      if (!nextList.some((n: any) => n.id === item.id)) {
+        await removeDocument('chamadas', item.id);
+      }
+    }
+    setChamadas(nextList);
+    localStorage.setItem('hnsr_chamadas_db', JSON.stringify(nextList));
+  };
+
   // Check if session keeps active on load
   useEffect(() => {
     const sessionLocal = localStorage.getItem('hnsr_active_session');
@@ -327,6 +356,7 @@ export default function App() {
     localStorage.removeItem('hnsr_solicitacoes_db');
     localStorage.removeItem('hnsr_ferias_db');
     localStorage.removeItem('hnsr_dynamic_selos');
+    localStorage.removeItem('hnsr_chamadas_db');
 
     if (mode === 'default') {
       setUsuarios(USUARIOS_INICIAIS);
@@ -335,12 +365,14 @@ export default function App() {
       setSolicitacoes(SOLICITACOES_FOLGA_INICIAL);
       setFerias([]);
       setDynamicSelos([]);
+      setChamadas([]);
     } else {
       setColaboradores([]);
       setAbsenteismo([]);
       setSolicitacoes([]);
       setFerias([]);
       setDynamicSelos([]);
+      setChamadas([]);
       if (usuarioLogado) {
         setUsuarios([usuarioLogado]);
       } else {
@@ -422,6 +454,18 @@ export default function App() {
             colaboradores={colaboradores}
             onUpdateAbsenteismo={handleUpdateAbsenteismo}
             usuarioLogado={usuarioLogado}
+          />
+        );
+      case 'chamada':
+        return (
+          <ChamadaView
+            colaboradores={colaboradores}
+            absenteismo={absenteismo}
+            ferias={ferias}
+            solicitacoes={solicitacoes}
+            usuarioLogado={usuarioLogado}
+            chamadas={chamadas}
+            onUpdateChamadas={handleUpdateChamadas}
           />
         );
       case 'folgas':

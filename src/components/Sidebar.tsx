@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { Activity, Users, Stethoscope, CalendarCheck, UserCog, LogOut, HeartHandshake, Palmtree, Award } from 'lucide-react';
+import { Activity, Users, Stethoscope, CalendarCheck, UserCog, LogOut, HeartHandshake, Palmtree, Award, ClipboardCheck } from 'lucide-react';
 import { Usuario } from '../types';
 import HapvidaLogo from './HapvidaLogo';
 
@@ -100,6 +100,20 @@ export default function Sidebar({ usuario, activeView, onNavigate, onLogout }: S
             </button>
           </li>
         )}
+
+        <li>
+          <button
+            onClick={() => onNavigate('chamada')}
+            className={`w-full text-left py-2.5 px-3.5 rounded-lg text-sm font-semibold flex items-center gap-3 transition-all duration-150 ${
+              activeView === 'chamada'
+                ? 'bg-sky-600 text-white shadow-md shadow-sky-600/10'
+                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+            }`}
+          >
+            <ClipboardCheck className="w-4 h-4 shrink-0 text-emerald-500" />
+            <span>Chamada Diária</span>
+          </button>
+        </li>
 
         <li>
           <button
