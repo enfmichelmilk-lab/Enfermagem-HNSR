@@ -6,6 +6,7 @@
 import React from 'react';
 import { Activity, Users, Stethoscope, CalendarCheck, UserCog, LogOut, HeartHandshake, Palmtree, Award } from 'lucide-react';
 import { Usuario } from '../types';
+import HapvidaLogo from './HapvidaLogo';
 
 interface SidebarProps {
   usuario: Usuario;
@@ -31,14 +32,9 @@ export default function Sidebar({ usuario, activeView, onNavigate, onLogout }: S
     <nav className="w-64 bg-white border-r border-slate-200 flex flex-col h-screen fixed left-0 top-0 text-slate-800 z-10 font-sans">
       
       {/* Branding Header */}
-      <div className="p-5 border-b border-slate-100 flex items-center gap-3">
-        <div className="w-9 h-9 rounded-lg bg-sky-600 flex items-center justify-center text-white shadow-md">
-          <Activity className="w-5 h-5 animate-pulse" />
-        </div>
-        <div>
-          <h1 className="text-base font-extrabold text-sky-800 tracking-tight leading-none">Hapvida</h1>
-          <span className="text-[9.5px] text-slate-400 font-extrabold uppercase tracking-tight leading-none">Hospital N. S. Rosário</span>
-        </div>
+      <div className="p-4 border-b border-slate-100 flex flex-col gap-1.5 justify-center">
+        <HapvidaLogo textSize="lg" animated={true} />
+        <span className="text-[7.5px] text-slate-400 font-extrabold uppercase tracking-widest block pl-1">SISTEMA INTEGRADO DE ESCALAS</span>
       </div>
 
       {/* Logged in User Section */}

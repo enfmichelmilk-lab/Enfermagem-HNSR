@@ -64,11 +64,11 @@ export default function DashboardView({
   }, [colaboradores]);
 
   const totalBrigada = useMemo(() => {
-    return colaboradores.filter(c => c.selo_brigadista === 'Sim' || c.brigada > 0 || c.selos_adicionais?.includes('Brigadista') || c.selos_adicionais?.includes('Brigadistas Emergência')).length;
+    return colaboradores.filter(c => c.selo_brigadista === 'Sim' || c.selos_adicionais?.includes('Brigadista') || c.selos_adicionais?.includes('Brigadistas Emergência')).length;
   }, [colaboradores]);
 
   const totalCipa = useMemo(() => {
-    return colaboradores.filter(c => c.selo_cipa === 'Sim' || c.eleicao > 0 || c.selos_adicionais?.includes('CIPA') || c.selos_adicionais?.includes('Membros da CIPA')).length;
+    return colaboradores.filter(c => c.selo_cipa === 'Sim' || c.selos_adicionais?.includes('CIPA') || c.selos_adicionais?.includes('Membros da CIPA')).length;
   }, [colaboradores]);
 
   // Active vacations tracker indicator

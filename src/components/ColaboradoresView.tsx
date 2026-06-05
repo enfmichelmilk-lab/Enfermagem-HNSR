@@ -346,7 +346,7 @@ Atenciosamente,
       }
       
       return matchSearch && matchEquipe && matchSetor && matchManager;
-    });
+    }).sort((a, b) => a.nome.localeCompare(b.nome));
   }, [colaboradores, searchTerm, selectedEquipe, selectedSetor, usuarioLogado]);
 
   // Gestor lists builders (direct translation of Gas rules)

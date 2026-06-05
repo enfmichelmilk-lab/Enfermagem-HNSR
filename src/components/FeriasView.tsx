@@ -10,6 +10,7 @@ import {
   Pencil
 } from 'lucide-react';
 import { Ferias, Colaborador, Usuario } from '../types';
+import SearchableColaboradorSelect from './SearchableColaboradorSelect';
 
 interface FeriasViewProps {
   ferias: Ferias[];
@@ -458,18 +459,13 @@ export default function FeriasView({
                 {/* Colaborador Selector */}
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-slate-650 block">Selecione o Colaborador:</label>
-                  <select
-                    value={selectedColabMatricula}
-                    onChange={(e) => setSelectedColabMatricula(e.target.value)}
-                    className="w-full text-xs font-bold text-slate-800 border border-slate-200 bg-slate-50/50 p-2.5 rounded-xl cursor-pointer focus:outline-none focus:bg-white focus:border-sky-500 focus:ring-1 focus:ring-sky-500 transition-colors"
-                  >
-                    <option value="" disabled>Escolha um profissional de sua competência...</option>
-                    {eligibleColaboradores.map(c => (
-                      <option key={c.matricula} value={c.matricula}>
-                        {c.nome} (S: {c.setor} • M: {c.matricula} • Cargo: {c.cargo})
-                      </option>
-                    ))}
-                  </select>
+                  <SearchableColaboradorSelect
+                    colaboradores={eligibleColaboradores}
+                    selectedMatricula={selectedColabMatricula}
+                    onSelect={(colab) => setSelectedColabMatricula(colab ? colab.matricula : '')}
+                    required={true}
+                    placeholder="Escolha um profissional de sua competência..."
+                  />
                   <span className="text-[10px] text-slate-400 block font-normal leading-normal">
                     {usuarioLogado.perfil === 'Enfermeiro(a)' || usuarioLogado.perfil.includes('Enfermeiro')
                       ? 'Em perfil de Enfermeiro(a), apenas sua ficha e de seu setor/equipe direta estão disponíveis.'

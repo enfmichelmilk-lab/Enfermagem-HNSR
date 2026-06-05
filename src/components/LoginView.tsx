@@ -6,6 +6,7 @@
 import React, { useState } from 'react';
 import { Activity, Shield, KeyRound, Eye, EyeOff, Mail, ArrowLeft, Send } from 'lucide-react';
 import { Usuario } from '../types';
+import HapvidaLogo from './HapvidaLogo';
 
 interface LoginViewProps {
   usuarios: Usuario[];
@@ -177,13 +178,12 @@ export default function LoginView({ usuarios, onLoginSuccess, onUpdateUsuarios }
       <div className="w-full max-w-md bg-white p-8 rounded-2xl shadow-xl border border-slate-200">
         
         {/* Core Header */}
-        <div className="text-center mb-6">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-sky-100 text-sky-600 mb-2">
-            <Activity className="w-8 h-8" />
+        <div className="text-center mb-6 flex flex-col items-center">
+          <div className="flex flex-col items-center gap-1 mb-2 justify-center">
+            <HapvidaLogo textSize="xl" />
+            <span className="text-[9px] text-slate-400 font-extrabold uppercase tracking-widest block text-center">SISTEMA INTEGRADO DE ESCALAS</span>
           </div>
-          <h2 className="text-xl font-black tracking-tight text-slate-850">Hapvida</h2>
-          <p className="text-xs text-sky-700 font-extrabold uppercase tracking-wider">Hospital Nossa Senhora do Rosário</p>
-          <span className="text-[10px] text-slate-400 font-semibold block mt-1">Gestão de RH da Enfermagem</span>
+          <p className="text-[11px] text-slate-500 font-extrabold mt-1">Hospital Nossa Senhora do Rosário &bull; Gestão de Enfermagem</p>
         </div>
 
         {/* Step 1: Login Form */}

@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
 import { Absenteismo, Colaborador, Usuario } from '../types';
+import SearchableColaboradorSelect from './SearchableColaboradorSelect';
 import { CID_NATIVO, SETORES_HOSPITALARES, EQUIPES_ESCALA } from '../data/mockData';
 
 interface AbsenteismoViewProps {
@@ -808,19 +809,19 @@ export default function AbsenteismoView({
               
               <div className="space-y-1">
                 <label className="font-bold text-slate-600">Colaborador</label>
-                <select
-                  value={colaboradorNome}
-                  onChange={(e) => handleNomeSelectChange(e.target.value)}
-                  className="w-full p-2.5 bg-white border border-slate-300 rounded-lg focus:outline-none focus:border-sky-500 font-bold text-slate-700 text-xs"
-                  required
-                >
-                  <option value="">Selecione o colaborador...</option>
-                  {colaboradores.map(c => (
-                    <option key={c.matricula} value={c.nome}>
-                      {c.nome} (Matrícula: {c.matricula} - {c.setor})
-                    </option>
-                  ))}
-                </select>
+                <SearchableColaboradorSelect
+                  colaboradores={colaboradores}
+                  selectedMatricula={matricula}
+                  onSelect={(colab) => {
+                    if (colab) {
+                      handleNomeSelectChange(colab.nome);
+                    } else {
+                      handleNomeSelectChange('');
+                    }
+                  }}
+                  required={true}
+                  placeholder="Selecione o colaborador..."
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-4">

@@ -15,6 +15,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend as Recharts
 import { SolicitacaoFolga, Colaborador, Usuario, Absenteismo, Ferias } from '../types';
 import { SETORES_HOSPITALARES } from '../data/mockData';
 import { subscribeCollection, saveDocument, removeDocument } from '../lib/firebase';
+import HapvidaLogo from './HapvidaLogo';
 
 const equipesDisponiveis = ['Todos', 'Diurno A', 'Diurno B', 'Noturno A', 'Noturno B', 'Diarista'];
 
@@ -3049,18 +3050,9 @@ export default function FolgasView({
                 <div className="flex justify-between items-start border-b-2 border-sky-605 pb-4 mb-4">
                   
                   {/* Brand hapvida logo */}
-                  <div className="flex items-center gap-2.5">
-                    <svg className="w-10 h-10" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M50 85C50 85 85 58 85 36C85 19 71 10 57 10C48 10 52 18 50 20C48 18 52 10 43 10C29 10 15 19 15 36C15 58 50 85 50 85Z" fill="#0079C1"/>
-                      <path d="M50 72C50 72 75 50 75 34C75 22 65 15 55 15C48 15 52 19 50 21C48 19 52 15 45 15C35 15 25 22 25 34C25 50 50 72 50 72Z" fill="#00AAA0"/>
-                    </svg>
-                    <div>
-                      <span className="font-extrabold text-2xl tracking-tight leading-none block">
-                        <span className="text-[#0079C1]">hap</span>
-                        <span className="text-[#00AAA0]">vida</span>
-                      </span>
-                      <span className="text-[7.5px] uppercase tracking-widest font-black text-slate-400 block mt-0.5">SISTEMA INTEGRADO DE ESCALAS</span>
-                    </div>
+                  <div className="flex flex-col items-start gap-1">
+                    <HapvidaLogo textSize="lg" animated={false} />
+                    <span className="text-[7.5px] uppercase tracking-widest font-black text-slate-400 block mt-0.5">SISTEMA INTEGRADO DE ESCALAS</span>
                   </div>
 
                   <div className="text-right leading-tight">

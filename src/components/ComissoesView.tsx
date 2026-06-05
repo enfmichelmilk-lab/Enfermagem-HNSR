@@ -9,6 +9,7 @@ import {
   Search, ShieldCheck, ClipboardList, Info, Users
 } from 'lucide-react';
 import { Colaborador, Usuario } from '../types';
+import SearchableColaboradorSelect from './SearchableColaboradorSelect';
 
 interface ComissoesViewProps {
   colaboradores: Colaborador[];
@@ -263,22 +264,16 @@ export default function ComissoesView({
               </div>
               
               <div className="flex-1 w-full">
-                <select
-                  value={fastAddMatricula}
-                  onChange={(e) => {
-                    const mat = e.target.value;
+                <SearchableColaboradorSelect
+                  colaboradores={candidateColabs}
+                  selectedMatricula={fastAddMatricula}
+                  onSelect={(colab) => {
+                    const mat = colab ? colab.matricula : '';
                     setFastAddMatricula(mat);
                     if (mat) handleAddColabToSelo(mat);
                   }}
-                  className="w-full bg-white border border-slate-200 text-slate-850 text-xs font-bold rounded-lg px-3 py-1.5 focus:outline-none cursor-pointer focus:border-sky-500 shadow-3xs"
-                >
-                  <option value="">Selecione um profissional para adicionar a este comitê/selo...</option>
-                  {candidateColabs.map(c => (
-                    <option key={c.matricula} value={c.matricula}>
-                      {c.nome} (S: {c.setor} • cargo: {c.cargo})
-                    </option>
-                  ))}
-                </select>
+                  placeholder="Selecione um profissional para adicionar a este comitê/selo..."
+                />
               </div>
               
               <span className="text-[10px] text-slate-400 font-semibold italic select-none">Basta selecionar para ingressar instantaneamente!</span>
