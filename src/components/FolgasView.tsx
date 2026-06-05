@@ -19,6 +19,16 @@ import HapvidaLogo from './HapvidaLogo';
 
 const equipesDisponiveis = ['Todos', 'Diurno A', 'Diurno B', 'Noturno A', 'Noturno B', 'Diarista'];
 
+const isColabOnInssOnDay = (colab: Colaborador, year: number, month: number, day: number): boolean => {
+  if (!colab) return false;
+  if (colab.inss_check !== 'Sim') return false;
+  
+  const targetDateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  const hasRetorno = colab.inss_retorno && colab.inss_retorno.trim() !== '';
+  if (!hasRetorno) return true;
+  return targetDateStr < colab.inss_retorno;
+};
+
 const isColabOnAtestado = (
   matricula: string,
   year: number,
@@ -188,13 +198,16 @@ export default function FolgasView({
       csv += `${colabName};${colab.cargo};${colab.matricula};${colab.setor};`;
       for (let d = 1; d <= daysInMonth; d++) {
         const dateStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        const hasInss = isColabOnInssOnDay(colab, currentYear, currentMonth, d);
         const hasAtestado = isColabOnAtestado(colab.matricula, currentYear, currentMonth, d, absenteismo);
         const req = solicitacoesLookup[`${colab.matricula}-${dateStr}`];
         const { isWorkDay } = checkRosteredStatus(colab, d);
         const remSector = remanejamentos[`${colab.matricula}-${dateStr}`];
 
         let cellVal = '';
-        if (hasAtestado) {
+        if (hasInss) {
+          cellVal = 'INSS';
+        } else if (hasAtestado) {
           cellVal = 'AT';
         } else if (req && req.status === 'Aprovado') {
           cellVal = getShorthand(req.tipo);
@@ -225,13 +238,16 @@ export default function FolgasView({
       csv += `${colabName};${colab.cargo};${colab.matricula};${colab.setor};`;
       for (let d = 1; d <= daysInMonth; d++) {
         const dateStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        const hasInss = isColabOnInssOnDay(colab, currentYear, currentMonth, d);
         const hasAtestado = isColabOnAtestado(colab.matricula, currentYear, currentMonth, d, absenteismo);
         const req = solicitacoesLookup[`${colab.matricula}-${dateStr}`];
         const { isWorkDay } = checkRosteredStatus(colab, d);
         const remSector = remanejamentos[`${colab.matricula}-${dateStr}`];
 
         let cellVal = '';
-        if (hasAtestado) {
+        if (hasInss) {
+          cellVal = 'INSS';
+        } else if (hasAtestado) {
           cellVal = 'AT';
         } else if (req && req.status === 'Aprovado') {
           cellVal = getShorthand(req.tipo);
@@ -271,6 +287,9 @@ export default function FolgasView({
   const isColabActiveOnDay = (colab: Colaborador, dNum: number) => {
     // Explicitly exclude VAGA (vacant/terminated) profiles from the daily staff summation calculations
     if (getColabStatus(colab).isVaga) {
+      return false;
+    }
+    if (isColabOnInssOnDay(colab, currentYear, currentMonth, dNum)) {
       return false;
     }
     if (isColabOnAtestado(colab.matricula, currentYear, currentMonth, dNum, absenteismo)) {
@@ -668,19 +687,19 @@ export default function FolgasView({
   // Abbreviations Helper
   const getShorthand = (tipo: string): string => {
     switch (tipo) {
-      case 'Folga de Escala': return 'F';
+      case 'Folga de Escala': return 'FS';
       case 'Banco de Horas': return 'BH';
       case 'Folga Feriado': return 'FF';
       case 'Folga Brigada': return 'FB';
       case 'Folga Eleição': return 'FE';
-      default: return 'F';
+      default: return 'FS';
     }
   };
 
   // Full labels translation
   const getFullLabel = (tipo: string) => {
     switch (tipo) {
-      case 'Folga de Escala': return 'Folga de Escala (F)';
+      case 'Folga de Escala': return 'Folga de Escala (FS)';
       case 'Banco de Horas': return 'Banco de Horas (BH)';
       case 'Folga Feriado': return 'Folga Feriado (FF)';
       case 'Folga Brigada': return 'Folga Brigada (FB)';
@@ -727,6 +746,22 @@ export default function FolgasView({
       if (modalTipoFolga === 'Folga Eleição' && modalTargetColab.eleicao <= 0) {
         alert(`Aviso: Saldo insuficiente de Folga Eleitoral (${modalTargetColab.eleicao} dia[s]).`);
         return;
+      }
+      // Enforce at most 2 Folga de Escala (FS) per month
+      if (modalTipoFolga === 'Folga de Escala') {
+        const parts = modalTargetDate.split('-');
+        const targetMonthPrefix = `${parts[0]}-${parts[1]}`;
+        const existingCount = solicitacoes.filter(s => 
+          s.matricula === modalTargetColab.matricula && 
+          s.tipo === 'Folga de Escala' && 
+          s.status === 'Aprovado' && 
+          s.data.startsWith(targetMonthPrefix)
+        ).length;
+
+        if (existingCount >= 2) {
+          alert(`Erro: O limite máximo de 2 Folgas de Escala (FS) por direito ao mês foi atingido para este colaborador neste mês (${parts[1]}/${parts[0]}).`);
+          return;
+        }
       }
     }
 
@@ -778,6 +813,24 @@ export default function FolgasView({
 
   // Action: Approve leave request inline
   const handleApproveInline = (sol: SolicitacaoFolga) => {
+    // Enforce 2 Folga de Escala limit when approving
+    if (sol.tipo === 'Folga de Escala') {
+      const parts = sol.data.split('-');
+      const targetMonthPrefix = `${parts[0]}-${parts[1]}`;
+      const existingCount = solicitacoes.filter(s => 
+        s.matricula === sol.matricula && 
+        s.tipo === 'Folga de Escala' && 
+        s.status === 'Aprovado' && 
+        s.data.startsWith(targetMonthPrefix) &&
+        s.id !== sol.id
+      ).length;
+
+      if (existingCount >= 2) {
+        alert(`Erro: Não é possível aprovar. O colaborador já possui o limite máximo de 2 Folgas de Escala (FS) aprovadas para este mês (${parts[1]}/${parts[0]}).`);
+        return;
+      }
+    }
+
     const targetColab = colaboradores.find(c => c.matricula === sol.matricula);
     if (targetColab) {
       let updatedColab = { ...targetColab };
@@ -984,7 +1037,7 @@ export default function FolgasView({
           <span className="text-slate-400 uppercase tracking-wider text-[9px]">Gabarito Visual:</span>
           
           <div className="flex items-center gap-1.5">
-            <span className="w-4 h-4 bg-emerald-600 rounded text-white flex items-center justify-center text-[9px] font-extrabold shadow-xs">F</span>
+            <span className="w-4 h-4 bg-emerald-600 rounded text-white flex items-center justify-center text-[9px] font-extrabold shadow-xs">FS</span>
             <span>Folga de Escala</span>
           </div>
 
@@ -1123,6 +1176,18 @@ export default function FolgasView({
                                     const dateStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(dNum).padStart(2, '0')}`;
                                     const req = solicitacoesLookup[`${colab.matricula}-${dateStr}`];
                                     const { isWorkDay } = checkRosteredStatus(colab, dNum);
+
+                                    const hasInss = isColabOnInssOnDay(colab, currentYear, currentMonth, dNum);
+                                    if (hasInss) {
+                                      const cellTitle = `${colab.nome}\nData: ${dNum}/${currentMonth}/${currentYear}\nAfastamento INSS / Licença Ativo`;
+                                      return (
+                                        <td key={dNum} onClick={() => handleCellClick(colab, dNum)} className="p-1 border-b border-r border-slate-200 text-center cursor-pointer align-middle bg-rose-50" title={cellTitle}>
+                                          <div className="mx-auto w-7 h-7 bg-red-650 text-white border border-red-500 font-extrabold text-[8px] rounded-lg shadow-sm flex items-center justify-center transition-all duration-150 hover:scale-105 select-none font-sans leading-none">
+                                            INSS
+                                          </div>
+                                        </td>
+                                      );
+                                    }
 
                                     const hasAtestado = isColabOnAtestado(colab.matricula, currentYear, currentMonth, dNum, absenteismo);
                                     if (hasAtestado) {
@@ -1305,6 +1370,18 @@ export default function FolgasView({
                               const req = solicitacoesLookup[`${colab.matricula}-${dateStr}`];
                               const { isWorkDay } = checkRosteredStatus(colab, dNum);
 
+                              const hasInss = isColabOnInssOnDay(colab, currentYear, currentMonth, dNum);
+                              if (hasInss) {
+                                const cellTitle = `${colab.nome}\nData: ${dNum}/${currentMonth}/${currentYear}\nAfastamento INSS / Licença Ativo`;
+                                return (
+                                  <td key={dNum} onClick={() => handleCellClick(colab, dNum)} className="p-1 border-b border-r border-slate-200 text-center cursor-pointer align-middle bg-rose-50" title={cellTitle}>
+                                    <div className="mx-auto w-7 h-7 bg-red-650 text-white border border-red-500 font-extrabold text-[8px] rounded-lg shadow-sm flex items-center justify-center transition-all duration-150 hover:scale-105 select-none font-sans leading-none">
+                                      INSS
+                                    </div>
+                                  </td>
+                                );
+                              }
+
                               const hasAtestado = isColabOnAtestado(colab.matricula, currentYear, currentMonth, dNum, absenteismo);
                               if (hasAtestado) {
                                 const cellTitle = `${colab.nome}\nData: ${dNum}/${currentMonth}/${currentYear}\nAtestado Médico Ativo`;
@@ -1468,15 +1545,15 @@ export default function FolgasView({
                 if (compareRoleMode === 'tecnicos_auxiliares') {
                   const getCount = (setor: string) => counts[setor] || 0;
                   const psCount = getCount('PSA') + getCount('PSI');
-                  const ccCount = getCount('CENTRO CIRURGICO') + getCount('CME') + getCount('Centro Cirurgico');
+                  const ccCount = getCount('CENTRO CIRURGICO') + getCount('CME') + getCount('Centro Cirurgico') + getCount('CC');
                   const uiCount = getCount('2º ANDAR') + getCount('3º ANDAR') + getCount('4º ANDAR') + getCount('5º ANDAR') + getCount('6º ANDAR');
-                  const utiCount = getCount('UTI 7º ANDAR') + getCount('UTI 8º ANDAR') + getCount('UTI 9º ANDAR') + getCount('UTI 7º andar') + getCount('UTI 9º andar');
+                  const utiCount = getCount('UTI 7º ANDAR') + getCount('UTI 9º ANDAR') + getCount('UTI 7º andar') + getCount('UTI 9º andar');
 
                   const items = [
-                    { name: 'Pronto Socorro: PSA E PSI', count: psCount },
-                    { name: 'Centro Cirurgico: CME e Centro Cirurgico', count: ccCount },
-                    { name: 'Unidade de Internação: 2º, 3º, 4º, 5º e 6º andar', count: uiCount },
-                    { name: 'UTI: UTI 7º andar e UTI 9º andar', count: utiCount },
+                    { name: 'PS (PSA e PSI)', count: psCount },
+                    { name: 'CC (CC e CME)', count: ccCount },
+                    { name: 'UI (2, 3, 4, 5 e 6º andar)', count: uiCount },
+                    { name: 'UTI (7 e 8º andar)', count: utiCount },
                   ];
 
                   const total = items.reduce((acc, x) => acc + x.count, 0);
@@ -1495,7 +1572,7 @@ export default function FolgasView({
                     if (filter === 'Unidade de Internação') {
                       ['2º ANDAR', '3º ANDAR', '4º ANDAR', '5º ANDAR', '6º ANDAR'].forEach(x => listSet.add(x));
                     } else if (filter === 'UTI') {
-                      ['UTI 8º ANDAR', 'UTI 9º ANDAR'].forEach(x => listSet.add(x));
+                      ['UTI 7º ANDAR', 'UTI 9º ANDAR'].forEach(x => listSet.add(x));
                     } else {
                       listSet.add(filter);
                     }
@@ -1755,6 +1832,22 @@ export default function FolgasView({
                                         tdBg = 'bg-slate-50/70';
                                       }
 
+                                      const hasInss = isColabOnInssOnDay(colab, currentYear, currentMonth, dNum);
+                                      if (hasInss) {
+                                        return (
+                                          <td 
+                                            key={`cmp1-td-${colab.matricula}-${dNum}`} 
+                                            onClick={() => handleCellClick(colab, dNum)} 
+                                            className={`p-0.5 border-r border-slate-200 text-center align-middle font-black cursor-pointer shadow-2xs transition-all uppercase bg-rose-50`}
+                                            title="Afastamento INSS / Licença Ativo"
+                                          >
+                                            <span className="block py-0.5 rounded-sm border text-[8px] tracking-tight leading-none bg-red-650 text-white border-red-500 font-extrabold font-sans">
+                                              INSS
+                                            </span>
+                                          </td>
+                                        );
+                                      }
+
                                       const hasAtestado = isColabOnAtestado(colab.matricula, currentYear, currentMonth, dNum, absenteismo);
                                       if (hasAtestado) {
                                         return (
@@ -1766,6 +1859,22 @@ export default function FolgasView({
                                           >
                                             <span className="block py-0.5 rounded-sm border text-[8px] tracking-tight leading-none bg-red-100 text-red-600 border-red-300 font-extrabold font-sans">
                                               AT
+                                            </span>
+                                          </td>
+                                        );
+                                      }
+
+                                      const hasFerias = isColabOnFeriasOnDay(colab.matricula, dNum);
+                                      if (hasFerias) {
+                                        return (
+                                          <td 
+                                            key={`cmp1-td-${colab.matricula}-${dNum}`} 
+                                            onClick={() => handleCellClick(colab, dNum)} 
+                                            className={`p-0.5 border-r border-slate-200 text-center align-middle font-black cursor-pointer shadow-2xs transition-all uppercase bg-purple-50`}
+                                            title="Férias de Escala Ativa"
+                                          >
+                                            <span className="block py-0.5 rounded-sm border text-[8px] tracking-tight leading-none bg-purple-600 text-white border-purple-500 font-extrabold font-sans">
+                                              F
                                             </span>
                                           </td>
                                         );
@@ -2193,6 +2302,22 @@ export default function FolgasView({
                                         tdBg = 'bg-slate-50/70';
                                       }
 
+                                      const hasInss = isColabOnInssOnDay(colab, currentYear, currentMonth, dNum);
+                                      if (hasInss) {
+                                        return (
+                                          <td 
+                                            key={`cmp2-td-${colab.matricula}-${dNum}`} 
+                                            onClick={() => handleCellClick(colab, dNum)} 
+                                            className={`p-0.5 border-r border-slate-200 text-center align-middle font-black cursor-pointer shadow-2xs transition-all uppercase bg-rose-50`}
+                                            title="Afastamento INSS / Licença Ativo"
+                                          >
+                                            <span className="block py-0.5 rounded-sm border text-[8px] tracking-tight leading-none bg-red-650 text-white border-red-500 font-extrabold font-sans">
+                                              INSS
+                                            </span>
+                                          </td>
+                                        );
+                                      }
+
                                       const hasAtestado = isColabOnAtestado(colab.matricula, currentYear, currentMonth, dNum, absenteismo);
                                       if (hasAtestado) {
                                         return (
@@ -2204,6 +2329,22 @@ export default function FolgasView({
                                           >
                                             <span className="block py-0.5 rounded-sm border text-[8px] tracking-tight leading-none bg-red-100 text-red-600 border-red-300 font-extrabold font-sans">
                                               AT
+                                            </span>
+                                          </td>
+                                        );
+                                      }
+
+                                      const hasFerias = isColabOnFeriasOnDay(colab.matricula, dNum);
+                                      if (hasFerias) {
+                                        return (
+                                          <td 
+                                            key={`cmp2-td-${colab.matricula}-${dNum}`} 
+                                            onClick={() => handleCellClick(colab, dNum)} 
+                                            className={`p-0.5 border-r border-slate-200 text-center align-middle font-black cursor-pointer shadow-2xs transition-all uppercase bg-purple-50`}
+                                            title="Férias de Escala Ativa"
+                                          >
+                                            <span className="block py-0.5 rounded-sm border text-[8px] tracking-tight leading-none bg-purple-600 text-white border-purple-500 font-extrabold font-sans">
+                                              F
                                             </span>
                                           </td>
                                         );
@@ -2873,7 +3014,7 @@ export default function FolgasView({
                       onChange={(e) => setModalTipoFolga(e.target.value as any)}
                       className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 font-bold focus:outline-none focus:bg-white focus:border-sky-500 transition-colors"
                     >
-                      <option value="Folga de Escala">Folga de Escala (F)</option>
+                      <option value="Folga de Escala">Folga de Escala (FS)</option>
                       <option value="Banco de Horas">Banco de Horas (BH) - Consome 12 horas</option>
                       <option value="Folga Feriado">Folga Feriado (FF)</option>
                       <option value="Folga Brigada">Folga Brigada (FB)</option>
@@ -3579,7 +3720,7 @@ export default function FolgasView({
                   <div className="space-y-2 text-slate-600 text-[8.5px] leading-relaxed font-semibold">
                     <span className="font-extrabold uppercase text-slate-500 block tracking-wider">LEGENDA OPERACIONAL DE ESCALA:</span>
                     <div className="grid grid-cols-3 gap-2 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
-                      <div><b>F:</b> Folga de Escala</div>
+                      <div><b>FS:</b> Folga de Escala</div>
                       <div><b>BH:</b> Banco de Horas</div>
                       <div><b>FF:</b> Folga Feriado</div>
                       <div><b>FE:</b> Folga Eleições</div>

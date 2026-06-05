@@ -23,5 +23,8 @@ service cloud.firestore {
     match /dynamic_selos/{document} {
       allow read, write: if true;
     }
+    match /chamadas/{document} {
+      allow read, write: if true;
+    }
   }
 }

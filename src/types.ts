@@ -101,7 +101,7 @@ export interface ColaboradorChamadaStatus {
   nome: string;
   cargo: string;
   setorOriginal: string;
-  status: 'Presente' | 'Atestado' | 'Falta' | 'Férias' | 'Folga';
+  status: 'Presente' | 'Atestado' | 'Falta' | 'Férias' | 'Folga' | 'Pendente';
   remanejadoPara?: string; // e.g. 'CC / CME'
   info?: string; // description of leave
 }
@@ -114,5 +114,6 @@ export interface Chamada {
   statusColaboradores: ColaboradorChamadaStatus[];
   metricasSetor: { [setorName: string]: ChamadaSetorMetric };
   dataCriacao: string;
+  usuarioCriador?: string;
 }
 

@@ -32,7 +32,7 @@ export const SETORES_HOSPITALARES = [
   "CME",
   "PSA",
   "PSI",
-  "UTI 8º ANDAR",
+  "UTI 7º ANDAR",
   "UTI 9º ANDAR"
 ];
 
@@ -104,7 +104,8 @@ const SECTOR_MAPPING: Record<string, string> = {
   "PSA": "PSA",
   "PSI (Pronto Socorro Infantil)": "PSI",
   "PSI": "PSI",
-  "UTI 8º andar": "UTI 8º ANDAR",
+  "UTI 7º andar": "UTI 7º ANDAR",
+  "UTI 8º andar": "UTI 7º ANDAR",
   "UTI 9º andar": "UTI 9º ANDAR"
 };
 
@@ -122,7 +123,8 @@ export const mapSector = (sec: string): string => {
   if (upper.includes("CME") || upper.includes("CENTRAL DE MATERIAL")) return "CME";
   if (upper.includes("PSA") || upper.includes("PRONTO SOCORRO ADULTO")) return "PSA";
   if (upper.includes("PSI") || upper.includes("PRONTO SOCORRO INFANTIL")) return "PSI";
-  if (upper.includes("UTI 8") || (upper.includes("UTI") && upper.includes("8º")) || (upper.includes("UTI") && upper.includes("8O"))) return "UTI 8º ANDAR";
+  if (upper.includes("UTI 7") || (upper.includes("UTI") && upper.includes("7º")) || (upper.includes("UTI") && upper.includes("7O"))) return "UTI 7º ANDAR";
+  if (upper.includes("UTI 8") || (upper.includes("UTI") && upper.includes("8º")) || (upper.includes("UTI") && upper.includes("8O"))) return "UTI 7º ANDAR";
   if (upper.includes("UTI 9") || (upper.includes("UTI") && upper.includes("9º")) || (upper.includes("UTI") && upper.includes("9O"))) return "UTI 9º ANDAR";
   
   if (upper === "GESTAO" || upper === "GESTÃO") return "Gestão";

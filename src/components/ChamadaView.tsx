@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   ClipboardCheck, 
   Calendar, 
@@ -24,6 +24,7 @@ import {
   ChevronDown,
   ChevronUp
 } from 'lucide-react';
+import { subscribeCollection } from '../lib/firebase';
 import { Colaborador, Usuario, Absenteismo, Ferias, SolicitacaoFolga, Chamada, ColaboradorChamadaStatus, ChamadaSetorMetric } from '../types';
 
 interface ChamadaViewProps {
@@ -107,8 +108,41 @@ export default function ChamadaView({
   const [copiedSuccess, setCopiedSuccess] = useState(false);
   const [isViewingDetails, setIsViewingDetails] = useState<Chamada | null>(null);
 
+  // Load and sync real-time remanejamentos from off-scale
+  const [remanejamentos, setRemanejamentos] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    const unsubscribe = subscribeCollection<any>(
+      'remanejamentos',
+      (data) => {
+        const mapped: Record<string, string> = {};
+        data.forEach((item) => {
+          mapped[item.id] = item.setor;
+        });
+        setRemanejamentos(mapped);
+      },
+      'hnsr_remanejamentos_db',
+      []
+    );
+    return () => unsubscribe();
+  }, []);
+
   // Helper detection of dynamic status of employees on this target date
   const getColaboradorStatusOnDate = (colab: Colaborador, targetDateStr: string) => {
+    // 0. Active INSS / Licença check
+    if (colab.inss_check === 'Sim') {
+      const hasRetorno = colab.inss_retorno && colab.inss_retorno.trim() !== '';
+      if (!hasRetorno || targetDateStr < colab.inss_retorno) {
+        const infoMsg = hasRetorno 
+          ? `Afastado INSS / Licença (Até retorno em ${formatDateBR(colab.inss_retorno)})`
+          : `Afastado INSS / Licença (Sem Data de Retorno Informada)`;
+        return { 
+          status: 'Atestado' as const, 
+          info: infoMsg
+        };
+      }
+    }
+
     // 1. Vacation Active
     const vacationMatch = ferias.find(f => {
       return (
@@ -174,17 +208,33 @@ export default function ChamadaView({
       
       // If we seek standard matching or similar
       return equipeLower === selectedLower;
+    }).sort((a, b) => {
+      const aCargo = a.cargo?.toLowerCase() || '';
+      const bCargo = b.cargo?.toLowerCase() || '';
+      const aIsEnf = aCargo.includes('enfermeiro') || aCargo.includes('enfermeira') || aCargo.startsWith('enf') ? 1 : 0;
+      const bIsEnf = bCargo.includes('enfermeiro') || bCargo.includes('enfermeira') || bCargo.startsWith('enf') ? 1 : 0;
+      if (aIsEnf !== bIsEnf) return bIsEnf - aIsEnf;
+      return a.nome.localeCompare(b.nome);
     });
 
     const activeDrafts = filtered.map(c => {
       const predState = getColaboradorStatusOnDate(c, selectedDate);
+      const remState = remanejamentos[`${c.matricula}-${selectedDate}`];
+      
+      let initialStatus: 'Presente' | 'Atestado' | 'Falta' | 'Férias' | 'Folga' | 'Pendente' = 'Pendente';
+      if (predState) {
+        initialStatus = predState.status;
+      } else if (remState) {
+        initialStatus = 'Presente';
+      }
+
       return {
         matricula: c.matricula,
         nome: c.nome,
         cargo: c.cargo,
         setorOriginal: mapSectorToTarget(c.setor),
-        status: predState ? predState.status : ('Presente' as const),
-        remanejadoPara: undefined,
+        status: initialStatus,
+        remanejadoPara: remState || undefined,
         info: predState ? predState.info : undefined
       };
     });
@@ -345,7 +395,8 @@ export default function ChamadaView({
       enfermeiroReferencia: enfermeiroRef,
       statusColaboradores: draftColaboradores,
       metricasSetor: draftMetricas,
-      dataCriacao: new Date().toISOString()
+      dataCriacao: new Date().toISOString(),
+      usuarioCriador: usuarioLogado.email
     };
 
     onUpdateChamadas([novaChamada, ...chamadas]);
@@ -354,6 +405,12 @@ export default function ChamadaView({
   };
 
   const handleDeleteChamada = (id: string) => {
+    const target = chamadas.find(c => c.id === id);
+    if (target && target.usuarioCriador && target.usuarioCriador !== usuarioLogado.email) {
+      alert(`Erro de Segurança: Somente o usuário que criou este registro de chamada (${target.usuarioCriador}) pode excluí-lo.`);
+      return;
+    }
+
     if (window.confirm("Deseja realmente excluir este registro de chamada permanentemente?")) {
       const filtered = chamadas.filter(c => c.id !== id);
       onUpdateChamadas(filtered);
@@ -695,7 +752,7 @@ export default function ChamadaView({
                     ) : (
                       <div className="divide-y divide-slate-100">
                         {subColaboradores.map((colab) => {
-                          const isSpecialStatus = ['Férias', 'Atestado', 'Folga'].includes(colab.status);
+                          const isSpecialStatus = ['Férias'].includes(colab.status);
 
                           return (
                             <div key={colab.matricula} className="py-2.5 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
@@ -707,6 +764,11 @@ export default function ChamadaView({
                                 <p className="text-[10px] text-slate-500 font-bold uppercase">
                                   {colab.cargo}
                                 </p>
+                                {colab.info && (
+                                  <p className="text-[9px] text-rose-600 font-extrabold mr-2 animate-pulse">
+                                    ★ Registro Ativo: {colab.info}
+                                  </p>
+                                )}
                               </div>
 
                               <div className="flex flex-wrap items-center gap-3">
