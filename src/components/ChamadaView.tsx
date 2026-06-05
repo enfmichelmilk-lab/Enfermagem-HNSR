@@ -50,6 +50,16 @@ const SECTORS_LIST = [
   'PSI'
 ];
 
+const HOSPITAL_CAPACITIES: Record<string, number> = {
+  '2º Andar': 16,
+  '3º Andar': 11,
+  '4º Andar': 13,
+  '5º Andar': 13,
+  '6º Andar': 11,
+  'UTI (7º andar)': 10,
+  'UTI (9º andar)': 10
+};
+
 const EQUIPES_DISPONIVEIS = ['Diurno A', 'Diurno B', 'Noturno A', 'Noturno B', 'Diarista'];
 
 // Helper to normalized map colaborador sectors to our 10 standard sectors
@@ -88,6 +98,7 @@ export default function ChamadaView({
 
   // Form Creation State
   const [isCreating, setIsCreating] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState(() => {
     const today = new Date();
     const year = today.getFullYear();
@@ -102,6 +113,44 @@ export default function ChamadaView({
   // Active Draft Session State
   const [draftColaboradores, setDraftColaboradores] = useState<ColaboradorChamadaStatus[]>([]);
   const [draftMetricas, setDraftMetricas] = useState<{ [setorName: string]: ChamadaSetorMetric }>({});
+
+  const getSectorTechniciansCount = (sectorKey: string, colabStatuses: ColaboradorChamadaStatus[]) => {
+    let count = 0;
+    colabStatuses.forEach(col => {
+      if (col.status !== 'Presente') return;
+      const isNurse = (col.cargo || '').toLowerCase().includes('enfermeiro') || 
+                      (col.cargo || '').toLowerCase().includes('enfermeira') || 
+                      (col.cargo || '').toLowerCase().startsWith('enf');
+      if (isNurse) return;
+
+      const isOrigPresentNotInMove = col.setorOriginal === sectorKey && !col.remanejadoPara;
+      const isIncomingPresentMove = col.remanejadoPara === sectorKey;
+
+      if (isOrigPresentNotInMove || isIncomingPresentMove) {
+        count++;
+      }
+    });
+    return count;
+  };
+
+  const getSectorNursesCount = (sectorKey: string, colabStatuses: ColaboradorChamadaStatus[]) => {
+    let count = 0;
+    colabStatuses.forEach(col => {
+      if (col.status !== 'Presente') return;
+      const isNurse = (col.cargo || '').toLowerCase().includes('enfermeiro') || 
+                      (col.cargo || '').toLowerCase().includes('enfermeira') || 
+                      (col.cargo || '').toLowerCase().startsWith('enf');
+      if (!isNurse) return;
+
+      const isOrigPresentNotInMove = col.setorOriginal === sectorKey && !col.remanejadoPara;
+      const isIncomingPresentMove = col.remanejadoPara === sectorKey;
+
+      if (isOrigPresentNotInMove || isIncomingPresentMove) {
+        count++;
+      }
+    });
+    return count;
+  };
   
   // Modal export copy text and copy alert states
   const [viewingReportText, setViewingReportText] = useState<string | null>(null);
@@ -203,6 +252,11 @@ export default function ChamadaView({
     // If Diarista is chosen, filter where c.equipe is Diarista
     // For others, filter matching team shift
     const filtered = colaboradores.filter(c => {
+      // Exclude dismissed/terminated collaborators on this target date
+      if (c.datarecisao && c.datarecisao.trim() !== '' && selectedDate >= c.datarecisao) {
+        return false;
+      }
+
       const equipeLower = (c.equipe || '').toLowerCase().trim();
       const selectedLower = selectedTurno.toLowerCase().trim();
       
@@ -224,8 +278,6 @@ export default function ChamadaView({
       let initialStatus: 'Presente' | 'Atestado' | 'Falta' | 'Férias' | 'Folga' | 'Pendente' = 'Pendente';
       if (predState) {
         initialStatus = predState.status;
-      } else if (remState) {
-        initialStatus = 'Presente';
       }
 
       return {
@@ -257,6 +309,11 @@ export default function ChamadaView({
   };
 
   const handleUpdateDraftStatus = (matricula: string, newStatus: 'Presente' | 'Atestado' | 'Falta') => {
+    const colab = draftColaboradores.find(c => c.matricula === matricula);
+    if (colab && (colab.status === 'Folga' || (colab.info && colab.info.toLowerCase().includes('folga')))) {
+      const confirmChange = window.confirm(`Este colaborador (${colab.nome}) está programado de FOLGA para esta data. Tem certeza de que de deseja alterar o status para "${newStatus === 'Presente' ? 'Presente' : newStatus === 'Atestado' ? 'Atestado' : 'Falta'}"?`);
+      if (!confirmChange) return;
+    }
     setDraftColaboradores(prev => 
       prev.map(c => c.matricula === matricula ? { ...c, status: newStatus } : c)
     );
@@ -346,16 +403,12 @@ export default function ChamadaView({
       });
       const atestadoText = leavesList.length > 0 ? leavesList.join(', ') : 'Nenhum';
 
-      // 4. Compile all remanejamentos originating from or coming to this sector
+      // 4. Compile all remanejamentos originating from this sector (outgoing only)
       const remanejadoDetails: string[] = [];
       colabStatuses.forEach(col => {
         // Outgoing remanejamento
         if (col.setorOriginal === sectorKey && col.remanejadoPara && col.status === 'Presente') {
           remanejadoDetails.push(`${col.nome} remanejado(a) para ${col.remanejadoPara}`);
-        }
-        // Incoming remanejamento
-        if (col.remanejadoPara === sectorKey && col.status === 'Presente') {
-          remanejadoDetails.push(`${col.nome} recebido(a) de ${col.setorOriginal}`);
         }
       });
 
@@ -373,13 +426,26 @@ export default function ChamadaView({
     return text.trim();
   };
 
+  const handleEditChamada = (ch: Chamada) => {
+    if (ch.usuarioCriador && ch.usuarioCriador !== usuarioLogado.email) {
+      alert(`Acesso Negado: Somente o usuário que criou este fechamento (${ch.usuarioCriador}) pode alterá-lo.`);
+      return;
+    }
+    setEditingId(ch.id);
+    setSelectedDate(ch.data);
+    setSelectedTurno(ch.turno);
+    setEnfermeiroRef(ch.enfermeiroReferencia);
+    setDraftColaboradores(ch.statusColaboradores);
+    setDraftMetricas(ch.metricasSetor);
+    setIsCreating(true);
+  };
+
   const handleSaveChamada = () => {
     if (!enfermeiroRef.trim()) {
       alert("Por favor, preencha o campo do Enfermeiro Referência.");
       return;
     }
 
-    const newId = `chamada_${Date.now()}`;
     const generatedReport = generateWhatsAppText(
       selectedDate,
       selectedTurno,
@@ -388,20 +454,43 @@ export default function ChamadaView({
       draftMetricas
     );
 
-    const novaChamada: Chamada = {
-      id: newId,
-      data: selectedDate,
-      turno: selectedTurno,
-      enfermeiroReferencia: enfermeiroRef,
-      statusColaboradores: draftColaboradores,
-      metricasSetor: draftMetricas,
-      dataCriacao: new Date().toISOString(),
-      usuarioCriador: usuarioLogado.email
-    };
+    let updatedChamadas: Chamada[];
+    const isEditing = !!editingId;
 
-    onUpdateChamadas([novaChamada, ...chamadas]);
+    if (isEditing) {
+      updatedChamadas = chamadas.map(c => {
+        if (c.id === editingId) {
+          return {
+            ...c,
+            data: selectedDate,
+            turno: selectedTurno,
+            enfermeiroReferencia: enfermeiroRef,
+            statusColaboradores: draftColaboradores,
+            metricasSetor: draftMetricas
+            // keep dataCriacao and usuarioCriador from original object
+          };
+        }
+        return c;
+      });
+    } else {
+      const newId = `chamada_${Date.now()}`;
+      const novaChamada: Chamada = {
+        id: newId,
+        data: selectedDate,
+        turno: selectedTurno,
+        enfermeiroReferencia: enfermeiroRef,
+        statusColaboradores: draftColaboradores,
+        metricasSetor: draftMetricas,
+        dataCriacao: new Date().toISOString(),
+        usuarioCriador: usuarioLogado.email
+      };
+      updatedChamadas = [novaChamada, ...chamadas];
+    }
+
+    onUpdateChamadas(updatedChamadas);
     setViewingReportText(generatedReport);
     setIsCreating(false);
+    setEditingId(null);
   };
 
   const handleDeleteChamada = (id: string) => {
@@ -601,9 +690,27 @@ export default function ChamadaView({
                         </button>
 
                         <button
+                          onClick={() => handleEditChamada(ch)}
+                          disabled={ch.usuarioCriador ? ch.usuarioCriador !== usuarioLogado.email : false}
+                          className={`px-3 py-2 font-bold rounded-lg text-[10px] uppercase border cursor-pointer transition flex items-center gap-1 ${
+                            ch.usuarioCriador && ch.usuarioCriador !== usuarioLogado.email
+                              ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed opacity-65'
+                              : 'bg-sky-50 hover:bg-sky-100 text-sky-700 border-sky-200'
+                          }`}
+                          title={ch.usuarioCriador && ch.usuarioCriador !== usuarioLogado.email ? `Somente o criador (${ch.usuarioCriador}) pode editar` : 'Editar Chamada'}
+                        >
+                          Editar
+                        </button>
+
+                        <button
                           onClick={() => handleDeleteChamada(ch.id)}
-                          className="p-2 text-slate-400 hover:text-red-650 rounded-lg hover:bg-red-55 border border-transparent hover:border-red-150 transition cursor-pointer"
-                          title="Excluir Chamada"
+                          disabled={ch.usuarioCriador ? ch.usuarioCriador !== usuarioLogado.email : false}
+                          className={`p-2 rounded-lg border transition cursor-pointer ${
+                            ch.usuarioCriador && ch.usuarioCriador !== usuarioLogado.email
+                              ? 'text-slate-350 border-transparent cursor-not-allowed opacity-50'
+                              : 'text-slate-400 hover:text-red-650 hover:bg-red-55 border-transparent hover:border-red-150'
+                          }`}
+                          title={ch.usuarioCriador && ch.usuarioCriador !== usuarioLogado.email ? `Somente o criador (${ch.usuarioCriador}) pode excluir` : 'Excluir Chamada'}
                         >
                           <Trash className="w-3.5 h-3.5" />
                         </button>
@@ -639,6 +746,7 @@ export default function ChamadaView({
                 onClick={() => {
                   if (window.confirm("Deseja cancelar o preenchimento desta chamada? Seus dados serão perdidos.")) {
                     setIsCreating(false);
+                    setEditingId(null);
                   }
                 }}
                 className="px-4 py-2 text-slate-550 bg-slate-100 hover:bg-slate-200 font-extrabold rounded-xl text-xs uppercase cursor-pointer transition duration-150"
@@ -652,214 +760,331 @@ export default function ChamadaView({
                 className="px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white font-black rounded-xl text-xs uppercase tracking-wider flex items-center gap-1.5 cursor-pointer shadow-md shadow-sky-600/10 transition duration-150"
               >
                 <CheckCircle2 className="w-4 h-4" />
-                Finalizar e Exportar
+                {editingId ? "Salvar Alterações" : "Finalizar e Exportar"}
               </button>
             </div>
           </div>
 
-          {/* Core Body: Sectors list panels */}
-          <div className="p-6 space-y-8 max-h-[800px] overflow-y-auto">
-            
-            <div className="bg-blue-50/50 border border-blue-200 p-3.5 rounded-2xl flex items-start gap-2.5 text-xs text-blue-800 font-semibold leading-relaxed">
-              <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
-              <div>
-                Cada setor possui caixas de preenchimento de métricas da enfermagem de leitos e de equipes. 
-                Os profissionais de férias, atestado ou folgas programados para essa data no sistema já aparecem pré-identificados e dispensados do check inicial.
-              </div>
-            </div>
+          {/* Core Body: Left-Sectors list, Right-Sticky Dimensionamento Resumo */}
+          <div className="p-6 max-h-[850px] overflow-y-auto">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              
+              {/* Left Column: Sector list panels (8 columns) */}
+              <div className="lg:col-span-8 space-y-6">
+                <div className="bg-blue-50/50 border border-blue-200 p-3.5 rounded-2xl flex items-start gap-2.5 text-xs text-blue-800 font-semibold leading-relaxed mb-4">
+                  <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                  <div>
+                    Cada setor possui caixas de preenchimento de métricas da enfermagem de leitos e de equipes. 
+                    Os profissionais de férias, atestado ou folgas programados para essa data no sistema já aparecem pré-identificados e dispensados do check inicial.
+                  </div>
+                </div>
 
-            {SECTORS_LIST.map((sectorName) => {
-              const metric = draftMetricas[sectorName] || {
-                totalPacientes: 0,
-                pacientesVM: 0,
-                pacientesAcamados: 0,
-                altasPrevistas: 0
-              };
-              const subColaboradores = groupedDraftColaboradores[sectorName] || [];
+                {SECTORS_LIST.map((sectorName) => {
+                  const metric = draftMetricas[sectorName] || {
+                    totalPacientes: 0,
+                    pacientesVM: 0,
+                    pacientesAcamados: 0,
+                    altasPrevistas: 0
+                  };
+                  const subColaboradores = groupedDraftColaboradores[sectorName] || [];
 
-              return (
-                <div key={sectorName} className="border border-slate-100 rounded-2xl overflow-hidden shadow-2xs">
-                  
-                  {/* Sector Title & Metrics Strip Container */}
-                  <div className="bg-slate-50/70 border-b border-slate-100 p-4">
-                    <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+                  return (
+                    <div key={sectorName} className="border border-slate-100 rounded-2xl overflow-hidden shadow-2xs bg-white">
                       
-                      {/* Sector Title Label */}
-                      <span className="text-xs font-black uppercase text-slate-800 bg-white border border-slate-200 px-3 py-1.5 rounded-lg shadow-3xs tracking-wider">
-                        {sectorName}
-                      </span>
+                      {/* Sector Title & Metrics Strip Container */}
+                      <div className="bg-slate-50/70 border-b border-slate-100 p-4">
+                        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+                          
+                          {/* Sector Title Label */}
+                          <span className="text-xs font-black uppercase text-slate-800 bg-white border border-slate-200 px-3 py-1.5 rounded-lg shadow-3xs tracking-wider">
+                            {sectorName}
+                          </span>
 
-                      {/* Required Metrics Fields Grid input */}
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs w-full xl:max-w-3xl">
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-bold text-slate-500 block uppercase">Total Pacientes:</label>
-                          <input
-                            type="number"
-                            min="0"
-                            value={metric.totalPacientes || ''}
-                            onChange={(e) => handleUpdateMetricas(sectorName, 'totalPacientes', parseInt(e.target.value) || 0)}
-                            className="w-full text-xs font-bold text-slate-800 bg-white border border-slate-250 p-2 rounded-lg focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 transition-colors"
-                            placeholder="0"
-                          />
-                        </div>
+                          {/* Required Metrics Fields Grid input */}
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs w-full xl:max-w-3xl">
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-bold text-slate-500 block uppercase">Total Pacientes:</label>
+                              <input
+                                type="number"
+                                min="0"
+                                value={metric.totalPacientes || ''}
+                                onChange={(e) => handleUpdateMetricas(sectorName, 'totalPacientes', parseInt(e.target.value) || 0)}
+                                className="w-full text-xs font-bold text-slate-800 bg-white border border-slate-250 p-2 rounded-lg focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 transition-colors"
+                                placeholder="0"
+                              />
+                            </div>
 
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-bold text-slate-500 block uppercase">Pacientes em VM:</label>
-                          <input
-                            type="number"
-                            min="0"
-                            value={metric.pacientesVM || ''}
-                            onChange={(e) => handleUpdateMetricas(sectorName, 'pacientesVM', parseInt(e.target.value) || 0)}
-                            className="w-full text-xs font-bold text-slate-800 bg-white border border-slate-250 p-2 rounded-lg focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 transition-colors"
-                            placeholder="0"
-                          />
-                        </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-bold text-slate-500 block uppercase">Pacientes em VM:</label>
+                              <input
+                                type="number"
+                                min="0"
+                                value={metric.pacientesVM || ''}
+                                onChange={(e) => handleUpdateMetricas(sectorName, 'pacientesVM', parseInt(e.target.value) || 0)}
+                                className="w-full text-xs font-bold text-slate-800 bg-white border border-slate-250 p-2 rounded-lg focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 transition-colors"
+                                placeholder="0"
+                              />
+                            </div>
 
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-bold text-slate-500 block uppercase">Acamados:</label>
-                          <input
-                            type="number"
-                            min="0"
-                            value={metric.pacientesAcamados || ''}
-                            onChange={(e) => handleUpdateMetricas(sectorName, 'pacientesAcamados', parseInt(e.target.value) || 0)}
-                            className="w-full text-xs font-bold text-slate-800 bg-white border border-slate-250 p-2 rounded-lg focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 transition-colors"
-                            placeholder="0"
-                          />
-                        </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-bold text-slate-500 block uppercase">Acamados:</label>
+                              <input
+                                type="number"
+                                min="0"
+                                value={metric.pacientesAcamados || ''}
+                                onChange={(e) => handleUpdateMetricas(sectorName, 'pacientesAcamados', parseInt(e.target.value) || 0)}
+                                className="w-full text-xs font-bold text-slate-800 bg-white border border-slate-250 p-2 rounded-lg focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 transition-colors"
+                                placeholder="0"
+                              />
+                            </div>
 
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-bold text-slate-500 block uppercase">Altas Previstas:</label>
-                          <input
-                            type="number"
-                            min="0"
-                            value={metric.altasPrevistas || ''}
-                            onChange={(e) => handleUpdateMetricas(sectorName, 'altasPrevistas', parseInt(e.target.value) || 0)}
-                            className="w-full text-xs font-bold text-slate-800 bg-white border border-slate-250 p-2 rounded-lg focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 transition-colors"
-                            placeholder="0"
-                          />
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-bold text-slate-500 block uppercase">Altas Previstas:</label>
+                              <input
+                                type="number"
+                                min="0"
+                                value={metric.altasPrevistas || ''}
+                                onChange={(e) => handleUpdateMetricas(sectorName, 'altasPrevistas', parseInt(e.target.value) || 0)}
+                                className="w-full text-xs font-bold text-slate-800 bg-white border border-slate-250 p-2 rounded-lg focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 transition-colors"
+                                placeholder="0"
+                              />
+                            </div>
+                          </div>
+
                         </div>
+                      </div>
+
+                      {/* Team Roll list of this Sector */}
+                      <div className="p-4 bg-white">
+                        {subColaboradores.length === 0 ? (
+                          <div className="text-center py-4 text-xs font-semibold text-slate-400 italic block">
+                            Nenhum colaborador alocado neste setor para este turno.
+                          </div>
+                        ) : (
+                          <div className="divide-y divide-slate-100">
+                            {subColaboradores.map((colab) => {
+                              const isSpecialStatus = colab.status === 'Férias' || (colab.status === 'Atestado' && !!colab.info);
+
+                              return (
+                                <div key={colab.matricula} className="py-2.5 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
+                                  <div className="space-y-0.5">
+                                    <p className="font-extrabold text-slate-800">
+                                      {colab.nome} 
+                                      <span className="text-[10px] text-slate-400 font-semibold ml-2">({colab.matricula})</span>
+                                    </p>
+                                    <p className="text-[10px] text-slate-500 font-bold uppercase">
+                                      {colab.cargo}
+                                    </p>
+                                    {colab.info && (
+                                      <p className="text-[9px] text-rose-600 font-extrabold mr-2 animate-pulse">
+                                        ★ Registro Ativo: {colab.info}
+                                      </p>
+                                    )}
+                                  </div>
+
+                                  <div className="flex flex-wrap items-center gap-3">
+                                    
+                                    {/* If already pre-identified status (vacation/atestado) show badge instead of options */}
+                                    {isSpecialStatus ? (
+                                      colab.status === 'Férias' ? (
+                                        <div className="bg-amber-50 text-amber-800 border border-amber-200 font-bold rounded-xl px-3 py-1.5 flex items-center gap-1 text-[10px] uppercase">
+                                          <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                          <span>{colab.info || 'Férias'}</span>
+                                        </div>
+                                      ) : (
+                                        <div className="bg-rose-55 text-rose-800 border border-rose-250 font-bold rounded-xl px-3 py-1.5 flex items-center gap-1.5 text-[10px] uppercase">
+                                          <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                                          <div className="text-left leading-normal">
+                                            <span className="font-extrabold text-rose-900 block">INSS / Afastamento</span>
+                                            <span className="text-[8px] font-semibold text-rose-750 block normal-case mt-0.5">{colab.info}</span>
+                                          </div>
+                                        </div>
+                                      )
+                                    ) : (
+                                      <>
+                                        {/* Action Status Check Radio buttons group */}
+                                        <div className="flex bg-slate-100 p-0.5 rounded-xl border border-slate-205/60 text-[10px]">
+                                          <button
+                                            type="button"
+                                            onClick={() => handleUpdateDraftStatus(colab.matricula, 'Presente')}
+                                            className={`px-2.5 py-1.5 rounded-lg font-black uppercase cursor-pointer transition ${
+                                              colab.status === 'Presente'
+                                                ? 'bg-emerald-600 text-white shadow-3xs'
+                                                : 'text-slate-500 hover:text-slate-850'
+                                            }`}
+                                          >
+                                            Presente
+                                          </button>
+                                          
+                                          <button
+                                            type="button"
+                                            onClick={() => handleUpdateDraftStatus(colab.matricula, 'Atestado')}
+                                            className={`px-2.5 py-1.5 rounded-lg font-black uppercase cursor-pointer transition ${
+                                              colab.status === 'Atestado'
+                                                ? 'bg-rose-600 text-white shadow-3xs'
+                                                : 'text-slate-500 hover:text-slate-850'
+                                            }`}
+                                          >
+                                            Atestado
+                                          </button>
+
+                                          <button
+                                            type="button"
+                                            onClick={() => handleUpdateDraftStatus(colab.matricula, 'Falta')}
+                                            className={`px-2.5 py-1.5 rounded-lg font-black uppercase cursor-pointer transition ${
+                                              colab.status === 'Falta'
+                                                ? 'bg-amber-600 text-white shadow-3xs'
+                                                : 'text-slate-500 hover:text-slate-850'
+                                            }`}
+                                          >
+                                            Falta
+                                          </button>
+                                        </div>
+
+                                        {/* Remanejamento Action drop down */}
+                                        {colab.status === 'Presente' && (
+                                          <div className="flex items-center gap-1.5">
+                                            <ArrowRightLeft className="w-3.5 h-3.5 text-slate-400" />
+                                            <select
+                                              value={colab.remanejadoPara || ''}
+                                              onChange={(e) => handleUpdateDraftRemanejamento(colab.matricula, e.target.value)}
+                                              className="text-[10px] font-bold text-slate-700 bg-slate-50 border border-slate-250 rounded-lg p-1 px-1.5 cursor-pointer focus:outline-none focus:border-sky-500 transition-colors"
+                                            >
+                                              <option value="">Não remanejado</option>
+                                              {SECTORS_LIST.map(s => {
+                                                if (s === sectorName) return null; // Avoid same transfer
+                                                return <option key={s} value={s}>Transferir para {s}</option>;
+                                              })}
+                                            </select>
+                                          </div>
+                                        )}
+                                      </>
+                                    )}
+
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
 
                     </div>
+                  );
+                })}
+              </div>
+
+              {/* Right Column: Sticky Resumo de Dimensionamento (4 columns) */}
+              <div className="lg:col-span-4 lg:sticky lg:top-4 space-y-4">
+                <div className="bg-slate-50 p-4 border border-slate-200 rounded-3xl space-y-4 shadow-3xs">
+                  <div className="pb-3 border-b border-slate-205 flex items-center justify-between">
+                    <div>
+                      <h3 className="font-extrabold text-xs text-slate-800 flex items-center gap-1.5 uppercase tracking-wide">
+                        <ClipboardCheck className="w-4 h-4 text-sky-600 shrink-0" />
+                        Dimensionamento Live
+                      </h3>
+                      <p className="text-[9px] text-slate-500 font-semibold mt-0.5">
+                        Relatório atualizado em tempo real.
+                      </p>
+                    </div>
                   </div>
 
-                  {/* Team Roll list of this Sector */}
-                  <div className="p-4 bg-white">
-                    {subColaboradores.length === 0 ? (
-                      <div className="text-center py-4 text-xs font-semibold text-slate-400 italic block">
-                        Nenhum colaborador alocado neste setor para este turno.
-                      </div>
-                    ) : (
-                      <div className="divide-y divide-slate-100">
-                        {subColaboradores.map((colab) => {
-                          const isSpecialStatus = ['Férias'].includes(colab.status);
+                  <div className="space-y-3 max-h-[620px] overflow-y-auto pr-1">
+                    {SECTORS_LIST.map((sectorName) => {
+                      const metric = draftMetricas[sectorName] || { totalPacientes: 0 };
+                      const capacity = HOSPITAL_CAPACITIES[sectorName];
+                      const activeTecs = getSectorTechniciansCount(sectorName, draftColaboradores);
+                      const activeNurses = getSectorNursesCount(sectorName, draftColaboradores);
+                      
+                      // Calculate occupancy percentage
+                      const occupancyPct = capacity ? Math.round((metric.totalPacientes / capacity) * 100) : null;
+                      
+                      // Patient-to-technician ratio
+                      const ratio = activeTecs > 0 ? (metric.totalPacientes / activeTecs).toFixed(1) : null;
 
-                          return (
-                            <div key={colab.matricula} className="py-2.5 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
-                              <div className="space-y-0.5">
-                                <p className="font-extrabold text-slate-800">
-                                  {colab.nome} 
-                                  <span className="text-[10px] text-slate-400 font-semibold ml-2">({colab.matricula})</span>
-                                </p>
-                                <p className="text-[10px] text-slate-500 font-bold uppercase">
-                                  {colab.cargo}
-                                </p>
-                                {colab.info && (
-                                  <p className="text-[9px] text-rose-600 font-extrabold mr-2 animate-pulse">
-                                    ★ Registro Ativo: {colab.info}
-                                  </p>
-                                )}
+                      return (
+                        <div key={sectorName} className="p-3 bg-white border border-slate-200 rounded-2xl shadow-3xs space-y-2.5 text-xs">
+                          <div className="flex items-center justify-between">
+                            <span className="font-black text-slate-800 tracking-wide uppercase text-[10px]">{sectorName}</span>
+                            {capacity ? (
+                              <span className="text-[9px] font-bold text-slate-500">
+                                Leitos: <strong className="text-slate-800">{metric.totalPacientes} / {capacity}</strong>
+                              </span>
+                            ) : (
+                              <span className="text-[9px] font-bold text-slate-400">
+                                S/ Cap. Fixada
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Occupancy Progress Bar */}
+                          {capacity && occupancyPct !== null && (
+                            <div className="space-y-1">
+                              <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                                <div 
+                                  className={`h-full transition-all duration-300 ${
+                                    occupancyPct > 100 
+                                      ? 'bg-red-500' 
+                                      : occupancyPct > 85 
+                                      ? 'bg-amber-500' 
+                                      : 'bg-sky-500'
+                                  }`}
+                                  style={{ width: `${Math.min(occupancyPct, 100)}%` }}
+                                />
                               </div>
-
-                              <div className="flex flex-wrap items-center gap-3">
-                                
-                                {/* If already pre-identified status (vacation/atestado) show badge instead of options */}
-                                {isSpecialStatus ? (
-                                  <div className="bg-amber-50/50 text-amber-800 border border-amber-200 font-bold rounded-xl px-3 py-1.5 flex items-center gap-1 text-[10px] uppercase">
-                                    <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
-                                    {colab.info || colab.status}
-                                  </div>
-                                ) : (
-                                  <>
-                                    {/* Action Status Check Radio buttons group */}
-                                    <div className="flex bg-slate-100 p-0.5 rounded-xl border border-slate-205/60 text-[10px]">
-                                      <button
-                                        type="button"
-                                        onClick={() => handleUpdateDraftStatus(colab.matricula, 'Presente')}
-                                        className={`px-2.5 py-1.5 rounded-lg font-black uppercase cursor-pointer transition ${
-                                          colab.status === 'Presente'
-                                            ? 'bg-emerald-600 text-white shadow-3xs'
-                                            : 'text-slate-500 hover:text-slate-850'
-                                        }`}
-                                      >
-                                        Presente
-                                      </button>
-                                      
-                                      <button
-                                        type="button"
-                                        onClick={() => handleUpdateDraftStatus(colab.matricula, 'Atestado')}
-                                        className={`px-2.5 py-1.5 rounded-lg font-black uppercase cursor-pointer transition ${
-                                          colab.status === 'Atestado'
-                                            ? 'bg-rose-600 text-white shadow-3xs'
-                                            : 'text-slate-500 hover:text-slate-850'
-                                        }`}
-                                      >
-                                        Atestado
-                                      </button>
-
-                                      <button
-                                        type="button"
-                                        onClick={() => handleUpdateDraftStatus(colab.matricula, 'Falta')}
-                                        className={`px-2.5 py-1.5 rounded-lg font-black uppercase cursor-pointer transition ${
-                                          colab.status === 'Falta'
-                                            ? 'bg-amber-600 text-white shadow-3xs'
-                                            : 'text-slate-500 hover:text-slate-850'
-                                        }`}
-                                      >
-                                        Falta
-                                      </button>
-                                    </div>
-
-                                    {/* Remanejamento Action drop down */}
-                                    {colab.status === 'Presente' && (
-                                      <div className="flex items-center gap-1.5">
-                                        <ArrowRightLeft className="w-3.5 h-3.5 text-slate-400" />
-                                        <select
-                                          value={colab.remanejadoPara || ''}
-                                          onChange={(e) => handleUpdateDraftRemanejamento(colab.matricula, e.target.value)}
-                                          className="text-[10px] font-bold text-slate-700 bg-slate-50 border border-slate-250 rounded-lg p-1 px-1.5 cursor-pointer focus:outline-none focus:border-sky-500 transition-colors"
-                                        >
-                                          <option value="">Não remanejado</option>
-                                          {SECTORS_LIST.map(s => {
-                                            if (s === sectorName) return null; // Avoid same transfer
-                                            return <option key={s} value={s}>Transferir para {s}</option>;
-                                          })}
-                                        </select>
-                                      </div>
-                                    )}
-                                  </>
+                              <div className="flex justify-between items-center text-[9px] text-slate-400 font-extrabold uppercase">
+                                <span>Ocupação: {occupancyPct}%</span>
+                                {occupancyPct > 100 && (
+                                  <span className="text-red-600 font-black animate-pulse text-[8px]">Superlotado!</span>
                                 )}
-
                               </div>
                             </div>
-                          );
-                        })}
-                      </div>
-                    )}
+                          )}
+
+                          {/* Personnel summary bar */}
+                          <div className="flex items-center justify-between gap-1 bg-slate-50/50 p-2 rounded-xl text-[10px] border border-slate-150">
+                            <div className="flex gap-2 text-slate-600 font-bold">
+                              <span>👥 Téc: <strong className="text-slate-800">{activeTecs}</strong></span>
+                              <span>🩺 Enf: <strong className="text-slate-800">{activeNurses}</strong></span>
+                            </div>
+
+                            <div className="flex items-center font-bold">
+                              {metric.totalPacientes > 0 && activeTecs === 0 ? (
+                                <span className="text-red-700 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded text-[8px] tracking-wide uppercase">
+                                  Sem Técnicos!
+                                </span>
+                              ) : metric.totalPacientes > 0 && ratio && parseFloat(ratio) > 8 ? (
+                                <span className="text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded text-[8px] tracking-wide uppercase" title="Recomenda-se remanejamento de técnicos para este setor">
+                                  Proporção: {ratio}
+                                </span>
+                              ) : ratio ? (
+                                <span className="text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded text-[8px] tracking-wide uppercase">
+                                  Proporção: {ratio}
+                                </span>
+                              ) : (
+                                <span className="text-slate-400 italic text-[9px]">
+                                  S/ Pacientes
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-
                 </div>
-              );
-            })}
+              </div>
 
+            </div>
           </div>
 
           {/* Bottom Save Action Controls */}
-          <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-3">
+          <div className="p-4 bg-slate-50 border-t border-slate-150 flex items-center justify-end gap-3">
             <button
               onClick={() => {
                 if (window.confirm("Deseja realmente cancelar? Dados editados serão perdidos.")) {
                   setIsCreating(false);
+                  setEditingId(null);
                 }
               }}
               className="px-4 py-2 text-slate-500 bg-white border border-slate-200 hover:bg-slate-100 font-extrabold rounded-xl text-xs uppercase cursor-pointer transition"
@@ -870,7 +1095,7 @@ export default function ChamadaView({
               onClick={handleSaveChamada}
               className="px-5 py-2.5 bg-sky-600 hover:bg-sky-700 text-white font-black rounded-xl text-xs uppercase cursor-pointer shadow-md shadow-sky-600/10 transition"
             >
-              Gravar e Copiar Relatório
+              {editingId ? "Salvar Alterações" : "Gravar e Copiar Relatório"}
             </button>
           </div>
 

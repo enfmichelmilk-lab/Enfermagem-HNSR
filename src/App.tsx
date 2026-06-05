@@ -163,7 +163,12 @@ export default function App() {
     const unsub7 = subscribeCollection<Chamada>(
       'chamadas',
       (data) => {
-        setChamadas(data);
+        const sorted = [...data].sort((a, b) => {
+          const dateCompare = b.data.localeCompare(a.data);
+          if (dateCompare !== 0) return dateCompare;
+          return (b.dataCriacao || '').localeCompare(a.dataCriacao || '');
+        });
+        setChamadas(sorted);
       },
       'hnsr_chamadas_db',
       []
@@ -297,19 +302,25 @@ export default function App() {
 
   const handleUpdateChamadas = async (val: React.SetStateAction<Chamada[]>) => {
     const nextList = typeof val === 'function' ? (val as Function)(chamadas) : val;
-    for (const item of nextList) {
+    const sortedNextList = [...nextList].sort((a, b) => {
+      const dateCompare = b.data.localeCompare(a.data);
+      if (dateCompare !== 0) return dateCompare;
+      return (b.dataCriacao || '').localeCompare(a.dataCriacao || '');
+    });
+
+    for (const item of sortedNextList) {
       const match = chamadas.find(c => c.id === item.id);
       if (!match || JSON.stringify(match) !== JSON.stringify(item)) {
         await saveDocument('chamadas', item.id, item);
       }
     }
     for (const item of chamadas) {
-      if (!nextList.some((n: any) => n.id === item.id)) {
+      if (!sortedNextList.some((n: any) => n.id === item.id)) {
         await removeDocument('chamadas', item.id);
       }
     }
-    setChamadas(nextList);
-    localStorage.setItem('hnsr_chamadas_db', JSON.stringify(nextList));
+    setChamadas(sortedNextList);
+    localStorage.setItem('hnsr_chamadas_db', JSON.stringify(sortedNextList));
   };
 
   // Check if session keeps active on load
