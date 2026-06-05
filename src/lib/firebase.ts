@@ -170,7 +170,7 @@ export async function saveDocument(collectionName: string, docId: string, data: 
     const serializedData = JSON.parse(JSON.stringify(data));
     await setDoc(docRef, serializedData, { merge: true });
   } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, `${collectionName}/${cleanId}`);
+    console.error(`[Firebase Write Error] Failed saving ${collectionName}/${cleanId}:`, error);
   }
 }
 
@@ -197,6 +197,6 @@ export async function removeDocument(collectionName: string, docId: string): Pro
     const docRef = doc(db, collectionName, cleanId);
     await deleteDoc(docRef);
   } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, `${collectionName}/${cleanId}`);
+    console.error(`[Firebase Delete Error] Failed removing ${collectionName}/${cleanId}:`, error);
   }
 }

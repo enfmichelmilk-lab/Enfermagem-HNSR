@@ -125,6 +125,46 @@ export default function ChamadaView({
   const [draftColaboradores, setDraftColaboradores] = useState<ColaboradorChamadaStatus[]>([]);
   const [draftMetricas, setDraftMetricas] = useState<{ [setorName: string]: ChamadaSetorMetric }>({});
 
+  // Helper to determine if the supervisor of Gestão is absent/off (i.e. status not 'Presente')
+  const isSupervisorAbsent = useMemo(() => {
+    const supervisorColabs = draftColaboradores.filter(c => 
+      c.setorOriginal === 'Gestão' && 
+      (c.cargo?.toLowerCase().includes('supervisor') || c.cargo?.toLowerCase().includes('coordenador'))
+    );
+    if (supervisorColabs.length === 0) return true;
+    return supervisorColabs.every(s => s.status !== 'Presente');
+  }, [draftColaboradores]);
+
+  // List of all present nurses in the shift (excluding supervisors)
+  const presentNurses = useMemo(() => {
+    return draftColaboradores.filter(c => 
+      (c.cargo?.toLowerCase().includes('enfermeir') || c.cargo?.toLowerCase().startsWith('enf')) &&
+      !c.cargo?.toLowerCase().includes('supervisor') &&
+      !c.cargo?.toLowerCase().includes('coordenador') &&
+      c.status === 'Presente'
+    );
+  }, [draftColaboradores]);
+
+  // Sanitizer helper to clean extra whitespaces or empty fields
+  const sanitizeStatusColaboradores = (list: ColaboradorChamadaStatus[]): ColaboradorChamadaStatus[] => {
+    return list.map(c => {
+      const clean: ColaboradorChamadaStatus = {
+        matricula: (c.matricula || '').trim(),
+        nome: (c.nome || '').trim(),
+        cargo: (c.cargo || '').trim(),
+        setorOriginal: (c.setorOriginal || '').trim(),
+        status: c.status,
+      };
+      if (c.remanejadoPara && String(c.remanejadoPara).trim() !== '') {
+        clean.remanejadoPara = String(c.remanejadoPara).trim();
+      }
+      if (c.info && String(c.info).trim() !== '') {
+        clean.info = String(c.info).trim();
+      }
+      return clean;
+    });
+  };
+
   const getSectorTechniciansCount = (sectorKey: string, colabStatuses: ColaboradorChamadaStatus[]) => {
     let count = 0;
     colabStatuses.forEach(col => {
@@ -304,7 +344,7 @@ export default function ChamadaView({
       return a.nome.localeCompare(b.nome);
     });
 
-    const activeDrafts = filtered.map(c => {
+    const activeDrafts: ColaboradorChamadaStatus[] = filtered.map(c => {
       const predState = getColaboradorStatusOnDate(c, selectedDate);
       const remState = remanejamentos[`${c.matricula}-${selectedDate}`];
       
@@ -335,6 +375,28 @@ export default function ChamadaView({
         altasPrevistas: 0
       };
     });
+
+    // Find supervisor in activeDrafts
+    const supervisorDraft = activeDrafts.find(c => 
+      c.setorOriginal === 'Gestão' && 
+      (c.cargo?.toLowerCase().includes('supervisor') || c.cargo?.toLowerCase().includes('coordenador')) &&
+      c.status === 'Presente'
+    );
+    
+    if (supervisorDraft) {
+      setEnfermeiroRef(supervisorDraft.nome);
+    } else {
+      const firstPresentNurse = activeDrafts.find(c => 
+        (c.cargo?.toLowerCase().includes('enfermeir') || c.cargo?.toLowerCase().startsWith('enf')) &&
+        !c.cargo?.toLowerCase().includes('supervisor') &&
+        c.status === 'Presente'
+      );
+      if (firstPresentNurse) {
+        setEnfermeiroRef(firstPresentNurse.nome);
+      } else {
+        setEnfermeiroRef(usuarioLogado.nome || '');
+      }
+    }
 
     setDraftColaboradores(activeDrafts);
     setDraftMetricas(standardMetricas);
@@ -445,13 +507,20 @@ export default function ChamadaView({
 
       const remanejadoText = remanejadoDetails.length > 0 ? remanejadoDetails.join(', ') : 'Nenhum';
 
-      text += `> ${sectorKey}\n`;
-      text += `* Enfermeiro(a): ${nursesText}\n`;
-      text += `* Técnicos: ${techniciansCount}\n`;
-      text += `* Total Pacientes: ${metric.totalPacientes}\n`;
-      text += `* Pacientes em VM: ${metric.pacientesVM}\n`;
-      text += `* Atestado: ${atestadoText}\n`;
-      text += `* Remanejado: ${remanejadoText}\n\n`;
+      if (sectorKey === 'Gestão') {
+        text += `> ${sectorKey}\n`;
+        text += `* Supervisor(a)/Enf. Referência: ${nursesText}\n`;
+        text += `* Atestado/Ausências: ${atestadoText}\n`;
+        text += `* Remanejado: ${remanejadoText}\n\n`;
+      } else {
+        text += `> ${sectorKey}\n`;
+        text += `* Enfermeiro(a): ${nursesText}\n`;
+        text += `* Técnicos: ${techniciansCount}\n`;
+        text += `* Total Pacientes: ${metric.totalPacientes}\n`;
+        text += `* Pacientes em VM: ${metric.pacientesVM}\n`;
+        text += `* Atestado: ${atestadoText}\n`;
+        text += `* Remanejado: ${remanejadoText}\n\n`;
+      }
     });
 
     return text.trim();
@@ -477,11 +546,13 @@ export default function ChamadaView({
       return;
     }
 
+    const sanitizedColabs = sanitizeStatusColaboradores(draftColaboradores);
+
     const generatedReport = generateWhatsAppText(
       selectedDate,
       selectedTurno,
       enfermeiroRef,
-      draftColaboradores,
+      sanitizedColabs,
       draftMetricas
     );
 
@@ -496,7 +567,7 @@ export default function ChamadaView({
             data: selectedDate,
             turno: selectedTurno,
             enfermeiroReferencia: enfermeiroRef,
-            statusColaboradores: draftColaboradores,
+            statusColaboradores: sanitizedColabs,
             metricasSetor: draftMetricas
             // keep dataCriacao and usuarioCriador from original object
           };
@@ -510,7 +581,7 @@ export default function ChamadaView({
         data: selectedDate,
         turno: selectedTurno,
         enfermeiroReferencia: enfermeiroRef,
-        statusColaboradores: draftColaboradores,
+        statusColaboradores: sanitizedColabs,
         metricasSetor: draftMetricas,
         dataCriacao: new Date().toISOString(),
         usuarioCriador: usuarioLogado.email
@@ -832,61 +903,89 @@ export default function ChamadaView({
                           </span>
 
                           {/* Required Metrics Fields Grid input */}
-                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs w-full xl:max-w-3xl">
-                            <div className="space-y-1">
-                              <label className="text-[10px] font-bold text-slate-500 block uppercase">Total Pacientes:</label>
-                              <input
-                                type="number"
-                                min="0"
-                                value={metric.totalPacientes || ''}
-                                onChange={(e) => handleUpdateMetricas(sectorName, 'totalPacientes', parseInt(e.target.value) || 0)}
-                                className="w-full text-xs font-bold text-slate-800 bg-white border border-slate-250 p-2 rounded-lg focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 transition-colors"
-                                placeholder="0"
-                              />
+                          {sectorName === 'Gestão' ? (
+                            <div className="text-[10px] text-slate-500 font-black uppercase tracking-wider bg-slate-100 hover:bg-slate-200/60 border border-slate-200/80 px-4 py-2.5 rounded-xl transition duration-150 shadow-3xs">
+                              Controle de Presença (Sem Pacientes)
                             </div>
+                          ) : (
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs w-full xl:max-w-3xl">
+                              <div className="space-y-1">
+                                <label className="text-[10px] font-bold text-slate-500 block uppercase">Total Pacientes:</label>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={metric.totalPacientes || ''}
+                                  onChange={(e) => handleUpdateMetricas(sectorName, 'totalPacientes', parseInt(e.target.value) || 0)}
+                                  className="w-full text-xs font-bold text-slate-800 bg-white border border-slate-250 p-2 rounded-lg focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 transition-colors"
+                                  placeholder="0"
+                                />
+                              </div>
 
-                            <div className="space-y-1">
-                              <label className="text-[10px] font-bold text-slate-500 block uppercase">Pacientes em VM:</label>
-                              <input
-                                type="number"
-                                min="0"
-                                value={metric.pacientesVM || ''}
-                                onChange={(e) => handleUpdateMetricas(sectorName, 'pacientesVM', parseInt(e.target.value) || 0)}
-                                className="w-full text-xs font-bold text-slate-800 bg-white border border-slate-250 p-2 rounded-lg focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 transition-colors"
-                                placeholder="0"
-                              />
-                            </div>
+                              <div className="space-y-1">
+                                <label className="text-[10px] font-bold text-slate-500 block uppercase">Pacientes em VM:</label>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={metric.pacientesVM || ''}
+                                  onChange={(e) => handleUpdateMetricas(sectorName, 'pacientesVM', parseInt(e.target.value) || 0)}
+                                  className="w-full text-xs font-bold text-slate-800 bg-white border border-slate-250 p-2 rounded-lg focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 transition-colors"
+                                  placeholder="0"
+                                />
+                              </div>
 
-                            <div className="space-y-1">
-                              <label className="text-[10px] font-bold text-slate-500 block uppercase">Acamados:</label>
-                              <input
-                                type="number"
-                                min="0"
-                                value={metric.pacientesAcamados || ''}
-                                onChange={(e) => handleUpdateMetricas(sectorName, 'pacientesAcamados', parseInt(e.target.value) || 0)}
-                                className="w-full text-xs font-bold text-slate-800 bg-white border border-slate-250 p-2 rounded-lg focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 transition-colors"
-                                placeholder="0"
-                              />
-                            </div>
+                              <div className="space-y-1">
+                                <label className="text-[10px] font-bold text-slate-500 block uppercase">Acamados:</label>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={metric.pacientesAcamados || ''}
+                                  onChange={(e) => handleUpdateMetricas(sectorName, 'pacientesAcamados', parseInt(e.target.value) || 0)}
+                                  className="w-full text-xs font-bold text-slate-800 bg-white border border-slate-250 p-2 rounded-lg focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 transition-colors"
+                                  placeholder="0"
+                                />
+                              </div>
 
-                            <div className="space-y-1">
-                              <label className="text-[10px] font-bold text-slate-500 block uppercase">Altas Previstas:</label>
-                              <input
-                                type="number"
-                                min="0"
-                                value={metric.altasPrevistas || ''}
-                                onChange={(e) => handleUpdateMetricas(sectorName, 'altasPrevistas', parseInt(e.target.value) || 0)}
-                                className="w-full text-xs font-bold text-slate-800 bg-white border border-slate-250 p-2 rounded-lg focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 transition-colors"
-                                placeholder="0"
-                              />
+                              <div className="space-y-1">
+                                <label className="text-[10px] font-bold text-slate-500 block uppercase">Altas Previstas:</label>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={metric.altasPrevistas || ''}
+                                  onChange={(e) => handleUpdateMetricas(sectorName, 'altasPrevistas', parseInt(e.target.value) || 0)}
+                                  className="w-full text-xs font-bold text-slate-800 bg-white border border-slate-250 p-2 rounded-lg focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 transition-colors"
+                                  placeholder="0"
+                                />
+                              </div>
                             </div>
-                          </div>
+                          )}
 
                         </div>
                       </div>
 
                       {/* Team Roll list of this Sector */}
                       <div className="p-4 bg-white">
+                        {sectorName === 'Gestão' && isSupervisorAbsent && (
+                          <div className="mb-4 bg-amber-50/50 border border-amber-200 p-3.5 rounded-2xl space-y-1.5 text-xs">
+                            <div className="flex items-start gap-2 text-amber-900 font-extrabold text-[11px] uppercase tracking-wide">
+                              <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                              Supervisor(a) de Folga / Ausente no Turno
+                            </div>
+                            <p className="text-[11px] text-slate-550 font-semibold">
+                              Como o supervisor está ausente, selecione abaixo o <strong>Enfermeiro(a) Referência</strong> para o plantão:
+                            </p>
+                            <select
+                              value={enfermeiroRef}
+                              onChange={(e) => setEnfermeiroRef(e.target.value)}
+                              className="w-full text-xs font-extrabold text-slate-800 bg-white border border-slate-250 p-2.5 rounded-xl cursor-pointer focus:outline-none focus:border-amber-500 transition-colors"
+                            >
+                              <option value="">-- Selecione o Enfermeiro(a) Referência --</option>
+                              {presentNurses.map(n => (
+                                <option key={n.matricula} value={n.nome}>{n.nome} ({n.setorOriginal})</option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+
                         {subColaboradores.length === 0 ? (
                           <div className="text-center py-4 text-xs font-semibold text-slate-400 italic block">
                             Nenhum colaborador alocado neste setor para este turno.
@@ -1037,7 +1136,11 @@ export default function ChamadaView({
                         <div key={sectorName} className="p-3 bg-white border border-slate-200 rounded-2xl shadow-3xs space-y-2.5 text-xs">
                           <div className="flex items-center justify-between">
                             <span className="font-black text-slate-800 tracking-wide uppercase text-[10px]">{sectorName}</span>
-                            {capacity ? (
+                            {sectorName === 'Gestão' ? (
+                              <span className="text-[9px] font-extrabold text-sky-600 bg-sky-50 px-1.5 py-0.5 rounded border border-sky-100 uppercase">
+                                Controle de Presença
+                              </span>
+                            ) : capacity ? (
                               <span className="text-[9px] font-bold text-slate-500">
                                 Leitos: <strong className="text-slate-800">{metric.totalPacientes} / {capacity}</strong>
                               </span>
@@ -1049,7 +1152,7 @@ export default function ChamadaView({
                           </div>
 
                           {/* Occupancy Progress Bar */}
-                          {capacity && occupancyPct !== null && (
+                          {sectorName !== 'Gestão' && capacity && occupancyPct !== null && (
                             <div className="space-y-1">
                               <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
                                 <div 
@@ -1074,13 +1177,29 @@ export default function ChamadaView({
 
                           {/* Personnel summary bar */}
                           <div className="flex items-center justify-between gap-1 bg-slate-50/50 p-2 rounded-xl text-[10px] border border-slate-150">
-                            <div className="flex gap-2 text-slate-600 font-bold">
-                              <span>👥 Téc: <strong className="text-slate-800">{activeTecs}</strong></span>
-                              <span>🩺 Enf: <strong className="text-slate-800">{activeNurses}</strong></span>
-                            </div>
+                            {sectorName === 'Gestão' ? (
+                              <div className="flex gap-2 text-slate-600 font-bold">
+                                <span>🩺 Supervisores: <strong className="text-slate-800">{activeNurses}</strong></span>
+                              </div>
+                            ) : (
+                              <div className="flex gap-2 text-slate-600 font-bold">
+                                <span>👥 Téc: <strong className="text-slate-800">{activeTecs}</strong></span>
+                                <span>🩺 Enf: <strong className="text-slate-800">{activeNurses}</strong></span>
+                              </div>
+                            )}
 
                             <div className="flex items-center font-bold">
-                              {metric.totalPacientes > 0 && activeTecs === 0 ? (
+                              {sectorName === 'Gestão' ? (
+                                activeNurses > 0 ? (
+                                  <span className="text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded text-[8px] tracking-wide uppercase font-black">
+                                    Supervisor Presente
+                                  </span>
+                                ) : (
+                                  <span className="text-amber-750 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded text-[8px] tracking-wide uppercase font-black animate-pulse">
+                                    Enf. Referência Ativo
+                                  </span>
+                                )
+                              ) : metric.totalPacientes > 0 && activeTecs === 0 ? (
                                 <span className="text-red-700 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded text-[8px] tracking-wide uppercase">
                                   Sem Técnicos!
                                 </span>
@@ -1250,12 +1369,18 @@ export default function ChamadaView({
                     return (
                       <div key={sectorName} className="p-2.5 bg-slate-50 border border-slate-150 rounded-xl space-y-1.5 config_item">
                         <span className="font-black text-slate-705 block uppercase text-[10px] tracking-wide">{sectorName}</span>
-                        <div className="grid grid-cols-4 gap-1.5 text-slate-500 text-[10px]">
-                          <div>Pacientes: <strong className="text-slate-700">{metric.totalPacientes}</strong></div>
-                          <div>Em VM: <strong className="text-slate-700">{metric.pacientesVM}</strong></div>
-                          <div>Acamados: <strong className="text-slate-700">{metric.pacientesAcamados}</strong></div>
-                          <div>Altas: <strong className="text-slate-700">{metric.altasPrevistas}</strong></div>
-                        </div>
+                        {sectorName === 'Gestão' ? (
+                          <div className="text-slate-400 font-extrabold text-[9px] uppercase italic">
+                            Controle de Presença (Sem Pacientes)
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-4 gap-1.5 text-slate-500 text-[10px]">
+                            <div>Pacientes: <strong className="text-slate-700">{metric.totalPacientes}</strong></div>
+                            <div>Em VM: <strong className="text-slate-700">{metric.pacientesVM}</strong></div>
+                            <div>Acamados: <strong className="text-slate-700">{metric.pacientesAcamados}</strong></div>
+                            <div>Altas: <strong className="text-slate-700">{metric.altasPrevistas}</strong></div>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
