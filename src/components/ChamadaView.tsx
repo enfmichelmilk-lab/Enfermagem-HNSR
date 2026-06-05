@@ -38,6 +38,7 @@ interface ChamadaViewProps {
 }
 
 const SECTORS_LIST = [
+  'Gestão',
   'UTI (9º andar)',
   'UTI (7º andar)',
   '6º Andar',
@@ -62,9 +63,19 @@ const HOSPITAL_CAPACITIES: Record<string, number> = {
 
 const EQUIPES_DISPONIVEIS = ['Diurno A', 'Diurno B', 'Noturno A', 'Noturno B', 'Diarista'];
 
-// Helper to normalized map colaborador sectors to our 10 standard sectors
-const mapSectorToTarget = (setor: string): string => {
+// Helper to normalized map colaborador sectors to our standard sectors
+const mapSectorToTarget = (setor: string, cargo?: string): string => {
   const norm = (setor || '').toUpperCase().trim();
+  const cargoNorm = (cargo || '').toUpperCase().trim();
+  if (
+    cargoNorm.includes('SUPERVISOR') ||
+    norm.includes('GESTÃO') ||
+    norm.includes('GESTAO') ||
+    norm.includes('COORDENAÇÃO') ||
+    norm.includes('COORDENACAO')
+  ) {
+    return 'Gestão';
+  }
   if (norm.includes('9º') || norm.includes('9O') || norm.includes('UTI 9')) return 'UTI (9º andar)';
   if (norm.includes('7º') || norm.includes('7O') || norm.includes('8º') || norm.includes('8O') || norm.includes('UTI 8') || norm.includes('UTI 7')) return 'UTI (7º andar)';
   if (norm.includes('6º') || norm.includes('6O') || norm.includes('6 ANDAR')) return '6º Andar';
@@ -260,7 +271,29 @@ export default function ChamadaView({
       const equipeLower = (c.equipe || '').toLowerCase().trim();
       const selectedLower = selectedTurno.toLowerCase().trim();
       
-      // If we seek standard matching or similar
+      if (selectedLower === 'diarista') {
+        return (
+          equipeLower === 'diário' ||
+          equipeLower === 'diario' ||
+          equipeLower === 'diarista' ||
+          equipeLower.includes('diário') ||
+          equipeLower.includes('diario') ||
+          equipeLower.includes('diarista')
+        );
+      }
+      if (selectedLower === 'diurno a') {
+        return equipeLower === 'diurno a' || equipeLower === 'turno diurno a' || equipeLower.includes('diurno a');
+      }
+      if (selectedLower === 'diurno b') {
+        return equipeLower === 'diurno b' || equipeLower === 'turno diurno b' || equipeLower.includes('diurno b');
+      }
+      if (selectedLower === 'noturno a') {
+        return equipeLower === 'noturno a' || equipeLower === 'turno noturno a' || equipeLower.includes('noturno a');
+      }
+      if (selectedLower === 'noturno b') {
+        return equipeLower === 'noturno b' || equipeLower === 'turno noturno b' || equipeLower.includes('noturno b');
+      }
+      
       return equipeLower === selectedLower;
     }).sort((a, b) => {
       const aCargo = a.cargo?.toLowerCase() || '';
@@ -284,7 +317,7 @@ export default function ChamadaView({
         matricula: c.matricula,
         nome: c.nome,
         cargo: c.cargo,
-        setorOriginal: mapSectorToTarget(c.setor),
+        setorOriginal: mapSectorToTarget(c.setor, c.cargo),
         status: initialStatus,
         remanejadoPara: remState || undefined,
         info: predState ? predState.info : undefined
@@ -370,10 +403,8 @@ export default function ChamadaView({
         const isOrigPresentNotInMove = col.setorOriginal === sectorKey && col.status === 'Presente' && !col.remanejadoPara;
         const isIncomingPresentMove = col.remanejadoPara === sectorKey && col.status === 'Presente';
 
-        if (isOrigPresentNotInMove) {
+        if (isOrigPresentNotInMove || isIncomingPresentMove) {
           nursesPresent.push(col.nome);
-        } else if (isIncomingPresentMove) {
-          nursesPresent.push(`${col.nome} (Remanejado(a) de ${col.setorOriginal})`);
         }
       });
 

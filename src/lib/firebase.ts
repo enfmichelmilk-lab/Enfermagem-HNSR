@@ -117,7 +117,8 @@ export function subscribeCollection<T>(
         try {
           const docId = item.id || item.matricula || item.email;
           if (docId) {
-            await setDoc(doc(db, collectionName, docId), item);
+            const cleanItem = JSON.parse(JSON.stringify(item));
+            await setDoc(doc(db, collectionName, docId), cleanItem);
           }
         } catch (err) {
           console.error(`Error seeding ${collectionName}:`, err);
@@ -165,7 +166,9 @@ export async function saveDocument(collectionName: string, docId: string, data: 
 
   try {
     const docRef = doc(db, collectionName, cleanId);
-    await setDoc(docRef, data, { merge: true });
+    // Remove undefined values recursively to prevent Firestore SDK from throwing errors
+    const serializedData = JSON.parse(JSON.stringify(data));
+    await setDoc(docRef, serializedData, { merge: true });
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, `${collectionName}/${cleanId}`);
   }
