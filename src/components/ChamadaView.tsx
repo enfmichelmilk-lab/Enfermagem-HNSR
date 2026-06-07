@@ -103,7 +103,7 @@ export default function ChamadaView({
     return [...chamadas].sort((a, b) => {
       const dateCompare = b.data.localeCompare(a.data);
       if (dateCompare !== 0) return dateCompare;
-      return b.dataCriacao.localeCompare(a.dataCriacao);
+      return (b.dataCriacao || '').localeCompare(a.dataCriacao || '');
     });
   }, [chamadas]);
 
@@ -217,7 +217,10 @@ export default function ChamadaView({
       (data) => {
         const mapped: Record<string, string> = {};
         data.forEach((item) => {
-          mapped[item.id] = item.setor;
+          const valSetor = (item.setor || '').trim();
+          if (valSetor !== '') {
+            mapped[item.id] = valSetor;
+          }
         });
         setRemanejamentos(mapped);
       },
@@ -346,7 +349,10 @@ export default function ChamadaView({
 
     const activeDrafts: ColaboradorChamadaStatus[] = filtered.map(c => {
       const predState = getColaboradorStatusOnDate(c, selectedDate);
-      const remState = remanejamentos[`${c.matricula}-${selectedDate}`];
+      const rawRem = remanejamentos[`${c.matricula}-${selectedDate}`];
+      const remState = (rawRem && rawRem.trim() !== '' && rawRem.trim().toLowerCase() !== 'não remanejado') 
+        ? rawRem.trim() 
+        : undefined;
       
       let initialStatus: 'Presente' | 'Atestado' | 'Falta' | 'Férias' | 'Folga' | 'Pendente' = 'Pendente';
       if (predState) {
@@ -359,7 +365,7 @@ export default function ChamadaView({
         cargo: c.cargo,
         setorOriginal: mapSectorToTarget(c.setor, c.cargo),
         status: initialStatus,
-        remanejadoPara: remState || undefined,
+        remanejadoPara: remState,
         info: predState ? predState.info : undefined
       };
     });
@@ -415,10 +421,11 @@ export default function ChamadaView({
   };
 
   const handleUpdateDraftRemanejamento = (matricula: string, targetSectorSector: string) => {
+    const valSetor = (targetSectorSector || '').trim();
     setDraftColaboradores(prev => 
       prev.map(c => c.matricula === matricula ? { 
         ...c, 
-        remanejadoPara: targetSectorSector === '' ? undefined : targetSectorSector 
+        remanejadoPara: (valSetor === '' || valSetor.toLowerCase() === 'não remanejado') ? undefined : valSetor 
       } : c)
     );
   };
