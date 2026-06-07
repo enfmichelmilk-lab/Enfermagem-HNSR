@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { Activity, Users, Stethoscope, CalendarCheck, UserCog, LogOut, HeartHandshake, Palmtree, Award, ClipboardCheck, Smartphone } from 'lucide-react';
+import { Activity, Users, Stethoscope, CalendarCheck, UserCog, LogOut, HeartHandshake, Palmtree, Award, ClipboardCheck, Smartphone, X } from 'lucide-react';
 import { Usuario } from '../types';
 import HapvidaLogo from './HapvidaLogo';
 
@@ -18,6 +18,7 @@ interface SidebarProps {
 export default function Sidebar({ usuario, activeView, onNavigate, onLogout }: SidebarProps) {
   const [deferredPrompt, setDeferredPrompt] = React.useState<any>(null);
   const [isInstalled, setIsInstalled] = React.useState<boolean>(false);
+  const [showGuide, setShowGuide] = React.useState<boolean>(false);
 
   React.useEffect(() => {
     const handleBeforeInstall = (e: Event) => {
@@ -216,7 +217,7 @@ export default function Sidebar({ usuario, activeView, onNavigate, onLogout }: S
       {/* Footer containing support details and Logout */}
       <div className="p-4 border-t border-slate-100 space-y-3">
         {/* PWA Promotion action hook */}
-        {deferredPrompt && (
+        {deferredPrompt ? (
           <button
             onClick={handleInstallClick}
             className="w-full flex items-center justify-center gap-2 py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl text-[10px] transition duration-150 shadow-3xs cursor-pointer uppercase tracking-wider animate-pulse"
@@ -224,6 +225,16 @@ export default function Sidebar({ usuario, activeView, onNavigate, onLogout }: S
             <Smartphone className="w-3.5 h-3.5 shrink-0" />
             <span>Instalar Aplicativo</span>
           </button>
+        ) : (
+          !isInstalled && (
+            <button
+              onClick={() => setShowGuide(true)}
+              className="w-full flex items-center justify-center gap-2 py-2.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-extrabold rounded-xl text-[10px] transition duration-150 border border-slate-200 cursor-pointer uppercase tracking-wider"
+            >
+              <Smartphone className="w-3.5 h-3.5 shrink-0" />
+              <span>Como Instalar no Celular</span>
+            </button>
+          )
         )}
 
         {isInstalled && (
@@ -246,6 +257,65 @@ export default function Sidebar({ usuario, activeView, onNavigate, onLogout }: S
           <span>Encerrar Sessão</span>
         </button>
       </div>
+
+      {/* PWA Help Guide Modal */}
+      {showGuide && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-55 p-4">
+          <div className="bg-white rounded-3xl shadow-xl border border-slate-100 w-full max-w-sm overflow-hidden animate-in fade-in zoom-in-95 duration-150 text-left">
+            <div className="p-4 bg-slate-950 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Smartphone className="w-4 h-4 text-sky-400" />
+                <span className="font-extrabold text-xs uppercase tracking-wide">Manual de Instalação</span>
+              </div>
+              <button
+                onClick={() => setShowGuide(false)}
+                className="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            
+            <div className="p-5 space-y-4 text-xs">
+              <p className="text-slate-600 font-medium leading-relaxed">
+                Você pode instalar este painel de monitoramento como um aplicativo exclusivo no seu celular! Ele funcionará em tela cheia, sem barras de navegação.
+              </p>
+              
+              <div className="space-y-3.5">
+                {/* iOS Instructions */}
+                <div className="bg-slate-50 border border-slate-100 p-3.5 rounded-2xl space-y-2">
+                  <div className="flex items-center gap-1.5 font-black text-slate-850 uppercase text-[10px] tracking-wider text-sky-700">
+                    <span>📱 No iPhone (Safari)</span>
+                  </div>
+                  <ol className="list-decimal pl-4 space-y-1.5 text-[11px] text-slate-600 font-semibold leading-relaxed">
+                    <li>Toque no botão de <strong className="text-slate-800 font-extrabold">Compartilhar</strong> (ícone de retângulo com uma seta para cima 📤).</li>
+                    <li>Role as opções disponíveis para baixo e toque em <strong className="text-slate-800 font-extrabold">"Adicionar à Tela de Início"</strong> (ícone ➕).</li>
+                    <li>Toque em <strong className="text-sky-700 font-extrabold">"Adicionar"</strong> no canto superior direito para confirmar.</li>
+                  </ol>
+                </div>
+
+                {/* Android Instructions */}
+                <div className="bg-slate-50 border border-slate-100 p-3.5 rounded-2xl space-y-2">
+                  <div className="flex items-center gap-1.5 font-black text-slate-850 uppercase text-[10px] tracking-wider text-emerald-700">
+                    <span>🤖 No Android (Chrome / Edge)</span>
+                  </div>
+                  <ol className="list-decimal pl-4 space-y-1.5 text-[11px] text-slate-600 font-semibold leading-relaxed">
+                    <li>Toque nos <strong className="text-slate-800 font-extrabold">três pontinhos</strong> (⫶) no canto superior direito.</li>
+                    <li>Selecione <strong className="text-slate-800 font-extrabold">"Instalar aplicativo"</strong> ou <strong className="text-slate-800 font-extrabold">"Adicionar à tela inicial"</strong>.</li>
+                    <li>Confirme tocando em <strong className="text-emerald-700 font-extrabold">"Instalar"</strong>.</li>
+                  </ol>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setShowGuide(false)}
+                className="w-full py-2.5 bg-slate-900 hover:bg-slate-950 text-white font-extrabold rounded-xl text-[10px] uppercase tracking-wider transition cursor-pointer text-center"
+              >
+                Concluir e fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </nav>
   );
 }
