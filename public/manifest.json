@@ -1,0 +1,27 @@
+{
+  "name": "Gestão RH Enfermagem HNSR",
+  "short_name": "RH Enfermagem",
+  "description": "Painel Assistencial - Escalas, Folgas, Férias e Chamada Diária do Hospital Nossa Senhora do Rosário",
+  "id": "/?source=pwa",
+  "start_url": "/?source=pwa",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "scope": "/",
+  "categories": ["medical", "productivity", "utilities"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

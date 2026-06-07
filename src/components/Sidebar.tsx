@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { Activity, Users, Stethoscope, CalendarCheck, UserCog, LogOut, HeartHandshake, Palmtree, Award, ClipboardCheck } from 'lucide-react';
+import { Activity, Users, Stethoscope, CalendarCheck, UserCog, LogOut, HeartHandshake, Palmtree, Award, ClipboardCheck, Smartphone } from 'lucide-react';
 import { Usuario } from '../types';
 import HapvidaLogo from './HapvidaLogo';
 
@@ -16,6 +16,44 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ usuario, activeView, onNavigate, onLogout }: SidebarProps) {
+  const [deferredPrompt, setDeferredPrompt] = React.useState<any>(null);
+  const [isInstalled, setIsInstalled] = React.useState<boolean>(false);
+
+  React.useEffect(() => {
+    const handleBeforeInstall = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+
+    const handleAppInstalled = () => {
+      setIsInstalled(true);
+      setDeferredPrompt(null);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstall);
+    window.addEventListener('appinstalled', handleAppInstalled);
+
+    // Check if running in standalone window display mode
+    if (window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone) {
+      setIsInstalled(true);
+    }
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
+      window.removeEventListener('appinstalled', handleAppInstalled);
+    };
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setIsInstalled(true);
+      setDeferredPrompt(null);
+    }
+  };
+
   // Access check rule from JS.html
   const isAuthorizedAdmin = () => {
     const perfil = usuario.perfil ? usuario.perfil.toLowerCase() : "";
@@ -177,6 +215,23 @@ export default function Sidebar({ usuario, activeView, onNavigate, onLogout }: S
 
       {/* Footer containing support details and Logout */}
       <div className="p-4 border-t border-slate-100 space-y-3">
+        {/* PWA Promotion action hook */}
+        {deferredPrompt && (
+          <button
+            onClick={handleInstallClick}
+            className="w-full flex items-center justify-center gap-2 py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl text-[10px] transition duration-150 shadow-3xs cursor-pointer uppercase tracking-wider animate-pulse"
+          >
+            <Smartphone className="w-3.5 h-3.5 shrink-0" />
+            <span>Instalar Aplicativo</span>
+          </button>
+        )}
+
+        {isInstalled && (
+          <div className="text-[9px] text-emerald-700 bg-emerald-50 border border-emerald-150 py-1.5 px-2 rounded-lg font-black text-center uppercase tracking-wider">
+            ⚡ Executando como Aplicativo
+          </div>
+        )}
+
         <div className="text-[10px] text-slate-400 bg-slate-50 p-2.5 rounded-lg border border-slate-100 text-center leading-normal">
           <HeartHandshake className="w-4.5 h-4.5 text-sky-500 mx-auto mb-1" />
           <span className="font-bold block text-slate-500">Milk Sistemas</span>
@@ -185,7 +240,7 @@ export default function Sidebar({ usuario, activeView, onNavigate, onLogout }: S
         
         <button
           onClick={onLogout}
-          className="w-full flex items-center gap-3 py-2 px-3 rounded-lg text-xs font-bold text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors w-full text-left"
+          className="w-full flex items-center gap-3 py-2 px-3 rounded-lg text-xs font-bold text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors w-full text-left cursor-pointer"
         >
           <LogOut className="w-4 h-4" />
           <span>Encerrar Sessão</span>
