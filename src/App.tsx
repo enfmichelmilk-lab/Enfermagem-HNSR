@@ -38,7 +38,7 @@ export default function App() {
   const [chamadas, setChamadas] = useState<Chamada[]>([]);
 
   // Responsive Sidebar collapsible states
-  const [isCollapsed, setIsCollapsed] = useState<boolean>(false);
+  const [isCollapsed, setIsCollapsed] = useState<boolean>(true);
   const [isMobile, setIsMobile] = useState<boolean>(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
 

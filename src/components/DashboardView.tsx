@@ -242,7 +242,7 @@ export default function DashboardView({
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-2xl border border-slate-250 shadow-sm flex items-center gap-4 hover:shadow-md transition">
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4 hover:shadow-md transition">
           <div className="w-12 h-12 bg-pink-50 text-pink-650 rounded-xl flex items-center justify-center shrink-0">
             <Palmtree className="w-6 h-6 text-pink-600" />
           </div>

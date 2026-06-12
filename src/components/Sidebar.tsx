@@ -94,10 +94,10 @@ export default function Sidebar({
     <nav 
       onMouseEnter={() => isCollapsed && setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      className={`fixed top-0 bottom-0 left-0 h-screen bg-white border-r border-slate-200 flex flex-col text-slate-800 z-30 font-sans transition-all duration-300
+      className={`fixed top-0 bottom-0 left-0 h-screen bg-white border-r border-slate-200 flex flex-col text-slate-800 font-sans transition-all duration-300
         ${isMobile 
-          ? `${mobileMenuOpen ? 'translate-x-0 w-64' : '-translate-x-full w-0 pointer-events-none'} shadow-2xl` 
-          : `${isCollapsed ? (isHovered ? 'w-64 shadow-2xl z-40' : 'w-20') : 'w-64'}`
+          ? `z-50 w-64 ${mobileMenuOpen ? 'translate-x-0 opacity-100 visible' : '-translate-x-full pointer-events-none opacity-0 invisible'} shadow-2xl` 
+          : `z-30 ${isCollapsed ? (isHovered ? 'w-64 shadow-2xl z-40' : 'w-20') : 'w-64'}`
         }
       `}
     >
@@ -363,24 +363,20 @@ export default function Sidebar({
           </a>
         )}
 
-        {/* Pin/Unpin Toggle Button (Only visible on desktop/iPad landscape) */}
-        {!isMobile && (
+        {/* Pin/Unpin Toggle Button (Only visible on desktop/iPad landscape when expanded) */}
+        {!isMobile && !isSidebarCollapsed && (
           <button
             onClick={onToggleCollapse}
-            className={`w-full flex items-center justify-center transition-all duration-200 border rounded-xl cursor-pointer
-              ${isSidebarCollapsed 
-                ? 'p-2.5 h-9 w-9 bg-slate-50 border-slate-200 text-slate-400 hover:text-slate-700 hover:bg-slate-100' 
-                : isCollapsed 
-                  ? 'py-2 px-3 gap-2 bg-sky-50 border-sky-100 text-sky-700 hover:bg-sky-100 hover:border-sky-200 text-[10px] font-extrabold uppercase tracking-wider animate-pulse' 
-                  : 'py-2 px-3 gap-2 bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100 text-[10px] font-bold uppercase tracking-wider'
+            className={`w-full flex items-center justify-center transition-all duration-200 border rounded-xl cursor-pointer py-2 px-3 gap-2
+              ${isCollapsed 
+                ? 'bg-sky-50 border-sky-100 text-sky-700 hover:bg-sky-100 hover:border-sky-200 text-[10px] font-extrabold uppercase tracking-wider animate-pulse' 
+                : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100 text-[10px] font-bold uppercase tracking-wider'
               }
             `}
             title={isCollapsed ? "Fixar Menu (manter sempre aberto)" : "Deixar Retrátil (recolher automaticamente)"}
           >
             <Pin className={`w-3.5 h-3.5 shrink-0 transition-transform duration-200 ${isCollapsed ? 'rotate-45 text-slate-400' : 'text-sky-600'}`} />
-            {!isSidebarCollapsed && (
-              <span>{isCollapsed ? "Fixar Menu" : "Desafixar Menu"}</span>
-            )}
+            <span>{isCollapsed ? "Fixar Menu" : "Desafixar Menu"}</span>
           </button>
         )}
         
