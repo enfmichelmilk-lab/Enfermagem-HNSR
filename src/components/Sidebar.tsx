@@ -7,7 +7,7 @@ import React from 'react';
 import { 
   Activity, Users, Stethoscope, CalendarCheck, UserCog, 
   LogOut, HeartHandshake, Palmtree, Award, ClipboardCheck, 
-  Smartphone, X, ChevronLeft, ChevronRight 
+  Smartphone, X, Pin 
 } from 'lucide-react';
 import { Usuario } from '../types';
 import HapvidaLogo from './HapvidaLogo';
@@ -363,20 +363,23 @@ export default function Sidebar({
           </a>
         )}
 
-        {/* Collapsing toggle button (Only visible on desktop/iPad landscape) */}
+        {/* Pin/Unpin Toggle Button (Only visible on desktop/iPad landscape) */}
         {!isMobile && (
           <button
             onClick={onToggleCollapse}
-            className="w-full flex items-center justify-center py-2 px-2.5 hover:bg-slate-50 border border-slate-150 rounded-lg text-slate-500 hover:text-slate-800 transition cursor-pointer"
-            title={isSidebarCollapsed ? "Expandir Menu" : "Recolher Menu"}
+            className={`w-full flex items-center justify-center transition-all duration-200 border rounded-xl cursor-pointer
+              ${isSidebarCollapsed 
+                ? 'p-2.5 h-9 w-9 bg-slate-50 border-slate-200 text-slate-400 hover:text-slate-700 hover:bg-slate-100' 
+                : isCollapsed 
+                  ? 'py-2 px-3 gap-2 bg-sky-50 border-sky-100 text-sky-700 hover:bg-sky-100 hover:border-sky-200 text-[10px] font-extrabold uppercase tracking-wider animate-pulse' 
+                  : 'py-2 px-3 gap-2 bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100 text-[10px] font-bold uppercase tracking-wider'
+              }
+            `}
+            title={isCollapsed ? "Fixar Menu (manter sempre aberto)" : "Deixar Retrátil (recolher automaticamente)"}
           >
-            {isSidebarCollapsed ? (
-              <ChevronRight className="w-4 h-4 text-slate-500" />
-            ) : (
-              <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                <ChevronLeft className="w-4 h-4 text-slate-500" />
-                <span>Recolher</span>
-              </div>
+            <Pin className={`w-3.5 h-3.5 shrink-0 transition-transform duration-200 ${isCollapsed ? 'rotate-45 text-slate-400' : 'text-sky-600'}`} />
+            {!isSidebarCollapsed && (
+              <span>{isCollapsed ? "Fixar Menu" : "Desafixar Menu"}</span>
             )}
           </button>
         )}

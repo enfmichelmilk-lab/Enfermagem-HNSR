@@ -1146,9 +1146,9 @@ export default function FolgasView({
                             <th className="w-44 text-left p-2.5 bg-slate-100 border-r border-slate-200 sticky left-0 z-15 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Colaborador</th>
                             {showAppSupportColumns && (
                               <>
-                                <th className="w-18 text-center p-2 border-r border-slate-200 sticky left-[176px] z-15 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] bg-slate-100">Escala</th>
-                                <th className="w-20 text-center p-2 border-r border-slate-200 sticky left-[248px] z-15 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] bg-slate-100">Matrícula</th>
-                                <th className="w-24 text-center p-2 border-r border-slate-200 sticky left-[328px] z-15 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] bg-slate-100">Cargo</th>
+                                <th className="w-18 text-center p-2 border-r border-slate-200 static md:sticky md:left-[176px] z-15 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] bg-slate-100">Escala</th>
+                                <th className="w-20 text-center p-2 border-r border-slate-200 static md:sticky md:left-[248px] z-15 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] bg-slate-100">Matrícula</th>
+                                <th className="w-24 text-center p-2 border-r border-slate-200 static md:sticky md:left-[328px] z-15 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] bg-slate-100">Cargo</th>
                               </>
                             )}
                             {Array.from({ length: daysInMonth }, (_, index) => {
@@ -1183,15 +1183,15 @@ export default function FolgasView({
 
                                   {showAppSupportColumns && (
                                     <>
-                                      <td className="p-2 text-center font-bold text-slate-600 border-b border-r border-slate-200 bg-white sticky left-[176px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] whitespace-nowrap">
+                                      <td className="p-2 text-center font-bold text-slate-600 border-b border-r border-slate-200 bg-white static md:sticky md:left-[176px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] whitespace-nowrap">
                                         {colab.equipe.replace('Turno ', '').replace('Diurno', 'D').replace('Noturno', 'N')}
                                       </td>
 
-                                      <td className="p-2 text-center text-slate-500 font-mono border-b border-r border-slate-200 bg-white sticky left-[248px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] whitespace-nowrap">
+                                      <td className="p-2 text-center text-slate-500 font-mono border-b border-r border-slate-200 bg-white static md:sticky md:left-[248px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] whitespace-nowrap">
                                         {colab.matricula}
                                       </td>
 
-                                      <td className="p-2 text-center text-slate-500 font-medium border-b border-r border-slate-200 bg-white sticky left-[328px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] whitespace-nowrap text-ellipsis overflow-hidden">
+                                      <td className="p-2 text-center text-slate-500 font-medium border-b border-r border-slate-200 bg-white static md:sticky md:left-[328px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] whitespace-nowrap text-ellipsis overflow-hidden">
                                         {colab.cargo}
                                       </td>
                                     </>
@@ -1303,13 +1303,13 @@ export default function FolgasView({
                                 <span>Total Técnico + Auxiliar</span>
                               </div>
                             </td>
-                            {showAppSupportColumns && (
-                              <>
-                                <td className="p-2 text-center border-b border-r border-slate-200 bg-sky-50 sticky left-[176px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] font-extrabold">---</td>
-                                <td className="p-2 text-center border-b border-r border-slate-200 bg-sky-50 sticky left-[248px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] font-extrabold">---</td>
-                                <td className="p-2 text-center border-b border-r border-slate-200 bg-sky-50 sticky left-[328px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] font-extrabold overflow-hidden text-ellipsis whitespace-nowrap text-[10px]">Ativos no Dia</td>
-                              </>
-                            )}
+                             {showAppSupportColumns && (
+                               <>
+                                 <td className="p-2 text-center border-b border-r border-slate-200 bg-sky-50 static md:sticky md:left-[176px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] font-extrabold font-sans">---</td>
+                                 <td className="p-2 text-center border-b border-r border-slate-200 bg-sky-50 static md:sticky md:left-[248px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] font-extrabold font-sans">---</td>
+                                 <td className="p-2 text-center border-b border-r border-slate-200 bg-sky-50 static md:sticky md:left-[328px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] font-extrabold overflow-hidden text-ellipsis whitespace-nowrap text-[10px] font-sans">Ativos no Dia</td>
+                               </>
+                             )}
                             {Array.from({ length: daysInMonth }, (_, index) => {
                               const dNum = index + 1;
                               const count = shiftColabs.filter(colab => {
@@ -1348,9 +1348,9 @@ export default function FolgasView({
                     <th className="w-44 text-left p-2.5 bg-slate-100 border-r border-slate-200 sticky left-0 z-15 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Colaborador</th>
                     {showAppSupportColumns && (
                       <>
-                        <th className="w-18 text-center p-2 border-r border-slate-200 sticky left-[176px] z-15 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] bg-slate-100">Escala</th>
-                        <th className="w-20 text-center p-2 border-r border-slate-200 sticky left-[248px] z-15 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] bg-slate-100">Matrícula</th>
-                        <th className="w-24 text-center p-2 border-r border-slate-200 sticky left-[328px] z-15 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] bg-slate-100">Cargo</th>
+                        <th className="w-18 text-center p-2 border-r border-slate-200 static md:sticky md:left-[176px] z-15 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] bg-slate-100">Escala</th>
+                        <th className="w-20 text-center p-2 border-r border-slate-200 static md:sticky md:left-[248px] z-15 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] bg-slate-100">Matrícula</th>
+                        <th className="w-24 text-center p-2 border-r border-slate-200 static md:sticky md:left-[328px] z-15 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] bg-slate-100">Cargo</th>
                       </>
                     )}
                     {Array.from({ length: daysInMonth }, (_, index) => {
@@ -1394,13 +1394,13 @@ export default function FolgasView({
                             </td>
                             {showAppSupportColumns && (
                               <>
-                                <td className="p-2 text-center font-bold text-slate-600 border-b border-r border-slate-200 bg-white sticky left-[176px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] whitespace-nowrap">
+                                <td className="p-2 text-center font-bold text-slate-600 border-b border-r border-slate-200 bg-white static md:sticky md:left-[176px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] whitespace-nowrap">
                                   {colab.equipe.replace('Turno ', '').replace('Diurno', 'D').replace('Noturno', 'N')}
                                 </td>
-                                <td className="p-2 text-center text-slate-500 font-mono border-b border-r border-slate-200 bg-white sticky left-[248px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] whitespace-nowrap">
+                                <td className="p-2 text-center text-slate-500 font-mono border-b border-r border-slate-200 bg-white static md:sticky md:left-[248px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] whitespace-nowrap">
                                   {colab.matricula}
                                 </td>
-                                <td className="p-2 text-center text-slate-500 font-medium border-b border-r border-slate-200 bg-white sticky left-[328px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] whitespace-nowrap text-ellipsis overflow-hidden">
+                                <td className="p-2 text-center text-slate-500 font-medium border-b border-r border-slate-200 bg-white static md:sticky md:left-[328px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] whitespace-nowrap text-ellipsis overflow-hidden">
                                   {colab.cargo}
                                 </td>
                               </>

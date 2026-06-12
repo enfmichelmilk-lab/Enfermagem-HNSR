@@ -592,6 +592,15 @@ export default function App() {
             </div>
           )}
 
+          {/* Mobile backdrop overlay to close side drawer when clicking outside */}
+          {isMobile && mobileMenuOpen && (
+            <div 
+              onClick={() => setMobileMenuOpen(false)}
+              className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-25 transition-opacity duration-200" 
+              aria-hidden="true"
+            />
+          )}
+
           {/* Main Hospital Sidebar navigation */}
           <Sidebar 
             usuario={usuarioLogado} 
