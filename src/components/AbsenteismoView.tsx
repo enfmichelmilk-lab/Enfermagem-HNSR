@@ -56,6 +56,48 @@ export default function AbsenteismoView({
   const [setorForm, setSetorForm] = useState('');
   const [turnoForm, setTurnoForm] = useState('');
 
+  // Gemini AI CID-10 search states
+  const [geminiSearchQuery, setGeminiSearchQuery] = useState('');
+  const [isGeminiSearching, setIsGeminiSearching] = useState(false);
+  const [geminiSearchResults, setGeminiSearchResults] = useState<{ codigo: string; descricao: string; detalhes: string; }[]>([]);
+  const [showGeminiSearchPanel, setShowGeminiSearchPanel] = useState(false);
+  const [geminiSearchError, setGeminiSearchError] = useState('');
+
+  const handleGeminiCidSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!geminiSearchQuery.trim()) return;
+
+    setIsGeminiSearching(true);
+    setGeminiSearchError('');
+    setGeminiSearchResults([]);
+
+    try {
+      const response = await fetch('/api/cid10/search', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ query: geminiSearchQuery.trim() }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Falha ao obter resultados da inteligência artificial.');
+      }
+
+      const data = await response.json();
+      if (data && Array.isArray(data.results)) {
+        setGeminiSearchResults(data.results);
+      } else {
+        throw new Error('Formato de resposta inesperado do serviço da IA.');
+      }
+    } catch (err: any) {
+      console.error(err);
+      setGeminiSearchError(err.message || 'Erro de conexão com o servidor.');
+    } finally {
+      setIsGeminiSearching(false);
+    }
+  };
+
   // 1. Interactive Helper: Auto calculates final dates based on duration count
   const calculatedFim = useMemo(() => {
     if (!inicio || !duracaoNum) return '';
@@ -881,6 +923,78 @@ export default function AbsenteismoView({
                 </span>
               </div>
 
+              {/* Gemini AI Powered CID-10 Smart Search */}
+              <div className="space-y-1.5 pt-1.5">
+                <div className="flex justify-between items-center bg-sky-50/70 p-2 rounded-lg border border-sky-100">
+                  <div className="flex items-center gap-1.5 text-[11px] text-sky-850 font-bold">
+                    <span>✨ Pesquisa de CID por Sintomas ou Palavras-Chave</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowGeminiSearchPanel(!showGeminiSearchPanel)}
+                    className="text-[10px] bg-sky-600 hover:bg-sky-700 text-white font-extrabold py-1 px-2.5 rounded-md transition shadow-xs cursor-pointer uppercase tracking-wider"
+                  >
+                    {showGeminiSearchPanel ? 'Ocultar Buscador' : 'Buscar por IA (Gemini)'}
+                  </button>
+                </div>
+
+                {showGeminiSearchPanel && (
+                  <div className="bg-sky-50/30 border border-sky-100 p-3 rounded-lg space-y-3 animate-fadeIn">
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={geminiSearchQuery}
+                        onChange={(e) => setGeminiSearchQuery(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleGeminiCidSearch(e);
+                          }
+                        }}
+                        placeholder="Ex: 'Dor de cabeça forte', 'Diarreia e vômito', 'Fratura de punho'..."
+                        className="flex-1 p-2 bg-white border border-slate-300 rounded-lg text-xs leading-normal font-bold focus:outline-none focus:border-sky-500 font-sans"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleGeminiCidSearch}
+                        disabled={isGeminiSearching}
+                        className="bg-sky-600 hover:bg-sky-700 text-white text-xs font-black py-2 px-3.5 rounded-lg transition disabled:bg-slate-300 disabled:text-slate-500 flex items-center justify-center shrink-0 cursor-pointer"
+                      >
+                        {isGeminiSearching ? 'Buscando...' : 'Buscar'}
+                      </button>
+                    </div>
+
+                    {geminiSearchError && (
+                      <div className="text-[10px] text-rose-600 font-bold bg-rose-50 p-2 rounded-md border border-rose-100">{geminiSearchError}</div>
+                    )}
+
+                    {geminiSearchResults.length > 0 && (
+                      <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1 border-t border-sky-100/60 pt-2">
+                        <span className="text-[9px] text-slate-400 font-black tracking-wider block uppercase mb-1">Resultados Sugeridos:</span>
+                        {geminiSearchResults.map((res) => (
+                          <div
+                            key={res.codigo}
+                            onClick={() => {
+                              setCid(res.codigo);
+                              setPatologia(res.descricao);
+                              setShowGeminiSearchPanel(false);
+                            }}
+                            className="hover:bg-sky-105/90 cursor-pointer p-2 rounded-lg bg-white border border-slate-200 text-left transition duration-150 hover:shadow-xs hover:border-sky-300"
+                          >
+                            <div className="flex justify-between items-center mb-1">
+                              <span className="font-extrabold text-[10px] text-sky-800 bg-sky-50 border border-sky-100 px-2 py-0.5 rounded font-mono uppercase">{res.codigo}</span>
+                              <span className="text-[9px] text-sky-600 font-black uppercase tracking-wider">Selecionar ✓</span>
+                            </div>
+                            <p className="font-extrabold text-slate-800 text-[11px] leading-snug">{res.descricao}</p>
+                            {res.detalhes && <p className="text-[9.5px] text-slate-500 mt-1 leading-snug font-medium italic">{res.detalhes}</p>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
               <div className="grid grid-cols-4 gap-3 items-end">
                 <div className="col-span-1 space-y-1">
                   <label className="font-bold text-slate-600 block">CID-10</label>
@@ -902,7 +1016,7 @@ export default function AbsenteismoView({
                     value={patologia}
                     onChange={(e) => setPatologia(e.target.value)}
                     placeholder="Auto-preenchido pelo CID ou preenchimento livre"
-                    className="w-full p-2 border border-slate-200 bg-slate-50 text-slate-700 rounded-lg font-bold"
+                    className="w-full p-2 border border-slate-250 bg-white text-slate-700 rounded-lg font-bold"
                   />
                 </div>
               </div>

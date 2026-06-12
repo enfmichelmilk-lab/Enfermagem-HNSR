@@ -503,18 +503,26 @@ export default function ChamadaView({
       });
       const atestadoText = leavesList.length > 0 ? leavesList.join(', ') : 'Nenhum';
 
-      // 4. Compile all remanejamentos originating from this sector (outgoing only)
+      // 4. Compile all remanejamentos originating from this sector (outgoing only, excluding nurses from showing in text)
       const remanejadoDetails: string[] = [];
       colabStatuses.forEach(col => {
         // Outgoing remanejamento
         if (col.setorOriginal === sectorKey && col.remanejadoPara && col.status === 'Presente') {
-          remanejadoDetails.push(`${col.nome} remanejado(a) para ${col.remanejadoPara}`);
+          const isNurse = (col.cargo || '').toLowerCase().includes('enfermeiro') || (col.cargo || '').toLowerCase().includes('enfermeira');
+          if (!isNurse) {
+            remanejadoDetails.push(`${col.nome} remanejado(a) para ${col.remanejadoPara}`);
+          }
         }
       });
 
       const remanejadoText = remanejadoDetails.length > 0 ? remanejadoDetails.join(', ') : 'Nenhum';
 
       if (sectorKey === 'Gestão') {
+        const hasEnfRef = enfermeiroName && enfermeiroName.toLowerCase() !== 'nenhum' && enfermeiroName.trim() !== '';
+        if (hasEnfRef) {
+          // Skip drawing Gestão section completely to avoid redundancies
+          return;
+        }
         text += `> ${sectorKey}\n`;
         text += `* Supervisor(a)/Enf. Referência: ${nursesText}\n`;
         text += `* Atestado/Ausências: ${atestadoText}\n`;
@@ -1092,6 +1100,8 @@ export default function ChamadaView({
                                                 if (s === sectorName) return null; // Avoid same transfer
                                                 return <option key={s} value={s}>Transferir para {s}</option>;
                                               })}
+                                              <option value="Diurno A">Transferir para Diurno A</option>
+                                              <option value="Diurno B">Transferir para Diurno B</option>
                                             </select>
                                           </div>
                                         )}

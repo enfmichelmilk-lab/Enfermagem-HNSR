@@ -425,7 +425,7 @@ export default function FolgasView({
   const [modalExistingFolga, setModalExistingFolga] = useState<SolicitacaoFolga | null>(null);
   
   // Form input inside the modal
-  const [modalTipoFolga, setModalTipoFolga] = useState<'Folga de Escala' | 'Banco de Horas' | 'Folga Feriado' | 'Folga Enfermagem' | 'Folga Brigada' | 'Folga Eleição' | 'Integração' | 'Falta'>('Folga de Escala');
+  const [modalTipoFolga, setModalTipoFolga] = useState<'Folga de Escala' | 'Banco de Horas' | 'Folga Feriado' | 'Folga Enfermagem' | 'Folga Brigada' | 'Folga Eleição' | 'Integração' | 'Falta' | 'Folga Troca de Plantão'>('Folga de Escala');
   const [modalImmediateApproval, setModalImmediateApproval] = useState(true);
 
   // Toggle for extra metadata columns to adjust horizontal space
@@ -698,6 +698,7 @@ export default function FolgasView({
       case 'Folga Eleição': return 'E';
       case 'Integração': return 'I';
       case 'Falta': return 'A';
+      case 'Folga Troca de Plantão': return 'X';
       default: return 'F';
     }
   };
@@ -713,6 +714,7 @@ export default function FolgasView({
       case 'Folga Eleição': return 'Eleição (E)';
       case 'Integração': return 'Integração (I)';
       case 'Falta': return 'Ausente - Falta s/ justificativa (A)';
+      case 'Folga Troca de Plantão': return 'Descanso por Troca de Plantão (X)';
       default: return tipo;
     }
   };
@@ -3044,6 +3046,8 @@ export default function FolgasView({
                       {SETORES_HOSPITALARES.map(s => (
                         <option key={`rem-opt-${s}`} value={s}>{s}</option>
                       ))}
+                      <option value="Diurno A">Diurno A</option>
+                      <option value="Diurno B">Diurno B</option>
                     </select>
                     <span className="text-[10px] text-slate-400 font-medium block font-sans">Sinaliza na escala de comparação o setor temporário do profissional</span>
                   </div>
@@ -3114,6 +3118,7 @@ export default function FolgasView({
                       <option value="Folga Brigada">Brigada de Incêndio (B) [Saldo: {modalTargetColab?.brigada}d]</option>
                       <option value="Folga Eleição">Eleição (E) [Saldo: {modalTargetColab?.eleicao}d]</option>
                       <option value="Integração">Integração (I)</option>
+                      <option value="Folga Troca de Plantão">Troca de Plantão (X)</option>
                       <option value="Falta">Ausente - Falta s/ justificativa (A)</option>
                     </select>
                   </div>
@@ -3821,8 +3826,9 @@ export default function FolgasView({
                       <div><b>FF:</b> Folga Feriado</div>
                       <div><b>FE:</b> Folga Eleições</div>
                       <div><b>FB:</b> Folga Brigada</div>
+                      <div><b>X:</b> Troca de Plantão</div>
                       <div><b>?:</b> Pendente Homologação</div>
-                      <div className="col-span-3 border-t pt-1.5 mt-1 text-[8px] font-medium text-slate-400">
+                      <div className="col-span-3 border-t pt-1.5 mt-1 text-[8px] font-medium text-slate-400 py-1">
                         * O dia em branco representa Plantão Ativo de 12 horas.
                         <br />
                         * E/F representa Descanso Regulamentar de Escala/Folga para turnos intercalados.

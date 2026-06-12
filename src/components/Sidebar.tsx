@@ -4,7 +4,11 @@
  */
 
 import React from 'react';
-import { Activity, Users, Stethoscope, CalendarCheck, UserCog, LogOut, HeartHandshake, Palmtree, Award, ClipboardCheck, Smartphone, X } from 'lucide-react';
+import { 
+  Activity, Users, Stethoscope, CalendarCheck, UserCog, 
+  LogOut, HeartHandshake, Palmtree, Award, ClipboardCheck, 
+  Smartphone, X, ChevronLeft, ChevronRight 
+} from 'lucide-react';
 import { Usuario } from '../types';
 import HapvidaLogo from './HapvidaLogo';
 
@@ -13,9 +17,24 @@ interface SidebarProps {
   activeView: string;
   onNavigate: (view: string) => void;
   onLogout: () => void;
+  isCollapsed: boolean;
+  onToggleCollapse: () => void;
+  isMobile: boolean;
+  mobileMenuOpen: boolean;
+  onCloseMobileMenu: () => void;
 }
 
-export default function Sidebar({ usuario, activeView, onNavigate, onLogout }: SidebarProps) {
+export default function Sidebar({ 
+  usuario, 
+  activeView, 
+  onNavigate, 
+  onLogout,
+  isCollapsed,
+  onToggleCollapse,
+  isMobile,
+  mobileMenuOpen,
+  onCloseMobileMenu
+}: SidebarProps) {
   const [deferredPrompt, setDeferredPrompt] = React.useState<any>(null);
   const [isInstalled, setIsInstalled] = React.useState<boolean>(false);
   const [showGuide, setShowGuide] = React.useState<boolean>(false);
@@ -67,45 +86,83 @@ export default function Sidebar({ usuario, activeView, onNavigate, onLogout }: S
     return perfil === "enfermeiro(a)" || perfil === "enfermeiro" || perfil === "enfermeira";
   };
 
+  const [isHovered, setIsHovered] = React.useState<boolean>(false);
+  const showExpanded = isMobile ? true : (!isCollapsed || isHovered);
+  const isSidebarCollapsed = !showExpanded;
+
   return (
-    <nav className="w-64 bg-white border-r border-slate-200 flex flex-col h-screen fixed left-0 top-0 text-slate-800 z-10 font-sans">
+    <nav 
+      onMouseEnter={() => isCollapsed && setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      className={`fixed top-0 bottom-0 left-0 h-screen bg-white border-r border-slate-200 flex flex-col text-slate-800 z-30 font-sans transition-all duration-300
+        ${isMobile 
+          ? `${mobileMenuOpen ? 'translate-x-0 w-64' : '-translate-x-full w-0 pointer-events-none'} shadow-2xl` 
+          : `${isCollapsed ? (isHovered ? 'w-64 shadow-2xl z-40' : 'w-20') : 'w-64'}`
+        }
+      `}
+    >
       
       {/* Branding Header */}
-      <div className="p-4 border-b border-slate-100 flex flex-col gap-1.5 justify-center">
-        <HapvidaLogo textSize="lg" animated={true} />
-        <span className="text-[7.5px] text-slate-400 font-extrabold uppercase tracking-widest block pl-1">SISTEMA INTEGRADO DE ESCALAS</span>
+      <div className={`p-4 border-b border-slate-100 flex flex-col gap-1.5 justify-center relative ${isSidebarCollapsed ? 'items-center px-1' : ''}`}>
+        {isMobile && mobileMenuOpen && (
+          <button
+            onClick={onCloseMobileMenu}
+            className="absolute top-4 right-4 p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition cursor-pointer"
+            title="Fechar menu"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        )}
+        <HapvidaLogo showText={!isSidebarCollapsed} textSize={isSidebarCollapsed ? "sm" : "lg"} animated={true} />
+        {!isSidebarCollapsed && (
+          <span className="text-[7.5px] text-slate-400 font-extrabold uppercase tracking-widest block pl-1">SISTEMA INTEGRADO DE ESCALAS</span>
+        )}
       </div>
 
       {/* Logged in User Section */}
-      <div className="mx-4 my-4 p-3 bg-slate-50 border border-slate-100 rounded-xl flex items-center gap-3">
-        <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-slate-600 font-bold border-2 border-white shadow-inner">
+      <div className={`mx-3 my-4 p-2.5 bg-slate-50 border border-slate-100 rounded-xl flex items-center transition-all duration-350 ${isSidebarCollapsed ? 'flex-col gap-1 text-center py-3' : 'gap-3'}`}>
+        <div 
+          className="w-9 h-9 rounded-full bg-slate-200 flex items-center justify-center text-slate-600 font-bold border-2 border-white shadow-inner shrink-0"
+          title={isSidebarCollapsed ? usuario.nome : undefined}
+        >
           {usuario.nome ? usuario.nome.charAt(0).toUpperCase() : '?'}
         </div>
-        <div className="overflow-hidden flex-1">
-          <span className="text-slate-800 font-bold text-xs block truncate leading-tight" title={usuario.nome}>
-            {usuario.nome}
+        {!isSidebarCollapsed ? (
+          <div className="overflow-hidden flex-1 mini-profile-text">
+            <span className="text-slate-800 font-extrabold text-[11px] block truncate leading-tight" title={usuario.nome}>
+              {usuario.nome}
+            </span>
+            <span className="text-[8px] text-sky-700 bg-sky-50 px-1.5 py-0.5 rounded font-black uppercase tracking-wider inline-block mt-0.5 border border-sky-100">
+              {usuario.perfil}
+            </span>
+          </div>
+        ) : (
+          <span className="text-[7px] text-slate-400 font-black uppercase text-center mt-0.5 tracking-tighter">
+            {usuario.perfil ? usuario.perfil.substring(0, 4) : ''}
           </span>
-          <span className="text-[9px] text-sky-700 bg-sky-50 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider inline-block mt-0.5 border border-sky-100">
-            {usuario.perfil}
-          </span>
-        </div>
+        )}
       </div>
 
       {/* Main Navigation Links */}
-      <ul className="flex-1 px-3 space-y-1.5">
+      <ul className={`flex-1 px-2.5 space-y-1.5 overflow-y-auto ${isSidebarCollapsed ? 'flex flex-col items-center' : ''}`}>
         
         {!isEnfermeiroProfile() && (
           <li>
             <button
               onClick={() => onNavigate('dashboard')}
-              className={`w-full text-left py-2.5 px-3.5 rounded-lg text-sm font-semibold flex items-center gap-3 transition-all duration-150 ${
+              title={isSidebarCollapsed ? 'Dashboard' : undefined}
+              className={`w-full flex items-center gap-3 transition-all duration-150 rounded-lg text-sm font-semibold cursor-pointer ${
+                isSidebarCollapsed 
+                  ? 'justify-center p-2.5 h-10 w-10 shrink-0' 
+                  : 'py-2.5 px-3.5 text-left'
+              } ${
                 activeView === 'dashboard'
                   ? 'bg-sky-600 text-white shadow-md shadow-sky-600/10'
                   : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
               }`}
             >
               <Activity className="w-4 h-4 shrink-0" />
-              <span>Dashboard</span>
+              {!isSidebarCollapsed && <span>Dashboard</span>}
             </button>
           </li>
         )}
@@ -113,14 +170,19 @@ export default function Sidebar({ usuario, activeView, onNavigate, onLogout }: S
         <li>
           <button
             onClick={() => onNavigate('colaboradores')}
-            className={`w-full text-left py-2.5 px-3.5 rounded-lg text-sm font-semibold flex items-center gap-3 transition-all duration-150 ${
+            title={isSidebarCollapsed ? 'Colaboradores' : undefined}
+            className={`w-full flex items-center gap-3 transition-all duration-150 rounded-lg text-sm font-semibold cursor-pointer ${
+              isSidebarCollapsed 
+                ? 'justify-center p-2.5 h-10 w-10 shrink-0' 
+                : 'py-2.5 px-3.5 text-left'
+            } ${
               activeView === 'colaboradores'
                 ? 'bg-sky-600 text-white shadow-md shadow-sky-600/10'
                 : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
             }`}
           >
             <Users className="w-4 h-4 shrink-0" />
-            <span>Colaboradores</span>
+            {!isSidebarCollapsed && <span>Colaboradores</span>}
           </button>
         </li>
 
@@ -128,14 +190,19 @@ export default function Sidebar({ usuario, activeView, onNavigate, onLogout }: S
           <li>
             <button
               onClick={() => onNavigate('absenteismo')}
-              className={`w-full text-left py-2.5 px-3.5 rounded-lg text-sm font-semibold flex items-center gap-3 transition-all duration-150 ${
+              title={isSidebarCollapsed ? 'Absenteísmo' : undefined}
+              className={`w-full flex items-center gap-3 transition-all duration-150 rounded-lg text-sm font-semibold cursor-pointer ${
+                isSidebarCollapsed 
+                  ? 'justify-center p-2.5 h-10 w-10 shrink-0' 
+                  : 'py-2.5 px-3.5 text-left'
+              } ${
                 activeView === 'absenteismo'
                   ? 'bg-sky-600 text-white shadow-md shadow-sky-600/10'
                   : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
               }`}
             >
               <Stethoscope className="w-4 h-4 shrink-0" />
-              <span>Absenteísmo</span>
+              {!isSidebarCollapsed && <span>Absenteísmo</span>}
             </button>
           </li>
         )}
@@ -143,56 +210,76 @@ export default function Sidebar({ usuario, activeView, onNavigate, onLogout }: S
         <li>
           <button
             onClick={() => onNavigate('chamada')}
-            className={`w-full text-left py-2.5 px-3.5 rounded-lg text-sm font-semibold flex items-center gap-3 transition-all duration-150 ${
+            title={isSidebarCollapsed ? 'Chamada Diária' : undefined}
+            className={`w-full flex items-center gap-3 transition-all duration-150 rounded-lg text-sm font-semibold cursor-pointer ${
+              isSidebarCollapsed 
+                ? 'justify-center p-2.5 h-10 w-10 shrink-0' 
+                : 'py-2.5 px-3.5 text-left'
+            } ${
               activeView === 'chamada'
                 ? 'bg-sky-600 text-white shadow-md shadow-sky-600/10'
                 : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
             }`}
           >
-            <ClipboardCheck className="w-4 h-4 shrink-0 text-emerald-500" />
-            <span>Chamada Diária</span>
+            <ClipboardCheck className={`w-4 h-4 shrink-0 ${activeView === 'chamada' ? 'text-white' : 'text-emerald-500'}`} />
+            {!isSidebarCollapsed && <span>Chamada Diária</span>}
           </button>
         </li>
 
         <li>
           <button
             onClick={() => onNavigate('folgas')}
-            className={`w-full text-left py-2.5 px-3.5 rounded-lg text-sm font-semibold flex items-center gap-3 transition-all duration-150 ${
+            title={isSidebarCollapsed ? 'Solicitar Folga' : undefined}
+            className={`w-full flex items-center gap-3 transition-all duration-150 rounded-lg text-sm font-semibold cursor-pointer ${
+              isSidebarCollapsed 
+                ? 'justify-center p-2.5 h-10 w-10 shrink-0' 
+                : 'py-2.5 px-3.5 text-left'
+            } ${
               activeView === 'folgas'
                 ? 'bg-sky-600 text-white shadow-md shadow-sky-600/10'
                 : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
             }`}
           >
             <CalendarCheck className="w-4 h-4 shrink-0" />
-            <span>Solicitar Folga</span>
+            {!isSidebarCollapsed && <span>Solicitar Folga</span>}
           </button>
         </li>
 
         <li>
           <button
             onClick={() => onNavigate('ferias')}
-            className={`w-full text-left py-2.5 px-3.5 rounded-lg text-sm font-semibold flex items-center gap-3 transition-all duration-150 ${
+            title={isSidebarCollapsed ? 'Gestão de Férias' : undefined}
+            className={`w-full flex items-center gap-3 transition-all duration-150 rounded-lg text-sm font-semibold cursor-pointer ${
+              isSidebarCollapsed 
+                ? 'justify-center p-2.5 h-10 w-10 shrink-0' 
+                : 'py-2.5 px-3.5 text-left'
+            } ${
               activeView === 'ferias'
                 ? 'bg-sky-600 text-white shadow-md shadow-sky-600/10'
                 : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
             }`}
           >
-            <Palmtree className="w-4 h-4 shrink-0 text-amber-500" />
-            <span>Gestão de Férias</span>
+            <Palmtree className={`w-4 h-4 shrink-0 ${activeView === 'ferias' ? 'text-white' : 'text-amber-500'}`} />
+            {!isSidebarCollapsed && <span>Gestão de Férias</span>}
           </button>
         </li>
 
         <li>
           <button
             onClick={() => onNavigate('comissoes')}
-            className={`w-full text-left py-2.5 px-3.5 rounded-lg text-sm font-semibold flex items-center gap-3 transition-all duration-150 ${
+            title={isSidebarCollapsed ? 'Comissões (Selos)' : undefined}
+            className={`w-full flex items-center gap-3 transition-all duration-150 rounded-lg text-sm font-semibold cursor-pointer ${
+              isSidebarCollapsed 
+                ? 'justify-center p-2.5 h-10 w-10 shrink-0' 
+                : 'py-2.5 px-3.5 text-left'
+            } ${
               activeView === 'comissoes'
                 ? 'bg-sky-600 text-white shadow-md shadow-sky-600/10'
                 : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
             }`}
           >
-            <Award className="w-4 h-4 shrink-0 text-indigo-500" />
-            <span>Comissões (Selos)</span>
+            <Award className={`w-4 h-4 shrink-0 ${activeView === 'comissoes' ? 'text-white' : 'text-indigo-500'}`} />
+            {!isSidebarCollapsed && <span>Comissões (Selos)</span>}
           </button>
         </li>
 
@@ -201,60 +288,110 @@ export default function Sidebar({ usuario, activeView, onNavigate, onLogout }: S
           <li>
             <button
               onClick={() => onNavigate('usuarios')}
-              className={`w-full text-left py-2.5 px-3.5 rounded-lg text-sm font-semibold flex items-center gap-3 transition-all duration-150 ${
+              title={isSidebarCollapsed ? 'Acessos Web' : undefined}
+              className={`w-full flex items-center gap-3 transition-all duration-150 rounded-lg text-sm font-semibold cursor-pointer ${
+                isSidebarCollapsed 
+                  ? 'justify-center p-2.5 h-10 w-10 shrink-0' 
+                  : 'py-2.5 px-3.5 text-left'
+              } ${
                 activeView === 'usuarios'
                   ? 'bg-sky-600 text-white shadow-md shadow-sky-600/10'
                   : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
               }`}
             >
               <UserCog className="w-4 h-4 shrink-0" />
-              <span>Acessos Web</span>
+              {!isSidebarCollapsed && <span>Acessos Web</span>}
             </button>
           </li>
         )}
       </ul>
 
-      {/* Footer containing support details and Logout */}
-      <div className="p-4 border-t border-slate-100 space-y-3">
+      {/* Footer containing support details, collapse toggle, and Logout */}
+      <div className={`p-3 border-t border-slate-100 space-y-2.5 ${isSidebarCollapsed ? 'flex flex-col items-center' : ''}`}>
         {/* PWA Promotion action hook */}
         {deferredPrompt ? (
           <button
             onClick={handleInstallClick}
-            className="w-full flex items-center justify-center gap-2 py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl text-[10px] transition duration-150 shadow-3xs cursor-pointer uppercase tracking-wider animate-pulse"
+            title="Instalar Aplicativo"
+            className={`w-full flex items-center justify-center bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold transition duration-150 shadow-3xs cursor-pointer uppercase tracking-wider animate-pulse ${
+              isSidebarCollapsed ? 'p-2.5 h-9 w-9 rounded-lg shrink-0' : 'py-2 px-3 rounded-xl gap-2 text-[9px]'
+            }`}
           >
             <Smartphone className="w-3.5 h-3.5 shrink-0" />
-            <span>Instalar Aplicativo</span>
+            {!isSidebarCollapsed && <span>Instalar</span>}
           </button>
         ) : (
           !isInstalled && (
             <button
               onClick={() => setShowGuide(true)}
-              className="w-full flex items-center justify-center gap-2 py-2.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-extrabold rounded-xl text-[10px] transition duration-150 border border-slate-200 cursor-pointer uppercase tracking-wider"
+              title="Manual de Instalação no Celular"
+              className={`w-full flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-700 font-extrabold transition duration-150 border border-slate-200 cursor-pointer uppercase tracking-wider ${
+                isSidebarCollapsed ? 'p-2.5 h-9 w-9 rounded-lg shrink-0' : 'py-2 px-3 rounded-xl gap-2 text-[9px]'
+              }`}
             >
               <Smartphone className="w-3.5 h-3.5 shrink-0" />
-              <span>Como Instalar no Celular</span>
+              {!isSidebarCollapsed && <span>Manual</span>}
             </button>
           )
         )}
 
         {isInstalled && (
-          <div className="text-[9px] text-emerald-700 bg-emerald-50 border border-emerald-150 py-1.5 px-2 rounded-lg font-black text-center uppercase tracking-wider">
-            ⚡ Executando como Aplicativo
+          <div 
+            title="Executando em modo PWA"
+            className={`text-emerald-750 bg-emerald-50 border border-emerald-150 font-black text-center uppercase tracking-wider ${
+              isSidebarCollapsed ? 'w-8 h-8 rounded-lg flex items-center justify-center text-[7px] font-extrabold' : 'text-[8px] py-1 px-2 rounded-lg'
+            }`}
+          >
+            {isSidebarCollapsed ? "⚡" : "⚡ App HNSR"}
           </div>
         )}
 
-        <div className="text-[10px] text-slate-400 bg-slate-50 p-2.5 rounded-lg border border-slate-100 text-center leading-normal">
-          <HeartHandshake className="w-4.5 h-4.5 text-sky-500 mx-auto mb-1" />
-          <span className="font-bold block text-slate-500">Milk Sistemas</span>
-          Suporte: <a href="mailto:enfmichelmilk@gmail.com" className="text-sky-600 font-semibold hover:underline">Michel Milk</a>
-        </div>
+        {/* Support element */}
+        {!isSidebarCollapsed ? (
+          <div className="text-[9px] text-slate-400 bg-slate-50 p-2.5 rounded-lg border border-slate-100 text-center leading-normal">
+            <HeartHandshake className="w-4 h-4 text-sky-500 mx-auto mb-1" />
+            <span className="font-bold block text-slate-500">Milk Sistemas</span>
+            Suporte: <a href="mailto:enfmichelmilk@gmail.com" className="text-sky-600 font-semibold hover:underline">Michel Milk</a>
+          </div>
+        ) : (
+          <a 
+            href="mailto:enfmichelmilk@gmail.com" 
+            title="Desenvolvido por Michel Milk - Milk Sistemas" 
+            className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-sky-600 transition duration-150 cursor-pointer"
+          >
+            <HeartHandshake className="w-4.5 h-4.5 text-sky-500" />
+          </a>
+        )}
+
+        {/* Collapsing toggle button (Only visible on desktop/iPad landscape) */}
+        {!isMobile && (
+          <button
+            onClick={onToggleCollapse}
+            className="w-full flex items-center justify-center py-2 px-2.5 hover:bg-slate-50 border border-slate-150 rounded-lg text-slate-500 hover:text-slate-800 transition cursor-pointer"
+            title={isSidebarCollapsed ? "Expandir Menu" : "Recolher Menu"}
+          >
+            {isSidebarCollapsed ? (
+              <ChevronRight className="w-4 h-4 text-slate-500" />
+            ) : (
+              <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                <ChevronLeft className="w-4 h-4 text-slate-500" />
+                <span>Recolher</span>
+              </div>
+            )}
+          </button>
+        )}
         
         <button
           onClick={onLogout}
-          className="w-full flex items-center gap-3 py-2 px-3 rounded-lg text-xs font-bold text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors w-full text-left cursor-pointer"
+          title="Encerrar Sessão"
+          className={`flex items-center text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors font-bold cursor-pointer ${
+            isSidebarCollapsed 
+              ? 'justify-center p-2.5 h-10 w-10 rounded-lg shrink-0' 
+              : 'w-full gap-3 py-2 px-3 rounded-lg text-xs text-left'
+          }`}
         >
-          <LogOut className="w-4 h-4" />
-          <span>Encerrar Sessão</span>
+          <LogOut className="w-4 h-4 shrink-0" />
+          {!isSidebarCollapsed && <span>Sair</span>}
         </button>
       </div>
 
@@ -277,14 +414,14 @@ export default function Sidebar({ usuario, activeView, onNavigate, onLogout }: S
             
             <div className="p-5 space-y-4 text-xs">
               <p className="text-slate-600 font-medium leading-relaxed">
-                Você pode instalar este painel de monitoramento como um aplicativo exclusivo no seu celular! Ele funcionará em tela cheia, sem barras de navegação.
+                Você pode instalar este painel de monitoramento como um aplicativo exclusivo no seu celular ou tablet! Ele funcionará em tela cheia, sem as barras do navegador.
               </p>
               
               <div className="space-y-3.5">
                 {/* iOS Instructions */}
                 <div className="bg-slate-50 border border-slate-100 p-3.5 rounded-2xl space-y-2">
                   <div className="flex items-center gap-1.5 font-black text-slate-850 uppercase text-[10px] tracking-wider text-sky-700">
-                    <span>📱 No iPhone (Safari)</span>
+                    <span>📱 No iPhone / iPad (Safari)</span>
                   </div>
                   <ol className="list-decimal pl-4 space-y-1.5 text-[11px] text-slate-600 font-semibold leading-relaxed">
                     <li>Toque no botão de <strong className="text-slate-800 font-extrabold">Compartilhar</strong> (ícone de retângulo com uma seta para cima 📤).</li>
@@ -299,7 +436,7 @@ export default function Sidebar({ usuario, activeView, onNavigate, onLogout }: S
                     <span>🤖 No Android (Chrome / Edge)</span>
                   </div>
                   <ol className="list-decimal pl-4 space-y-1.5 text-[11px] text-slate-600 font-semibold leading-relaxed">
-                    <li>Toque nos <strong className="text-slate-800 font-extrabold">três pontinhos</strong> (⫶) no canto superior direito.</li>
+                    <li>Toque nos <strong className="text-slate-800 font-extrabold">três pontinhos</strong> (⫶) no canto superior direito do navegador.</li>
                     <li>Selecione <strong className="text-slate-800 font-extrabold">"Instalar aplicativo"</strong> ou <strong className="text-slate-800 font-extrabold">"Adicionar à tela inicial"</strong>.</li>
                     <li>Confirme tocando em <strong className="text-emerald-700 font-extrabold">"Instalar"</strong>.</li>
                   </ol>

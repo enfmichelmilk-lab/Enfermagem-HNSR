@@ -37,6 +37,20 @@ export default function App() {
   const [dynamicSelos, setDynamicSelos] = useState<string[]>([]);
   const [chamadas, setChamadas] = useState<Chamada[]>([]);
 
+  // Responsive Sidebar collapsible states
+  const [isCollapsed, setIsCollapsed] = useState<boolean>(false);
+  const [isMobile, setIsMobile] = useState<boolean>(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 1024);
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   // 2. Real-Time Firestore Synchronization Subscriptions on Mount
   useEffect(() => {
     const unsub1 = subscribeCollection<Usuario>(
@@ -554,17 +568,48 @@ export default function App() {
           onUpdateUsuarios={handleUpdateUsuarios}
         />
       ) : (
-        <div className="min-h-screen bg-slate-100 flex font-sans">
+        <div className="min-h-screen bg-slate-100 flex flex-col lg:flex-row font-sans">
+          {/* Mobile hamburger header bar */}
+          {isMobile && (
+            <div className="fixed top-0 left-0 right-0 h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 z-20 shadow-sm">
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setMobileMenuOpen(true)}
+                  className="p-2 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition cursor-pointer"
+                  title="Abrir menu"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
+                  </svg>
+                </button>
+                <span className="font-extrabold text-sm text-sky-700 uppercase tracking-widest pl-1">
+                  HNSR ESCALAS
+                </span>
+              </div>
+              <span className="text-[10px] text-sky-750 bg-sky-50 px-2.5 py-0.5 rounded font-black uppercase border border-sky-100">
+                {usuarioLogado.perfil}
+              </span>
+            </div>
+          )}
+
           {/* Main Hospital Sidebar navigation */}
           <Sidebar 
             usuario={usuarioLogado} 
             activeView={activeView} 
-            onNavigate={(view) => setActiveView(view)} 
+            onNavigate={(view) => {
+              setActiveView(view);
+              setMobileMenuOpen(false);
+            }} 
             onLogout={handleLogout}
+            isCollapsed={isCollapsed}
+            onToggleCollapse={() => setIsCollapsed(!isCollapsed)}
+            isMobile={isMobile}
+            mobileMenuOpen={mobileMenuOpen}
+            onCloseMobileMenu={() => setMobileMenuOpen(false)}
           />
           
           {/* Main workspace arena */}
-          <main className="flex-1 ml-64 p-8 min-h-screen">
+          <main className={`flex-1 transition-all duration-305 p-4 md:p-8 min-h-screen ${isMobile ? 'ml-0 pt-20' : isCollapsed ? 'ml-20' : 'ml-64'}`}>
             <div className="max-w-7xl mx-auto animate-fadeIn pb-12">
               {renderViewContent()}
             </div>

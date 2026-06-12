@@ -1,0 +1,236 @@
+{
+  "system": "Gestão de RH Enfermagem HNSR - Hapvida",
+  "version": "1.0.0",
+  "description": "Banco de dados assistenciais, registros de pessoal, afastamentos, férias, selos institucionais e chamadas diárias consolidadas.",
+  "exportDate": "2026-06-09T11:15:00Z",
+  "schemas": {
+    "Usuario": {
+      "nome": "string (Nome completo do profissional)",
+      "email": "string (Email institucional de login)",
+      "setor": "string (Setor padrão de atuação)",
+      "perfil": "string ('Programador' | 'Gerente' | 'Enfermeiro(a)')",
+      "status": "string ('Ativo' | 'Inativo')",
+      "senha": "string (Senha criptografada ou temporária)"
+    },
+    "Colaborador": {
+      "nome": "string",
+      "matricula": "string (ID Único)",
+      "coren": "string (Registro profissional)",
+      "cargo": "string ('Supervisor(a)' | 'Coordenador(a)' | 'Gerente' | 'Enfermeiro(a)' | 'Tec. Enf.' | 'Aux. Enf.' | 'Administrativo')",
+      "equipe": "string ('Diurno A' | 'Diurno B' | 'Noturno A' | 'Noturno B' | 'Diário')",
+      "horario": "string (Ex: '07h as 19h')",
+      "setor": "string (Setor atualizado)",
+      "gestordireto": "string",
+      "gestorindireto": "string",
+      "email": "string",
+      "whatsapp": "string",
+      "bancohoras": "number (Saldo de banco em horas)",
+      "folgaenf": "number (Saldo de folgas de enfermagem)",
+      "folgaferiado": "number",
+      "brigada": "number",
+      "eleicao": "number",
+      "historico": "string (Registro de eventos e promoções)",
+      "selo_etica": "string ('Sim' | 'Não')",
+      "selo_brigadista": "string ('Sim' | 'Não')",
+      "selo_cipa": "string ('Sim' | 'Não')",
+      "datainicio": "string (YYYY-MM-DD)",
+      "datanascimento": "string (YYYY-MM-DD)",
+      "datarecisao": "string (YYYY-MM-DD ou vazio)",
+      "numreq": "string",
+      "infosubst": "string",
+      "inss_check": "string ('Sim' | 'Não')",
+      "inss_entrada": "string",
+      "inss_retorno": "string",
+      "inss_rep": "string",
+      "inss_obs": "string",
+      "selos_adicionais": "array of strings"
+    },
+    "Absenteismo": {
+      "id": "string",
+      "tipo": "string ('Atestado' | 'Licença / Outros')",
+      "colaborador": "string",
+      "matricula": "string",
+      "setor": "string",
+      "cargo": "string",
+      "turno": "string",
+      "inicio": "string (YYYY-MM-DD)",
+      "duracao": "string (Ex: '3 Dias')",
+      "termino": "string",
+      "retorno": "string",
+      "cid": "string",
+      "patologia": "string"
+    },
+    "SolicitacaoFolga": {
+      "id": "string",
+      "colaborador": "string",
+      "matricula": "string",
+      "tipo": "string ('Folga de Escala' | 'Banco de Horas' | 'Folga Feriado' | 'Folga Enfermagem' | 'Folga Brigada' | 'Folga Eleição' | 'Integração' | 'Falta')",
+      "data": "string (YYYY-MM-DD)",
+      "status": "string ('Pendente' | 'Aprovado' | 'Recusado')",
+      "solicitante": "string",
+      "dataCriacao": "string"
+    },
+    "Ferias": {
+      "id": "string",
+      "colaborador": "string",
+      "matricula": "string",
+      "dataInicio": "string (YYYY-MM-DD)",
+      "dataFim": "string (YYYY-MM-DD)",
+      "dataRetorno": "string (YYYY-MM-DD)",
+      "duracao": "number (20 | 30)",
+      "status": "string ('Pendente' | 'Aprovado' | 'Recusado')",
+      "solicitante": "string",
+      "dataCriacao": "string"
+    },
+    "Chamada": {
+      "id": "string",
+      "data": "string (YYYY-MM-DD)",
+      "turno": "string ('Diurno A' | 'Diurno B' | 'Noturno A' | 'Noturno B')",
+      "enfermeiroReferencia": "string",
+      "statusColaboradores": [
+        {
+          "matricula": "string",
+          "nome": "string",
+          "cargo": "string",
+          "setorOriginal": "string",
+          "status": "string ('Presente' | 'Atestado' | 'Falta' | 'Férias' | 'Folga' | 'Pendente')",
+          "remanejadoPara": "string (opcional)",
+          "info": "string (opcional)"
+        }
+      ],
+      "metricasSetor": {
+        "NOME_SETOR": {
+          "setor": "string",
+          "totalPacientes": "number",
+          "pacientesAcamados": "number",
+          "pacientesVM": "number",
+          "altasPrevistas": "number"
+        }
+      },
+      "dataCriacao": "string",
+      "usuarioCriador": "string"
+    }
+  },
+  "constants": {
+    "setores": [
+      "2º ANDAR",
+      "3º ANDAR",
+      "4º ANDAR",
+      "5º ANDAR",
+      "6º ANDAR",
+      "CENTRO CIRURGICO",
+      "CME",
+      "PSA",
+      "PSI",
+      "UTI 7º ANDAR",
+      "UTI 9º ANDAR"
+    ],
+    "cargos": [
+      "Supervisor(a)",
+      "Coordenador(a)",
+      "Gerente",
+      "Enfermeiro(a)",
+      "Tec. Enf.",
+      "Aux. Enf.",
+      "Administrativo",
+      "Estagiária",
+      "Outros"
+    ],
+    "cidMapping": {
+      "A09": "Diarreia e gastroenterite de origem infecciosa presumida",
+      "A90": "Dengue clássico",
+      "J00": "Nasofaringite aguda (resfriado comum)",
+      "M54.5": "Lombalgia baixa",
+      "F41.1": "Transtorno de ansiedade generalizada",
+      "Z76.2": "Consulta de vigilância de saúde de outro lactente ou criança saudável (Atestado Filho)",
+      "B34.2": "Infecção por coronavírus de localização não especificada",
+      "G43": "Enxaqueca",
+      "F43.2": "Transtornos de adaptação (Sobrecarga de Estresse)",
+      "K21": "Refluxo gastroesofágico",
+      "I10": "Hipertensão essencial (primária)",
+      "M54": "Dorsalgia",
+      "E11": "Diabetes mellitus não-insulino-dependente"
+    }
+  },
+  "seedData": {
+    "usuarios": [
+      {
+        "nome": "Enf. Michel Milk",
+        "email": "enfmichelmilk@gmail.com",
+        "setor": "Gestão",
+        "perfil": "Programador",
+        "status": "Ativo"
+      },
+      {
+        "nome": "Enf. Ana Souza",
+        "email": "anasouza@hnsr.com.br",
+        "setor": "Gestão",
+        "perfil": "Gerente",
+        "status": "Ativo"
+      },
+      {
+        "nome": "Claudia Reis",
+        "email": "claudia@hnsr.com.br",
+        "setor": "UTI 9º andar",
+        "perfil": "Enfermeiro(a)",
+        "status": "Ativo"
+      }
+    ],
+    "solicitacoes_folga_amostra": [
+      {
+        "id": "F-101",
+        "colaborador": "Maria Aparecida da Silva",
+        "matricula": "66618",
+        "tipo": "Folga de Escala",
+        "data": "2026-06-05",
+        "status": "Aprovado",
+        "solicitante": "Claudia Reis",
+        "dataCriacao": "2026-06-01 10:11"
+      },
+      {
+        "id": "F-102",
+        "colaborador": "Maria Aparecida da Silva",
+        "matricula": "66618",
+        "tipo": "Folga de Escala",
+        "data": "2026-06-23",
+        "status": "Aprovado",
+        "solicitante": "Claudia Reis",
+        "dataCriacao": "2026-06-01 10:12"
+      }
+    ],
+    "colaboradores_exemplo": [
+      {
+        "nome": "Enf. Michel Milk",
+        "matricula": "30001",
+        "coren": "123456-SP",
+        "cargo": "Supervisor(a)",
+        "equipe": "Diário",
+        "horario": "08:00 as 17:00",
+        "setor": "Gestão",
+        "gestordireto": "Enf. Ana Souza",
+        "gestorindireto": "",
+        "email": "enfmichelmilk@gmail.com",
+        "whatsapp": "11988887777",
+        "bancohoras": 45.5,
+        "folgaenf": 4,
+        "folgaferiado": 2,
+        "brigada": 1,
+        "eleicao": 0,
+        "historico": "[2026-05-10 - Enf. Ana Souza]: Promovido.",
+        "selo_etica": "Sim",
+        "selo_brigadista": "Não",
+        "selo_cipa": "Sim",
+        "datainicio": "2023-01-15",
+        "datanascimento": "1988-06-02",
+        "datarecisao": "",
+        "numreq": "REQ-990",
+        "infosubst": "",
+        "inss_check": "Não",
+        "inss_entrada": "",
+        "inss_retorno": "",
+        "inss_rep": "",
+        "inss_obs": ""
+      }
+    ]
+  }
+}
