@@ -89,6 +89,23 @@ const mapSectorToTarget = (setor: string, cargo?: string): string => {
   return '2º Andar'; // Default fallback
 };
 
+const formatSectorShortCode = (sectorName: string): string => {
+  if (!sectorName) return '';
+  const norm = sectorName.trim().toUpperCase();
+  if (norm.includes('2º') || norm.includes('2ND') || norm.includes('2º ANDAR')) return '2';
+  if (norm.includes('3º') || norm.includes('3RD') || norm.includes('3º ANDAR')) return '3';
+  if (norm.includes('4º') || norm.includes('4TH') || norm.includes('4º ANDAR')) return '4';
+  if (norm.includes('5º') || norm.includes('5TH') || norm.includes('5º ANDAR')) return '5';
+  if (norm.includes('6º') || norm.includes('6TH') || norm.includes('6º ANDAR')) return '6';
+  if (norm.includes('UTI 7') || norm.includes('7º') && norm.includes('UTI')) return 'U7';
+  if (norm.includes('UTI 9') || norm.includes('9º') && norm.includes('UTI')) return 'U9';
+  if (norm.includes('CC') || norm.includes('CENTRO CIRURGICO')) return 'CC';
+  if (norm.includes('CME')) return 'CME';
+  if (norm.includes('PSA')) return 'PSA';
+  if (norm.includes('PSI')) return 'PSI';
+  return sectorName;
+};
+
 export default function ChamadaView({
   colaboradores,
   absenteismo,
@@ -157,6 +174,9 @@ export default function ChamadaView({
       };
       if (c.remanejadoPara && String(c.remanejadoPara).trim() !== '') {
         clean.remanejadoPara = String(c.remanejadoPara).trim();
+      }
+      if (c.remanejamentoTipo) {
+        clean.remanejamentoTipo = c.remanejamentoTipo;
       }
       if (c.info && String(c.info).trim() !== '') {
         clean.info = String(c.info).trim();
@@ -409,9 +429,9 @@ export default function ChamadaView({
     setIsCreating(true);
   };
 
-  const handleUpdateDraftStatus = (matricula: string, newStatus: 'Presente' | 'Atestado' | 'Falta') => {
+  const handleUpdateDraftStatus = (matricula: string, newStatus: 'Presente' | 'Atestado' | 'Falta' | 'Folga') => {
     const colab = draftColaboradores.find(c => c.matricula === matricula);
-    if (colab && (colab.status === 'Folga' || (colab.info && colab.info.toLowerCase().includes('folga')))) {
+    if (newStatus !== 'Folga' && colab && (colab.status === 'Folga' || (colab.info && colab.info.toLowerCase().includes('folga')))) {
       const confirmChange = window.confirm(`Este colaborador (${colab.nome}) está programado de FOLGA para esta data. Tem certeza de que de deseja alterar o status para "${newStatus === 'Presente' ? 'Presente' : newStatus === 'Atestado' ? 'Atestado' : 'Falta'}"?`);
       if (!confirmChange) return;
     }
@@ -466,14 +486,24 @@ export default function ChamadaView({
       // 1. Compile Nurses present in sector (original present of this sector who are nurses AND wasn't remanejado, plus incoming remanejado nurses)
       const nursesPresent: string[] = [];
       colabStatuses.forEach(col => {
-        const isNurse = (col.cargo || '').toLowerCase().includes('enfermeiro') || (col.cargo || '').toLowerCase().includes('enfermeira');
+        const isNurse = (col.cargo || '').toLowerCase().includes('enfermeiro') || (col.cargo || '').toLowerCase().includes('enfermeira') || (col.cargo || '').toLowerCase().startsWith('enf');
         if (!isNurse) return;
 
-        const isOrigPresentNotInMove = col.setorOriginal === sectorKey && col.status === 'Presente' && !col.remanejadoPara;
+        const isOrigPresentNotInMove = col.setorOriginal === sectorKey && col.status === 'Presente' && (!col.remanejadoPara || col.remanejamentoTipo === 'assumir_mais_um');
         const isIncomingPresentMove = col.remanejadoPara === sectorKey && col.status === 'Presente';
 
         if (isOrigPresentNotInMove || isIncomingPresentMove) {
-          nursesPresent.push(col.nome);
+          if (col.remanejamentoTipo === 'assumir_mais_um') {
+            if (col.setorOriginal === sectorKey) {
+              nursesPresent.push(`${col.nome} (Assumindo também ${formatSectorShortCode(col.remanejadoPara || '')})`);
+            } else {
+              nursesPresent.push(`${col.nome} (Assumindo de ${formatSectorShortCode(col.setorOriginal)})`);
+            }
+          } else if (col.remanejadoPara && col.remanejamentoTipo === 'remanejar') {
+            nursesPresent.push(`${col.nome} (Remanejado de ${formatSectorShortCode(col.setorOriginal)})`);
+          } else {
+            nursesPresent.push(col.nome);
+          }
         }
       });
 
@@ -482,7 +512,7 @@ export default function ChamadaView({
       // 2. Count technicians present in sector (original present non-nurses who weren't remanejado, plus incoming remanejado technicians)
       let techniciansCount = 0;
       colabStatuses.forEach(col => {
-        const isNurse = (col.cargo || '').toLowerCase().includes('enfermeiro') || (col.cargo || '').toLowerCase().includes('enfermeira');
+        const isNurse = (col.cargo || '').toLowerCase().includes('enfermeiro') || (col.cargo || '').toLowerCase().includes('enfermeira') || (col.cargo || '').toLowerCase().startsWith('enf');
         if (isNurse) return;
 
         const isOrigPresentNotInMove = col.setorOriginal === sectorKey && col.status === 'Presente' && !col.remanejadoPara;
@@ -493,11 +523,11 @@ export default function ChamadaView({
         }
       });
 
-      // 3. Compile anyone originally from this sector marked with Atestado (defined either of draft or scheduled)
+      // 3. Compile anyone originally from this sector marked with Atestado, Falta, or Folga
       const leavesList: string[] = [];
       colabStatuses.forEach(col => {
-        if (col.setorOriginal === sectorKey && (col.status === 'Atestado' || col.status === 'Falta')) {
-          const detail = col.status === 'Falta' ? 'Falta Sem Justificativa' : (col.info || 'Atestado');
+        if (col.setorOriginal === sectorKey && (col.status === 'Atestado' || col.status === 'Falta' || col.status === 'Folga')) {
+          const detail = col.status === 'Falta' ? 'Falta' : col.status === 'Folga' ? 'Folga' : (col.info || 'Atestado');
           leavesList.push(`${col.nome} (${detail})`);
         }
       });
@@ -508,9 +538,9 @@ export default function ChamadaView({
       colabStatuses.forEach(col => {
         // Outgoing remanejamento
         if (col.setorOriginal === sectorKey && col.remanejadoPara && col.status === 'Presente') {
-          const isNurse = (col.cargo || '').toLowerCase().includes('enfermeiro') || (col.cargo || '').toLowerCase().includes('enfermeira');
+          const isNurse = (col.cargo || '').toLowerCase().includes('enfermeiro') || (col.cargo || '').toLowerCase().includes('enfermeira') || (col.cargo || '').toLowerCase().startsWith('enf');
           if (!isNurse) {
-            remanejadoDetails.push(`${col.nome} remanejado(a) para ${col.remanejadoPara}`);
+            remanejadoDetails.push(`${col.nome} remanejado(a) para ${formatSectorShortCode(col.remanejadoPara)}`);
           }
         }
       });
@@ -1084,25 +1114,126 @@ export default function ChamadaView({
                                           >
                                             Falta
                                           </button>
+
+                                          <button
+                                            type="button"
+                                            onClick={() => handleUpdateDraftStatus(colab.matricula, 'Folga')}
+                                            className={`px-2.5 py-1.5 rounded-lg font-black uppercase cursor-pointer transition ${
+                                              colab.status === 'Folga'
+                                                ? 'bg-sky-600 text-white shadow-3xs'
+                                                : 'text-slate-500 hover:text-slate-850'
+                                            }`}
+                                          >
+                                            Folga
+                                          </button>
                                         </div>
 
                                         {/* Remanejamento Action drop down */}
                                         {colab.status === 'Presente' && (
-                                          <div className="flex items-center gap-1.5">
-                                            <ArrowRightLeft className="w-3.5 h-3.5 text-slate-400" />
-                                            <select
-                                              value={colab.remanejadoPara || ''}
-                                              onChange={(e) => handleUpdateDraftRemanejamento(colab.matricula, e.target.value)}
-                                              className="text-[10px] font-bold text-slate-700 bg-slate-50 border border-slate-250 rounded-lg p-1 px-1.5 cursor-pointer focus:outline-none focus:border-sky-500 transition-colors"
-                                            >
-                                              <option value="">Não remanejado</option>
-                                              {SECTORS_LIST.map(s => {
-                                                if (s === sectorName) return null; // Avoid same transfer
-                                                return <option key={s} value={s}>Transferir para {s}</option>;
-                                              })}
-                                              <option value="Diurno A">Transferir para Diurno A</option>
-                                              <option value="Diurno B">Transferir para Diurno B</option>
-                                            </select>
+                                          <div className="flex flex-col gap-1.5 min-w-[200px]">
+                                            {/* Only for nurses: show option buttons for Remanejar (transfere de setor) and Assumir +1 */}
+                                            {((colab.cargo || '').toLowerCase().includes('enfermeir') || 
+                                              (colab.cargo || '').toLowerCase().startsWith('enf')) ? (
+                                              <div className="flex bg-slate-100 p-0.5 rounded-xl border border-slate-200 text-[9px] font-sans">
+                                                <button
+                                                  type="button"
+                                                  onClick={() => {
+                                                    setDraftColaboradores(prev => 
+                                                      prev.map(c => c.matricula === colab.matricula 
+                                                        ? { ...c, remanejadoPara: undefined, remanejamentoTipo: undefined } 
+                                                        : c
+                                                      )
+                                                    );
+                                                  }}
+                                                  className={`px-2 py-1.5 rounded-lg font-extrabold transition cursor-pointer ${
+                                                    !colab.remanejadoPara
+                                                      ? 'bg-slate-700 text-white shadow-2xs'
+                                                      : 'text-slate-500 hover:text-slate-850'
+                                                  }`}
+                                                >
+                                                  Não reman.
+                                                </button>
+                                                
+                                                <button
+                                                  type="button"
+                                                  onClick={() => {
+                                                    setDraftColaboradores(prev => 
+                                                      prev.map(c => c.matricula === colab.matricula 
+                                                        ? { 
+                                                            ...c, 
+                                                            remanejamentoTipo: 'remanejar',
+                                                            remanejadoPara: c.remanejadoPara || SECTORS_LIST.find(s => s !== sectorName) || '' 
+                                                          } 
+                                                        : c
+                                                      )
+                                                    );
+                                                  }}
+                                                  className={`px-2 py-1.5 rounded-lg font-extrabold transition cursor-pointer ${
+                                                    colab.remanejadoPara && colab.remanejamentoTipo !== 'assumir_mais_um'
+                                                      ? 'bg-amber-600 text-white shadow-2xs'
+                                                      : 'text-slate-500 hover:text-slate-850'
+                                                  }`}
+                                                >
+                                                  Transferir
+                                                </button>
+
+                                                <button
+                                                  type="button"
+                                                  onClick={() => {
+                                                    setDraftColaboradores(prev => 
+                                                      prev.map(c => c.matricula === colab.matricula 
+                                                        ? { 
+                                                            ...c, 
+                                                            remanejamentoTipo: 'assumir_mais_um',
+                                                            remanejadoPara: c.remanejadoPara || SECTORS_LIST.find(s => s !== sectorName) || '' 
+                                                          } 
+                                                        : c
+                                                      )
+                                                    );
+                                                  }}
+                                                  className={`px-2 py-1.5 rounded-lg font-extrabold transition cursor-pointer ${
+                                                    colab.remanejadoPara && colab.remanejamentoTipo === 'assumir_mais_um'
+                                                      ? 'bg-indigo-600 text-white shadow-2xs'
+                                                      : 'text-slate-500 hover:text-slate-850'
+                                                  }`}
+                                                >
+                                                  Assumir +1
+                                                </button>
+                                              </div>
+                                            ) : null}
+
+                                            {/* Sector Dropdown selector */}
+                                            {(!((colab.cargo || '').toLowerCase().includes('enfermeir') || 
+                                              (colab.cargo || '').toLowerCase().startsWith('enf')) || colab.remanejamentoTipo) && (
+                                              <div className="flex items-center gap-1.5">
+                                                <ArrowRightLeft className="w-3.5 h-3.5 text-slate-400" />
+                                                <select
+                                                  value={colab.remanejadoPara || ''}
+                                                  onChange={(e) => {
+                                                    const val = e.target.value;
+                                                    setDraftColaboradores(prev => 
+                                                      prev.map(c => c.matricula === colab.matricula 
+                                                        ? { 
+                                                            ...c, 
+                                                            remanejadoPara: val === '' ? undefined : val,
+                                                            remanejamentoTipo: val === '' ? undefined : (c.remanejamentoTipo || 'remanejar') 
+                                                          } 
+                                                        : c
+                                                      )
+                                                    );
+                                                  }}
+                                                  className="text-[10px] font-bold text-slate-700 bg-slate-50 border border-slate-250 rounded-lg p-1 px-1.5 cursor-pointer focus:outline-none focus:border-sky-500 transition-colors flex-1"
+                                                >
+                                                  <option value="">-- Selecione o setor --</option>
+                                                  {SECTORS_LIST.map(s => {
+                                                    if (s === sectorName) return null; // Avoid same transfer
+                                                    return <option key={s} value={s}>{s}</option>;
+                                                  })}
+                                                  <option value="Diurno A">Transferir para Diurno A</option>
+                                                  <option value="Diurno B">Transferir para Diurno B</option>
+                                                </select>
+                                              </div>
+                                            )}
                                           </div>
                                         )}
                                       </>
@@ -1423,13 +1554,15 @@ export default function ChamadaView({
                               ? 'bg-rose-50 border-rose-100 text-rose-700' 
                               : c.status === 'Falta'
                               ? 'bg-amber-50 border-amber-100 text-amber-700'
+                              : c.status === 'Folga'
+                              ? 'bg-sky-50 border-sky-100 text-sky-700'
                               : 'bg-slate-50 border-slate-100 text-slate-600'
                           }`}>
                             {c.status}
                           </span>
                           {c.remanejadoPara && (
                             <span className="block text-[8px] text-indigo-600 font-bold mt-1 uppercase">
-                              Remanejado(a) p/ {c.remanejadoPara}
+                              {c.remanejamentoTipo === 'assumir_mais_um' ? 'Assumindo +1 p/' : 'Remanejado(a) p/'} {formatSectorShortCode(c.remanejadoPara)}
                             </span>
                           )}
                         </div>

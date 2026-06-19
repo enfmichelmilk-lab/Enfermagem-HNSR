@@ -427,6 +427,7 @@ export default function FolgasView({
   // Form input inside the modal
   const [modalTipoFolga, setModalTipoFolga] = useState<'Folga de Escala' | 'Banco de Horas' | 'Folga Feriado' | 'Folga Enfermagem' | 'Folga Brigada' | 'Folga Eleição' | 'Integração' | 'Falta' | 'Folga Troca de Plantão'>('Folga de Escala');
   const [modalImmediateApproval, setModalImmediateApproval] = useState(true);
+  const [modalCustomRemSetor, setModalCustomRemSetor] = useState('');
 
   // Toggle for extra metadata columns to adjust horizontal space
   const [showAppSupportColumns, setShowAppSupportColumns] = useState(true);
@@ -727,6 +728,10 @@ export default function FolgasView({
     setModalTargetColab(colab);
     setModalTargetDate(formattedDate);
     setModalExistingFolga(existing);
+    
+    // Set current remSetor if it exists
+    const remKey = `${colab.matricula}-${formattedDate}`;
+    setModalCustomRemSetor(remanejamentos[remKey] || '');
     
     // Default form inputs
     setModalTipoFolga('Folga de Escala');
@@ -2981,42 +2986,39 @@ export default function FolgasView({
               </div>
 
               {/* Remanejamento Section */}
-              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/60 space-y-2">
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/60 space-y-2.5">
                 <span className="text-[10px] text-slate-500 uppercase font-extrabold tracking-wider block">Remanejamento de Setor</span>
-                {remanejamentos[`${modalTargetColab.matricula}-${modalTargetDate}`] ? (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between p-2.5 bg-yellow-50 border border-yellow-250 rounded-lg text-slate-800 text-[11px] leading-tight font-medium">
-                      <span>Remanejado para: <strong className="font-extrabold text-amber-900">{remanejamentos[`${modalTargetColab.matricula}-${modalTargetDate}`]}</strong></span>
-                      <span className="text-[7.5px] uppercase font-black tracking-widest bg-amber-200 text-amber-900 px-1.5 py-0.5 rounded-full select-none">ATIVO</span>
-                    </div>
+                
+                {remanejamentos[`${modalTargetColab.matricula}-${modalTargetDate}`] && (
+                  <div className="p-2 bg-amber-50 border border-amber-200 rounded-lg text-slate-800 text-[11px] leading-tight font-medium flex items-center justify-between">
+                    <span>Ativo para: <strong className="font-extrabold text-amber-900">{remanejamentos[`${modalTargetColab.matricula}-${modalTargetDate}`]}</strong></span>
+                    <span className="text-[7.5px] uppercase font-black tracking-widest bg-amber-200 text-amber-900 px-1.5 py-0.5 rounded-full select-none">ATIVO</span>
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Ex: 2|3, U9, 5"
+                      value={modalCustomRemSetor}
+                      onChange={(e) => setModalCustomRemSetor(e.target.value.toUpperCase().trim())}
+                      className="flex-1 p-2 bg-white border border-slate-250 rounded-lg text-slate-800 font-extrabold text-xs focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                    />
                     <button
                       type="button"
                       onClick={() => {
+                        const val = modalCustomRemSetor.trim();
                         const remId = `${modalTargetColab.matricula}-${modalTargetDate}`;
                         const updated = { ...remanejamentos };
-                        delete updated[remId];
-                        setRemanejamentos(updated);
-                        localStorage.setItem('hnsr_remanejamentos_db', JSON.stringify(updated));
-                        removeDocument('remanejamentos', remId);
-                      }}
-                      className="w-full bg-rose-50 hover:bg-rose-105 border border-rose-200 text-rose-700 font-extrabold py-1.5 text-center rounded-lg transition-colors cursor-pointer text-[11px]"
-                    >
-                      Remover Remanejamento
-                    </button>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <select
-                      className="w-full p-2.5 bg-white border border-slate-250 rounded-lg text-slate-705 font-bold focus:outline-none focus:border-indigo-500 transition-colors text-[11px]"
-                      onChange={(e) => {
-                        const val = e.target.value;
+                        
                         if (val) {
-                          const remId = `${modalTargetColab.matricula}-${modalTargetDate}`;
-                          const updated = { ...remanejamentos, [remId]: val };
+                          updated[remId] = val;
                           setRemanejamentos(updated);
                           localStorage.setItem('hnsr_remanejamentos_db', JSON.stringify(updated));
                           saveDocument('remanejamentos', remId, { id: remId, setor: val });
 
+                          // Auto create leave entry if not a work day (same as original logic)
                           const dayNum = parseInt(modalTargetDate.split('-')[2]);
                           const { isWorkDay } = checkRosteredStatus(modalTargetColab, dayNum);
                           if (!isWorkDay) {
@@ -3037,21 +3039,92 @@ export default function FolgasView({
                               localStorage.setItem('hnsr_solicitacoes_db', JSON.stringify(updatedSols));
                             }
                           }
-                          setIsModalOpen(false);
+                          alert(`Remanejamento para "${val}" salvo com sucesso!`);
+                        } else {
+                          // Remove if blank
+                          delete updated[remId];
+                          setRemanejamentos(updated);
+                          localStorage.setItem('hnsr_remanejamentos_db', JSON.stringify(updated));
+                          removeDocument('remanejamentos', remId);
+                          alert('Remanejamento removido.');
                         }
+                        setIsModalOpen(false);
                       }}
-                      defaultValue=""
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs px-4 py-2 rounded-lg transition-colors cursor-pointer"
                     >
-                      <option value="" disabled>Remanejar para outro setor...</option>
-                      {SETORES_HOSPITALARES.map(s => (
-                        <option key={`rem-opt-${s}`} value={s}>{s}</option>
-                      ))}
-                      <option value="Diurno A">Diurno A</option>
-                      <option value="Diurno B">Diurno B</option>
-                    </select>
-                    <span className="text-[10px] text-slate-400 font-medium block font-sans">Sinaliza na escala de comparação o setor temporário do profissional</span>
+                      Salvar
+                    </button>
                   </div>
-                )}
+
+                  <p className="text-[9px] text-slate-400 font-extrabold uppercase tracking-wider mt-2">Clique para montar o remanejamento:</p>
+                  
+                  <div className="flex flex-wrap gap-1">
+                    {[
+                      { label: '2º Andar', code: '2' },
+                      { label: '3º Andar', code: '3' },
+                      { label: '4º Andar', code: '4' },
+                      { label: '5º Andar', code: '5' },
+                      { label: '6º Andar', code: '6' },
+                      { label: 'UTI 7º', code: 'U7' },
+                      { label: 'UTI 9º', code: 'U9' },
+                      { label: 'CC', code: 'CC' },
+                      { label: 'CME', code: 'CME' },
+                      { label: 'PSA', code: 'PSA' },
+                      { label: 'PSI', code: 'PSI' }
+                    ].map(sh => {
+                      const parts = modalCustomRemSetor ? modalCustomRemSetor.split('|').map(p => p.trim()) : [];
+                      const isActive = parts.includes(sh.code);
+                      return (
+                        <button
+                          key={sh.code}
+                          type="button"
+                          onClick={() => {
+                            let toggled;
+                            const partsCurrent = modalCustomRemSetor ? modalCustomRemSetor.split('|').map(p => p.trim()).filter(Boolean) : [];
+                            if (partsCurrent.includes(sh.code)) {
+                              toggled = partsCurrent.filter(p => p !== sh.code).join('|');
+                            } else {
+                              partsCurrent.push(sh.code);
+                              toggled = partsCurrent.join('|');
+                            }
+                            setModalCustomRemSetor(toggled);
+                          }}
+                          className={`px-2 py-1 text-[10px] font-bold rounded-lg border transition cursor-pointer ${
+                            isActive
+                              ? 'bg-indigo-100 border-indigo-400 text-indigo-900 font-extrabold'
+                              : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                          }`}
+                        >
+                          {sh.label} ({sh.code})
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {remanejamentos[`${modalTargetColab.matricula}-${modalTargetDate}`] && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const remId = `${modalTargetColab.matricula}-${modalTargetDate}`;
+                        const updated = { ...remanejamentos };
+                        delete updated[remId];
+                        setRemanejamentos(updated);
+                        localStorage.setItem('hnsr_remanejamentos_db', JSON.stringify(updated));
+                        removeDocument('remanejamentos', remId);
+                        setModalCustomRemSetor('');
+                        setIsModalOpen(false);
+                        alert('Remanejamento removido.');
+                      }}
+                      className="w-full bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 font-extrabold py-1.5 text-center rounded-lg transition-colors cursor-pointer text-[10px] uppercase tracking-wider"
+                    >
+                      Remover Remanejamento
+                    </button>
+                  )}
+
+                  <span className="text-[9px] text-slate-400 font-medium block leading-tight font-sans">
+                    Regra: Internação = somente o número (ex: 2|3). UTI = Letra U + andar (ex: U9).
+                  </span>
+                </div>
               </div>
 
               {/* ACTION BRANCH A: EXISTING LEAVE */}

@@ -103,6 +103,7 @@ export interface ColaboradorChamadaStatus {
   setorOriginal: string;
   status: 'Presente' | 'Atestado' | 'Falta' | 'Férias' | 'Folga' | 'Pendente';
   remanejadoPara?: string; // e.g. 'CC / CME'
+  remanejamentoTipo?: 'remanejar' | 'assumir_mais_um';
   info?: string; // description of leave
 }
 
