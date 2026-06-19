@@ -2296,8 +2296,11 @@ export default function FolgasView({
             {/* Print Document Header */}
             <div className="flex justify-between items-start border-b-2 border-slate-800 pb-5 mb-6">
               <div>
-                <h2 className="text-lg font-black text-slate-905 tracking-tight">HOSPITAL NOSSA SENHORA DAS GRAÇAS</h2>
-                <h3 className="text-xs font-bold text-slate-700 uppercase tracking-widest mt-1">Escala de Cobertura Assistencial e Folgas (Enfermagem)</h3>
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="bg-sky-600 text-white font-extrabold px-2 py-0.5 rounded text-[11px] tracking-tight">Hapvida</span>
+                  <h2 className="text-base font-black text-slate-905 tracking-tight uppercase">Hospital Nossa Senhora do Rosário</h2>
+                </div>
+                <h3 className="text-xs font-bold text-slate-750 uppercase tracking-wider mt-1">Escala de Cobertura Assistencial e Folgas (Enfermagem)</h3>
                 <p className="text-[10px] text-slate-450 uppercase font-black mt-2">
                   Período: <strong className="text-slate-800 font-extrabold">{monthNames[currentMonth - 1]} de {currentYear}</strong>
                 </p>
@@ -2310,159 +2313,185 @@ export default function FolgasView({
             </div>
 
             {/* Main Print Grid Body based on layout */}
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse border border-slate-300 text-[10px] leading-tight">
-                <thead>
-                  <tr className="bg-slate-100 text-slate-800 font-black">
-                    <th className="border border-slate-300 p-2 text-left">Colaborador</th>
-                    <th className="border border-slate-300 p-1 text-center w-12">Cargo</th>
-                    <th className="border border-slate-300 p-1 text-center w-12">Setor</th>
-                    <th className="border border-slate-300 p-1 text-center w-12">Equipe</th>
-                    {Array.from({ length: daysInMonth }, (_, d) => d + 1).map(dNum => {
-                      const { letter, isWeekend } = getDayOfWeekDetails(dNum);
-                      return (
-                        <th key={`print-head-${dNum}`} className={`border border-slate-300 text-center p-1 w-6.5 font-bold ${isWeekend ? 'bg-rose-50 text-rose-600' : ''}`}>
-                          <div className="text-[7.5px] font-medium leading-none">{letter}</div>
-                          <div className="text-[10px] font-black leading-none mt-0.5">{dNum}</div>
-                        </th>
-                      );
-                    })}
-                  </tr>
-                </thead>
-                <tbody>
-                  {(() => {
-                    // 1. Determine local list based on selection
-                    let printColabs: Colaborador[] = [];
-                    if (printLayoutMode.startsWith('escala_setor')) {
-                      printColabs = [...filteredColaboradores];
+            <div className="space-y-6">
+              {(() => {
+                const renderPrintTable = (colabsList: Colaborador[], showCategoryHeader?: string) => {
+                  const getSectorPriority = (sectorName: string): number => {
+                    const s = (sectorName || '').trim().toUpperCase();
+                    if (s.includes('PSI')) return 1;
+                    if (s.includes('PSA')) return 2;
+                    if (s.includes('CME')) return 3;
+                    if (s.includes('CC') || s.includes('CENTRO CIRURGICO') || s.includes('CIRURGICO') || s.includes('CENTRO CIRÚRGICO')) return 4;
+                    if (s.includes('2')) return 5;
+                    if (s.includes('3')) return 6;
+                    if (s.includes('4')) return 7;
+                    if (s.includes('5')) return 8;
+                    if (s.includes('6')) return 9;
+                    if (s.includes('7') || s.includes('UTI 7')) return 10;
+                    if (s.includes('9') || s.includes('UTI 9')) return 11;
+                    return 999;
+                  };
+
+                  const sortedList = [...colabsList].sort((a, b) => {
+                    const pA = getSectorPriority(a.setor);
+                    const pB = getSectorPriority(b.setor);
+                    if (pA !== pB) {
+                      return pA - pB;
+                    }
+                    return a.nome.localeCompare(b.nome);
+                  });
+
+                  return (
+                    <div className="mb-6 last:mb-0 break-inside-avoid" key={showCategoryHeader || 'all'}>
+                      {showCategoryHeader && (
+                        <div className="bg-slate-100 text-slate-800 font-black text-[11px] tracking-wider uppercase px-4 py-2 rounded-xl mb-3 border border-slate-300 flex items-center justify-between">
+                          <span className="text-slate-900 font-extrabold">{showCategoryHeader}</span>
+                          <span className="text-[9px] text-slate-500 font-bold">{sortedList.length} PROFISSIONAL(IS)</span>
+                        </div>
+                      )}
+                      <div className="overflow-x-auto">
+                        <table className="w-full border-collapse border border-slate-300 text-[10px] leading-tight">
+                          <thead>
+                            <tr className="bg-slate-100 text-slate-800 font-black">
+                              <th className="border border-slate-300 p-2 text-left">Colaborador</th>
+                              <th className="border border-slate-300 p-1 text-center w-12">Cargo</th>
+                              <th className="border border-slate-300 p-1 text-center w-12">Setor</th>
+                              <th className="border border-slate-300 p-1 text-center w-12">Equipe</th>
+                              {Array.from({ length: daysInMonth }, (_, d) => d + 1).map(dNum => {
+                                const { letter, isWeekend } = getDayOfWeekDetails(dNum);
+                                return (
+                                  <th key={`print-head-${dNum}`} className={`border border-slate-300 text-center p-1 w-6.5 font-bold ${isWeekend ? 'bg-rose-50 text-rose-600' : ''}`}>
+                                    <div className="text-[7.5px] font-medium leading-none">{letter}</div>
+                                    <div className="text-[10px] font-black leading-none mt-0.5">{dNum}</div>
+                                  </th>
+                                );
+                              })}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {sortedList.length === 0 ? (
+                              <tr>
+                                <td colSpan={4 + daysInMonth} className="p-4 text-center text-slate-450 font-bold italic">
+                                  Nenhum colaborador alocado neste quadro.
+                                </td>
+                              </tr>
+                            ) : (
+                              sortedList.map(colab => {
+                                return (
+                                  <tr key={`print-row-${colab.matricula}`} className="bg-white hover:bg-slate-50 transition border border-slate-300">
+                                    <td className="border border-slate-300 p-2 font-bold text-slate-800 text-[10px] truncate max-w-[150px]">
+                                      {colab.nome}
+                                    </td>
+                                    <td className="border border-slate-300 p-1 text-center text-[8.5px] font-medium text-slate-500 uppercase">
+                                      {colab.cargo?.replace('Enfermeiro(a) ', '')?.slice(0, 10)}
+                                    </td>
+                                    <td className="border border-slate-300 p-1 text-center text-[8.5px] font-extrabold text-slate-600 uppercase">
+                                      {colab.setor?.replace('º ANDAR', '°')?.replace('ANDAR', '')?.trim()}
+                                    </td>
+                                    <td className="border border-slate-300 p-1 text-center text-[8.5px] font-bold text-slate-500 uppercase">
+                                      {colab.equipe?.replace('Turno ', '')?.replace('Diurno ', 'D')?.replace('Noturno ', 'N')?.slice(0, 5)}
+                                    </td>
+                                    {Array.from({ length: daysInMonth }, (_, d) => d + 1).map(dNum => {
+                                      const dateStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(dNum).padStart(2, '0')}`;
+                                      const req = solicitacoesLookup[`${colab.matricula}-${dateStr}`];
+                                      const { isWorkDay } = checkRosteredStatus(colab, dNum);
+                                      
+                                      // INSS checking
+                                      const hasInss = isColabOnInssOnDay(colab, currentYear, currentMonth, dNum);
+                                      if (hasInss) {
+                                        return (
+                                          <td key={`print-cell-${dNum}`} className="border border-slate-300 p-0 text-center align-middle bg-rose-50 text-red-700 font-black text-[9px] select-none">
+                                            INSS
+                                          </td>
+                                        );
+                                      }
+
+                                      // Medical Certificate checking
+                                      const hasAtestado = isColabOnAtestado(colab.matricula, currentYear, currentMonth, dNum, absenteismo);
+                                      if (hasAtestado) {
+                                        return (
+                                          <td key={`print-cell-${dNum}`} className="border border-slate-300 p-0 text-center align-middle bg-rose-50 text-red-600 font-black text-[9px] select-none">
+                                            AT
+                                          </td>
+                                        );
+                                      }
+
+                                      // Remanejamento checking
+                                      const showRem = printLayoutMode === 'escala_setor_com' || printLayoutMode.startsWith('escala_comparar');
+                                      const remSector = remanejamentos[`${colab.matricula}-${dateStr}`];
+                                      if (showRem && remSector) {
+                                        return (
+                                          <td key={`print-cell-${dNum}`} className="border border-slate-300 p-0 text-center align-middle bg-amber-50 text-amber-955 font-black text-[7.5px] select-none uppercase tracking-tighter" title={`Remanejado p/ ${remSector}`}>
+                                            {remSector}
+                                          </td>
+                                        );
+                                      }
+
+                                      // Check approved / pending leaves
+                                      if (req) {
+                                        const isApproved = req.status === 'Aprovado';
+                                        const shorthand = getShorthand(req.tipo);
+                                        return (
+                                          <td key={`print-cell-${dNum}`} className={`border border-slate-300 p-0 text-center align-middle font-black text-[9px] select-none ${isApproved ? 'bg-emerald-50 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+                                            {shorthand}{isApproved ? '' : '?'}
+                                          </td>
+                                        );
+                                      }
+
+                                      // Standard scale
+                                      return (
+                                        <td key={`print-cell-${dNum}`} className={`border border-slate-300 p-0 text-center align-middle font-bold text-[8.5px] select-none ${isWorkDay ? 'bg-white text-slate-800' : 'bg-slate-100 text-slate-400'}`}>
+                                          {isWorkDay ? '' : '-'}
+                                        </td>
+                                      );
+                                    })}
+                                  </tr>
+                                );
+                              })
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  );
+                };
+
+                let printColabs: Colaborador[] = [];
+                if (printLayoutMode.startsWith('escala_setor')) {
+                  printColabs = [...filteredColaboradores];
+                  return renderPrintTable(printColabs);
+                } else {
+                  // comparative view filter
+                  const cRole = printLayoutMode === 'escala_comparar_enf' ? 'enfermeiro' : 'tecnico';
+                  const baseList = colaboradores.filter(c => {
+                    const eq = c.equipe?.toLowerCase() || '';
+                    const fitsShift = compareEquipe1 === 'Todos' || eq === compareEquipe1.toLowerCase() || eq.includes(compareEquipe1.toLowerCase());
+                    const cargoLower = c.cargo?.toLowerCase() || '';
+                    const isEnf = cargoLower.includes('enfermeiro') || cargoLower.includes('enfermeira') || cargoLower.startsWith('enf') || cargoLower.includes('coordenador') || cargoLower.includes('supervisor');
+                    
+                    if (cRole === 'enfermeiro') {
+                      return fitsShift && isEnf;
                     } else {
-                      // comparative view filter
-                      const cRole = printLayoutMode === 'escala_comparar_enf' ? 'enfermeiro' : 'tecnico';
-                      printColabs = colaboradores.filter(c => {
-                        const eq = c.equipe?.toLowerCase() || '';
-                        const fitsShift = compareEquipe1 === 'Todos' || eq === compareEquipe1.toLowerCase() || eq.includes(compareEquipe1.toLowerCase());
-                        const cargoLower = c.cargo?.toLowerCase() || '';
-                        const isEnf = cargoLower.includes('enfermeiro') || cargoLower.includes('enfermeira') || cargoLower.startsWith('enf');
-                        
-                        if (cRole === 'enfermeiro') {
-                          return fitsShift && isEnf;
-                        } else {
-                          return fitsShift && !isEnf;
-                        }
-                      });
+                      return fitsShift && !isEnf;
                     }
+                  });
 
-                    // Sort by Sector Priority: PSI, PSA, CME, CC, 2, 3, 4, 5, 6, UTI 7, UTI 9
-                    const getSectorPriority = (sectorName: string): number => {
-                      const s = (sectorName || '').trim().toUpperCase();
-                      if (s.includes('PSI')) return 1;
-                      if (s.includes('PSA')) return 2;
-                      if (s.includes('CME')) return 3;
-                      if (s.includes('CC') || s.includes('CENTRO CIRURGICO') || s.includes('CIRURGICO') || s.includes('CENTRO CIRÚRGICO')) return 4;
-                      if (s.includes('2')) return 5;
-                      if (s.includes('3')) return 6;
-                      if (s.includes('4')) return 7;
-                      if (s.includes('5')) return 8;
-                      if (s.includes('6')) return 9;
-                      if (s.includes('7') || s.includes('UTI 7')) return 10;
-                      if (s.includes('9') || s.includes('UTI 9')) return 11;
-                      return 999;
-                    };
+                  // Split into 4 quadros:
+                  const gestaoList = baseList.filter(c => getCategoryForColab(c) === 'Gestão');
+                  const uiList = baseList.filter(c => getCategoryForColab(c) === 'Unidade de Internação');
+                  const psUtiList = baseList.filter(c => getCategoryForColab(c) === 'PSA | PSI | UTI');
+                  const ccList = baseList.filter(c => getCategoryForColab(c) === 'Centro Cirurgico');
 
-                    printColabs.sort((a, b) => {
-                      const pA = getSectorPriority(a.setor);
-                      const pB = getSectorPriority(b.setor);
-                      if (pA !== pB) {
-                        return pA - pB;
-                      }
-                      return a.nome.localeCompare(b.nome);
-                    });
-
-                    if (printColabs.length === 0) {
-                      return (
-                        <tr>
-                          <td colSpan={4 + daysInMonth} className="p-6 text-center text-slate-400 font-bold">
-                            Nenhum profissional localizado para esta escala de impressão.
-                          </td>
-                        </tr>
-                      );
-                    }
-
-                    return printColabs.map(colab => {
-                      return (
-                        <tr key={`print-row-${colab.matricula}`} className="bg-white hover:bg-slate-50 transition border border-slate-300">
-                          <td className="border border-slate-300 p-2 font-bold text-slate-800 text-[10px] truncate max-w-[150px]">
-                            {colab.nome}
-                          </td>
-                          <td className="border border-slate-300 p-1 text-center text-[8.5px] font-medium text-slate-500 uppercase">
-                            {colab.cargo?.replace('Enfermeiro(a) ', '')?.slice(0, 10)}
-                          </td>
-                          <td className="border border-slate-300 p-1 text-center text-[8.5px] font-extrabold text-slate-600 uppercase">
-                            {colab.setor?.replace('º ANDAR', '°')?.replace('ANDAR', '')?.trim()}
-                          </td>
-                          <td className="border border-slate-300 p-1 text-center text-[8.5px] font-bold text-slate-500 uppercase">
-                            {colab.equipe?.replace('Turno ', '')?.replace('Diurno ', 'D')?.replace('Noturno ', 'N')?.slice(0, 5)}
-                          </td>
-                          {Array.from({ length: daysInMonth }, (_, d) => d + 1).map(dNum => {
-                            const dateStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(dNum).padStart(2, '0')}`;
-                            const req = solicitacoesLookup[`${colab.matricula}-${dateStr}`];
-                            const { isWorkDay } = checkRosteredStatus(colab, dNum);
-                            
-                            // INSS checking
-                            const hasInss = isColabOnInssOnDay(colab, currentYear, currentMonth, dNum);
-                            if (hasInss) {
-                              return (
-                                <td key={`print-cell-${dNum}`} className="border border-slate-300 p-0 text-center align-middle bg-rose-50 text-red-700 font-black text-[9px] select-none">
-                                  INSS
-                                </td>
-                              );
-                            }
-
-                            // Medical Certificate checking
-                            const hasAtestado = isColabOnAtestado(colab.matricula, currentYear, currentMonth, dNum, absenteismo);
-                            if (hasAtestado) {
-                              return (
-                                <td key={`print-cell-${dNum}`} className="border border-slate-300 p-0 text-center align-middle bg-rose-50 text-red-600 font-black text-[9px] select-none">
-                                  AT
-                                </td>
-                              );
-                            }
-
-                            // Remanejamento checking
-                            const showRem = printLayoutMode === 'escala_setor_com' || printLayoutMode.startsWith('escala_comparar');
-                            const remSector = remanejamentos[`${colab.matricula}-${dateStr}`];
-                            if (showRem && remSector) {
-                              return (
-                                <td key={`print-cell-${dNum}`} className="border border-slate-300 p-0 text-center align-middle bg-amber-50 text-amber-950 font-black text-[7.5px] select-none uppercase tracking-tighter" title={`Remanejado p/ ${remSector}`}>
-                                  {remSector}
-                                </td>
-                              );
-                            }
-
-                            // Check approved / pending leaves
-                            if (req) {
-                              const isApproved = req.status === 'Aprovado';
-                              const shorthand = getShorthand(req.tipo);
-                              return (
-                                <td key={`print-cell-${dNum}`} className={`border border-slate-300 p-0 text-center align-middle font-black text-[9px] select-none ${isApproved ? 'bg-emerald-50 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
-                                  {shorthand}{isApproved ? '' : '?'}
-                                </td>
-                              );
-                            }
-
-                            // Standard scale
-                            return (
-                              <td key={`print-cell-${dNum}`} className={`border border-slate-300 p-0 text-center align-middle font-bold text-[8.5px] select-none ${isWorkDay ? 'bg-white text-slate-800' : 'bg-slate-100 text-slate-400'}`}>
-                                {isWorkDay ? '' : '-'}
-                              </td>
-                            );
-                          })}
-                        </tr>
-                      );
-                    });
-                  })()}
-                </tbody>
-              </table>
+                  return (
+                    <div className="space-y-6">
+                      {renderPrintTable(gestaoList, "Gestão")}
+                      {renderPrintTable(uiList, "Unidade de Internação")}
+                      {renderPrintTable(psUtiList, "PS e UTI")}
+                      {renderPrintTable(ccList, "CC (Centro Cirúrgico)")}
+                    </div>
+                  );
+                }
+              })()}
             </div>
 
             {/* Print Document Legend Footer */}
