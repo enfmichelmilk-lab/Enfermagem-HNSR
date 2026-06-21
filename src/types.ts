@@ -68,7 +68,7 @@ export interface SolicitacaoFolga {
   id: string;
   colaborador: string;
   matricula: string;
-  tipo: 'Folga de Escala' | 'Banco de Horas' | 'Folga Feriado' | 'Folga Enfermagem' | 'Folga Brigada' | 'Folga Eleição' | 'Integração' | 'Falta';
+  tipo: string;
   data: string; // YYYY-MM-DD
   status: 'Pendente' | 'Aprovado' | 'Recusado';
   solicitante: string;
@@ -105,6 +105,7 @@ export interface ColaboradorChamadaStatus {
   remanejadoPara?: string; // e.g. 'CC / CME'
   remanejamentoTipo?: 'remanejar' | 'assumir_mais_um';
   info?: string; // description of leave
+  isExtra?: boolean;
 }
 
 export interface Chamada {

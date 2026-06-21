@@ -33,7 +33,9 @@ export const SETORES_HOSPITALARES = [
   "PSA",
   "PSI",
   "UTI 7º ANDAR",
-  "UTI 9º ANDAR"
+  "UTI 9º ANDAR",
+  "Folguista UI",
+  "Folguista PS | UTI"
 ];
 
 export const EQUIPES_ESCALA = [
@@ -114,6 +116,8 @@ export const mapSector = (sec: string): string => {
   const trimmed = sec.trim();
   const upper = trimmed.toUpperCase();
   
+  if (upper.includes("FOLGUISTA UI")) return "Folguista UI";
+  if (upper.includes("FOLGUISTA PS") || upper.includes("FOLGUISTA UTI")) return "Folguista PS | UTI";
   if (upper.includes("2º") || upper.includes("2O")) return "2º ANDAR";
   if (upper.includes("3º") || upper.includes("3O")) return "3º ANDAR";
   if (upper.includes("4º") || upper.includes("4O")) return "4º ANDAR";

@@ -39,16 +39,18 @@ interface ChamadaViewProps {
 
 const SECTORS_LIST = [
   'Gestão',
-  'UTI (9º andar)',
-  'UTI (7º andar)',
-  '6º Andar',
-  '5º Andar',
-  '4º Andar',
-  '3º Andar',
-  '2º Andar',
-  'CC / CME',
+  'Folguista PS | UTI',
+  'PSI',
   'PSA',
-  'PSI'
+  'UTI (7º andar)',
+  'UTI (9º andar)',
+  'CC / CME',
+  'Folguista UI',
+  '2º Andar',
+  '3º Andar',
+  '4º Andar',
+  '5º Andar',
+  '6º Andar'
 ];
 
 const HOSPITAL_CAPACITIES: Record<string, number> = {
@@ -76,6 +78,8 @@ const mapSectorToTarget = (setor: string, cargo?: string): string => {
   ) {
     return 'Gestão';
   }
+  if (norm.includes('FOLGUISTA UI')) return 'Folguista UI';
+  if (norm.includes('FOLGUISTA PS') || norm.includes('FOLGUISTA UTI')) return 'Folguista PS | UTI';
   if (norm.includes('9º') || norm.includes('9O') || norm.includes('UTI 9')) return 'UTI (9º andar)';
   if (norm.includes('7º') || norm.includes('7O') || norm.includes('8º') || norm.includes('8O') || norm.includes('UTI 8') || norm.includes('UTI 7')) return 'UTI (7º andar)';
   if (norm.includes('6º') || norm.includes('6O') || norm.includes('6 ANDAR')) return '6º Andar';
@@ -92,6 +96,8 @@ const mapSectorToTarget = (setor: string, cargo?: string): string => {
 const formatSectorShortCode = (sectorName: string): string => {
   if (!sectorName) return '';
   const norm = sectorName.trim().toUpperCase();
+  if (norm.includes('FOLGUISTA UI')) return 'FLG UI';
+  if (norm.includes('FOLGUISTA PS') || norm.includes('FOLGUISTA UTI')) return 'FLG PS/UTI';
   if (norm.includes('2º') || norm.includes('2ND') || norm.includes('2º ANDAR')) return '2';
   if (norm.includes('3º') || norm.includes('3RD') || norm.includes('3º ANDAR')) return '3';
   if (norm.includes('4º') || norm.includes('4TH') || norm.includes('4º ANDAR')) return '4';
@@ -137,10 +143,20 @@ export default function ChamadaView({
 
   const [selectedTurno, setSelectedTurno] = useState('Diurno A');
   const [enfermeiroRef, setEnfermeiroRef] = useState(usuarioLogado.nome || '');
+  
+  // State for adding extra colaboradores from other shifts
+  const [activeAddSector, setActiveAddSector] = useState<string | null>(null);
+  const [addSearchQuery, setAddSearchQuery] = useState('');
 
   // Active Draft Session State
   const [draftColaboradores, setDraftColaboradores] = useState<ColaboradorChamadaStatus[]>([]);
   const [draftMetricas, setDraftMetricas] = useState<{ [setorName: string]: ChamadaSetorMetric }>({});
+
+  const availableColabsForAdd = useMemo(() => {
+    const existingMatriculas = new Set(draftColaboradores.map(c => c.matricula));
+    let pool = colaboradores.filter(c => !existingMatriculas.has(c.matricula));
+    return pool.sort((a, b) => a.nome.localeCompare(b.nome));
+  }, [colaboradores, draftColaboradores]);
 
   // Helper to determine if the supervisor of Gestão is absent/off (i.e. status not 'Presente')
   const isSupervisorAbsent = useMemo(() => {
@@ -476,6 +492,11 @@ export default function ChamadaView({
     text += `🩺 Enfermeiro(a) Referencia: ${enfermeiroName}\n\n`;
 
     SECTORS_LIST.forEach((sectorKey) => {
+      // Skip Folguista PS | UTI and Folguista UI
+      if (sectorKey === 'Folguista PS | UTI' || sectorKey === 'Folguista UI') {
+        return;
+      }
+
       const metric = metrics[sectorKey] || {
         totalPacientes: 0,
         pacientesVM: 0,
@@ -493,14 +514,8 @@ export default function ChamadaView({
         const isIncomingPresentMove = col.remanejadoPara === sectorKey && col.status === 'Presente';
 
         if (isOrigPresentNotInMove || isIncomingPresentMove) {
-          if (col.remanejamentoTipo === 'assumir_mais_um') {
-            if (col.setorOriginal === sectorKey) {
-              nursesPresent.push(`${col.nome} (Assumindo também ${formatSectorShortCode(col.remanejadoPara || '')})`);
-            } else {
-              nursesPresent.push(`${col.nome} (Assumindo de ${formatSectorShortCode(col.setorOriginal)})`);
-            }
-          } else if (col.remanejadoPara && col.remanejamentoTipo === 'remanejar') {
-            nursesPresent.push(`${col.nome} (Remanejado de ${formatSectorShortCode(col.setorOriginal)})`);
+          if (col.isExtra) {
+            nursesPresent.push(`Extra: ${col.nome}`);
           } else {
             nursesPresent.push(col.nome);
           }
@@ -511,6 +526,7 @@ export default function ChamadaView({
 
       // 2. Count technicians present in sector (original present non-nurses who weren't remanejado, plus incoming remanejado technicians)
       let techniciansCount = 0;
+      const extraTechs: string[] = [];
       colabStatuses.forEach(col => {
         const isNurse = (col.cargo || '').toLowerCase().includes('enfermeiro') || (col.cargo || '').toLowerCase().includes('enfermeira') || (col.cargo || '').toLowerCase().startsWith('enf');
         if (isNurse) return;
@@ -520,15 +536,17 @@ export default function ChamadaView({
 
         if (isOrigPresentNotInMove || isIncomingPresentMove) {
           techniciansCount++;
+          if (col.isExtra) {
+            extraTechs.push(`Extra: ${col.nome}`);
+          }
         }
       });
 
-      // 3. Compile anyone originally from this sector marked with Atestado, Falta, or Folga
+      // 3. Compile anyone originally from this sector marked with Atestado or Falta (excluding Folga and Férias)
       const leavesList: string[] = [];
       colabStatuses.forEach(col => {
-        if (col.setorOriginal === sectorKey && (col.status === 'Atestado' || col.status === 'Falta' || col.status === 'Folga')) {
-          const detail = col.status === 'Falta' ? 'Falta' : col.status === 'Folga' ? 'Folga' : (col.info || 'Atestado');
-          leavesList.push(`${col.nome} (${detail})`);
+        if (col.setorOriginal === sectorKey && (col.status === 'Atestado' || col.status === 'Falta')) {
+          leavesList.push(col.nome);
         }
       });
       const atestadoText = leavesList.length > 0 ? leavesList.join(', ') : 'Nenhum';
@@ -560,7 +578,8 @@ export default function ChamadaView({
       } else {
         text += `> ${sectorKey}\n`;
         text += `* Enfermeiro(a): ${nursesText}\n`;
-        text += `* Técnicos: ${techniciansCount}\n`;
+        const extraTechsText = extraTechs.length > 0 ? ` (${extraTechs.join(', ')})` : '';
+        text += `* Técnicos: ${techniciansCount}${extraTechsText}\n`;
         text += `* Total Pacientes: ${metric.totalPacientes}\n`;
         text += `* Pacientes em VM: ${metric.pacientesVM}\n`;
         text += `* Atestado: ${atestadoText}\n`;
@@ -1244,6 +1263,65 @@ export default function ChamadaView({
                               );
                             })}
                           </div>
+                        )}
+                      </div>
+
+                      {/* Add Extra Collaborator Section */}
+                      <div className="px-4 pb-4 pt-2 border-t border-slate-100 bg-slate-50/40">
+                        {activeAddSector === sectorName ? (
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase text-slate-500 block">Adicionar Colaborador de Outro Turno</label>
+                            <div className="flex flex-col sm:flex-row gap-2">
+                              <select
+                                className="flex-1 p-2 border border-slate-250 bg-white rounded-lg text-xs font-bold text-slate-700 focus:outline-none focus:border-sky-500"
+                                onChange={(e) => {
+                                  const mat = e.target.value;
+                                  if (!mat) return;
+                                  const selectedCol = colaboradores.find(c => c.matricula === mat);
+                                  if (selectedCol) {
+                                    const newDraftColab: ColaboradorChamadaStatus = {
+                                      matricula: selectedCol.matricula,
+                                      nome: selectedCol.nome,
+                                      cargo: selectedCol.cargo,
+                                      setorOriginal: sectorName,
+                                      status: 'Presente',
+                                      isExtra: true
+                                    };
+                                    setDraftColaboradores(prev => [...prev, newDraftColab]);
+                                    setActiveAddSector(null);
+                                    setAddSearchQuery('');
+                                  }
+                                }}
+                                defaultValue=""
+                              >
+                                <option value="">-- Selecione o profissional para adicionar --</option>
+                                {availableColabsForAdd.map(c => (
+                                  <option key={c.matricula} value={c.matricula}>
+                                    {c.nome} ({c.cargo} - {c.setor} - {c.equipe})
+                                  </option>
+                                ))}
+                              </select>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActiveAddSector(null);
+                                  setAddSearchQuery('');
+                                }}
+                                className="p-2 px-3 bg-slate-200 hover:bg-slate-300 rounded-lg text-xs font-bold text-slate-600 transition"
+                              >
+                                Cancelar
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setActiveAddSector(sectorName)}
+                            className="w-full py-2 border border-dashed border-sky-300 text-sky-700 hover:bg-sky-50 rounded-xl text-xs font-extrabold transition flex items-center justify-center gap-1.5 shadow-3xs cursor-pointer"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            Adicionar Colaborador de Outro Turno
+                          </button>
                         )}
                       </div>
 

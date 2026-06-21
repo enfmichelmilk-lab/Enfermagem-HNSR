@@ -503,6 +503,7 @@ export default function App() {
             onUpdateSolicitacoes={handleUpdateSolicitacoes}
             onUpdateColaboradores={handleUpdateColaboradores}
             ferias={ferias}
+            chamadas={chamadas}
           />
         );
       case 'ferias':

@@ -12,7 +12,7 @@ import {
   Printer, Layers, TrendingUp, RefreshCcw, X
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend as RechartsLegend, ResponsiveContainer } from 'recharts';
-import { SolicitacaoFolga, Colaborador, Usuario, Absenteismo, Ferias } from '../types';
+import { SolicitacaoFolga, Colaborador, Usuario, Absenteismo, Ferias, Chamada } from '../types';
 import { SETORES_HOSPITALARES } from '../data/mockData';
 import { subscribeCollection, saveDocument, removeDocument } from '../lib/firebase';
 import HapvidaLogo from './HapvidaLogo';
@@ -157,11 +157,12 @@ interface FolgasViewProps {
   onUpdateSolicitacoes: (novasSols: SolicitacaoFolga[]) => void;
   onUpdateColaboradores: (novosColabs: Colaborador[]) => void;
   ferias?: Ferias[];
+  chamadas?: Chamada[];
 }
 
 export default function FolgasView({ 
   solicitacoes, colaboradores, absenteismo = [], usuarioLogado, 
-  onUpdateSolicitacoes, onUpdateColaboradores, ferias = []
+  onUpdateSolicitacoes, onUpdateColaboradores, ferias = [], chamadas = []
 }: FolgasViewProps) {
   
   // Date selection states
@@ -300,6 +301,24 @@ export default function FolgasView({
     });
   };
 
+  // Fast O(1) chamada status lookup map indexed by `${matricula}-${date_str}`
+  const chamadaStatusLookup = useMemo(() => {
+    const map: Record<string, { status: string; turno: string; remanejadoPara?: string }> = {};
+    if (!chamadas) return map;
+    chamadas.forEach(ch => {
+      if (ch.statusColaboradores) {
+        ch.statusColaboradores.forEach(col => {
+          map[`${col.matricula}-${ch.data}`] = {
+            status: col.status,
+            turno: ch.turno,
+            remanejadoPara: col.remanejadoPara
+          };
+        });
+      }
+    });
+    return map;
+  }, [chamadas]);
+
   // Active state calculation helper for column totals
   const isColabActiveOnDay = (colab: Colaborador, dNum: number) => {
     // Explicitly exclude VAGA (vacant/terminated) profiles from the daily staff summation calculations
@@ -315,10 +334,21 @@ export default function FolgasView({
     if (isColabOnFeriasOnDay(colab.matricula, dNum)) {
       return false; // discounted because they are on vacation (férias)
     }
+
+    const dateStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(dNum).padStart(2, '0')}`;
+    const chStatus = chamadaStatusLookup[`${colab.matricula}-${dateStr}`];
+    if (chStatus) {
+      if (chStatus.status === 'Presente') {
+        return true;
+      }
+      if (chStatus.status === 'Falta' || chStatus.status === 'Atestado' || chStatus.status === 'Folga') {
+        return false;
+      }
+    }
+
     const { isWorkDay } = checkRosteredStatus(colab, dNum);
     if (!isWorkDay) return false;
 
-    const dateStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(dNum).padStart(2, '0')}`;
     const req = solicitacoesLookup[`${colab.matricula}-${dateStr}`];
     if (req && req.status === 'Aprovado') {
       return false; // they are on approved leave, hence not active on duty
@@ -423,7 +453,7 @@ export default function FolgasView({
   const [modalExistingFolga, setModalExistingFolga] = useState<SolicitacaoFolga | null>(null);
   
   // Form input inside the modal
-  const [modalTipoFolga, setModalTipoFolga] = useState<'Folga de Escala' | 'Banco de Horas' | 'Folga Feriado' | 'Folga Enfermagem' | 'Folga Brigada' | 'Folga Eleição' | 'Integração' | 'Falta' | 'Folga Troca de Plantão'>('Folga de Escala');
+  const [modalTipoFolga, setModalTipoFolga] = useState<string>('Folga');
   const [modalImmediateApproval, setModalImmediateApproval] = useState(true);
   const [modalCustomRemSetor, setModalCustomRemSetor] = useState('');
 
@@ -678,14 +708,20 @@ export default function FolgasView({
   // Abbreviations Helper
   const getShorthand = (tipo: string): string => {
     switch (tipo) {
+      case 'Folga':
       case 'Folga de Escala': return 'F';
       case 'Banco de Horas': return 'BH';
-      case 'Folga Feriado': return 'FF';
-      case 'Folga Enfermagem': return 'FE';
+      case 'Brigada de Incêndio':
       case 'Folga Brigada': return 'B';
-      case 'Folga Eleição': return 'E';
+      case 'Folga Feriado': return 'FF';
       case 'Integração': return 'I';
+      case 'Folga Enfermagem': return 'FE';
+      case 'Férias': return 'F';
+      case 'Atestado': return 'AT';
+      case 'Ausente - Falta s/ justificativa':
       case 'Falta': return 'A';
+      case 'Eleição':
+      case 'Folga Eleição': return 'E';
       case 'Folga Troca de Plantão': return 'X';
       default: return 'F';
     }
@@ -694,14 +730,20 @@ export default function FolgasView({
   // Full labels translation
   const getFullLabel = (tipo: string) => {
     switch (tipo) {
+      case 'Folga':
       case 'Folga de Escala': return 'Folga (F)';
       case 'Banco de Horas': return 'Banco de Horas (BH)';
-      case 'Folga Feriado': return 'Folga Feriado (FF)';
-      case 'Folga Enfermagem': return 'Folga Enfermagem (FE)';
+      case 'Brigada de Incêndio':
       case 'Folga Brigada': return 'Brigada de Incêndio (B)';
-      case 'Folga Eleição': return 'Eleição (E)';
+      case 'Folga Feriado': return 'Folga Feriado (FF)';
       case 'Integração': return 'Integração (I)';
+      case 'Folga Enfermagem': return 'Folga Enfermagem (FE)';
+      case 'Férias': return 'Férias (F)';
+      case 'Atestado': return 'Atestado (AT)';
+      case 'Ausente - Falta s/ justificativa':
       case 'Falta': return 'Ausente - Falta s/ justificativa (A)';
+      case 'Eleição':
+      case 'Folga Eleição': return 'Eleição (E)';
       case 'Folga Troca de Plantão': return 'Descanso por Troca de Plantão (X)';
       default: return tipo;
     }
@@ -721,7 +763,7 @@ export default function FolgasView({
     setModalCustomRemSetor(remanejamentos[remKey] || '');
     
     // Default form inputs
-    setModalTipoFolga('Folga de Escala');
+    setModalTipoFolga('Folga');
     // Supervisors approval auto-enabled, Nurses file pending
     setModalImmediateApproval(
       usuarioLogado.perfil === 'Supervisor(a)' || 
@@ -761,33 +803,40 @@ export default function FolgasView({
 
     // Balance checks if type is limited
     if (modalTargetColab) {
-      if (modalTipoFolga === 'Banco de Horas' && modalTargetColab.bancohoras <= 0) {
+      const isBH = modalTipoFolga === 'Banco de Horas';
+      const isFE = modalTipoFolga === 'Folga Enfermagem';
+      const isFF = modalTipoFolga === 'Folga Feriado';
+      const isB = modalTipoFolga === 'Brigada de Incêndio' || modalTipoFolga === 'Folga Brigada';
+      const isE = modalTipoFolga === 'Eleição' || modalTipoFolga === 'Folga Eleição';
+      const isF = modalTipoFolga === 'Folga' || modalTipoFolga === 'Folga de Escala' || modalTipoFolga === 'Férias';
+
+      if (isBH && modalTargetColab.bancohoras <= 0) {
         alert(`Aviso: O colaborador selecionado não possui saldo positivo de Banco de Horas (${modalTargetColab.bancohoras}h).`);
         return;
       }
-      if (modalTipoFolga === 'Folga Enfermagem' && modalTargetColab.folgaenf <= 0) {
+      if (isFE && modalTargetColab.folgaenf <= 0) {
         alert(`Aviso: O colaborador possui saldo insuficiente para Folga Enfermagem (${modalTargetColab.folgaenf} dia[s]).`);
         return;
       }
-      if (modalTipoFolga === 'Folga Feriado' && modalTargetColab.folgaferiado <= 0) {
+      if (isFF && modalTargetColab.folgaferiado <= 0) {
         alert(`Aviso: O colaborador possui saldo insuficiente para Folga Feriado (${modalTargetColab.folgaferiado} dia[s]).`);
         return;
       }
-      if (modalTipoFolga === 'Folga Brigada' && modalTargetColab.brigada <= 0) {
+      if (isB && modalTargetColab.brigada <= 0) {
         alert(`Aviso: Saldo insuficiente de Folga Brigada (${modalTargetColab.brigada} dia[s]).`);
         return;
       }
-      if (modalTipoFolga === 'Folga Eleição' && modalTargetColab.eleicao <= 0) {
+      if (isE && modalTargetColab.eleicao <= 0) {
         alert(`Aviso: Saldo insuficiente de Eleição (${modalTargetColab.eleicao} dia[s]).`);
         return;
       }
-      // Enforce at most 2 Folga de Escala (FS) per month
-      if (modalTipoFolga === 'Folga de Escala') {
+      // Enforce at most 2 Folga de Escala (F) per month
+      if (isF && modalTipoFolga !== 'Férias') {
         const parts = modalTargetDate.split('-');
         const targetMonthPrefix = `${parts[0]}-${parts[1]}`;
         const existingCount = solicitacoes.filter(s => 
           s.matricula === modalTargetColab.matricula && 
-          s.tipo === 'Folga de Escala' && 
+          (s.tipo === 'Folga' || s.tipo === 'Folga de Escala') && 
           s.status === 'Aprovado' && 
           s.data.startsWith(targetMonthPrefix)
         ).length;
@@ -822,15 +871,21 @@ export default function FolgasView({
       let updatedColab = { ...modalTargetColab };
       const carimboLog = `[${new Date().toLocaleString('pt-BR')} - ${usuarioLogado.nome}]: Lançado e aprovado folga imediata (${modalTipoFolga}) para o dia ${modalTargetDate.split('-').reverse().join('/')}.`;
 
-      if (modalTipoFolga === 'Banco de Horas') {
+      const isBH = modalTipoFolga === 'Banco de Horas';
+      const isFE = modalTipoFolga === 'Folga Enfermagem';
+      const isFF = modalTipoFolga === 'Folga Feriado';
+      const isB = modalTipoFolga === 'Brigada de Incêndio' || modalTipoFolga === 'Folga Brigada';
+      const isE = modalTipoFolga === 'Eleição' || modalTipoFolga === 'Folga Eleição';
+
+      if (isBH) {
         updatedColab.bancohoras = Math.max(0, modalTargetColab.bancohoras - 12);
-      } else if (modalTipoFolga === 'Folga Enfermagem') {
+      } else if (isFE) {
         updatedColab.folgaenf = Math.max(0, modalTargetColab.folgaenf - 1);
-      } else if (modalTipoFolga === 'Folga Feriado') {
+      } else if (isFF) {
         updatedColab.folgaferiado = Math.max(0, modalTargetColab.folgaferiado - 1);
-      } else if (modalTipoFolga === 'Folga Brigada') {
+      } else if (isB) {
         updatedColab.brigada = Math.max(0, modalTargetColab.brigada - 1);
-      } else if (modalTipoFolga === 'Folga Eleição') {
+      } else if (isE) {
         updatedColab.eleicao = Math.max(0, modalTargetColab.eleicao - 1);
       }
 
@@ -852,12 +907,13 @@ export default function FolgasView({
   // Action: Approve leave request inline
   const handleApproveInline = (sol: SolicitacaoFolga) => {
     // Enforce 2 Folga de Escala limit when approving
-    if (sol.tipo === 'Folga de Escala') {
+    const isFS = sol.tipo === 'Folga' || sol.tipo === 'Folga de Escala';
+    if (isFS) {
       const parts = sol.data.split('-');
       const targetMonthPrefix = `${parts[0]}-${parts[1]}`;
       const existingCount = solicitacoes.filter(s => 
         s.matricula === sol.matricula && 
-        s.tipo === 'Folga de Escala' && 
+        (s.tipo === 'Folga' || s.tipo === 'Folga de Escala') && 
         s.status === 'Aprovado' && 
         s.data.startsWith(targetMonthPrefix) &&
         s.id !== sol.id
@@ -874,15 +930,21 @@ export default function FolgasView({
       let updatedColab = { ...targetColab };
       const carimbo = `[${new Date().toLocaleString('pt-BR')} - ${usuarioLogado.nome}]: Folga concedida (${sol.tipo}) para o dia ${sol.data.split('-').reverse().join('/')}.`;
 
-      if (sol.tipo === 'Banco de Horas') {
+      const isBH = sol.tipo === 'Banco de Horas';
+      const isFE = sol.tipo === 'Folga Enfermagem';
+      const isFF = sol.tipo === 'Folga Feriado';
+      const isB = sol.tipo === 'Brigada de Incêndio' || sol.tipo === 'Folga Brigada';
+      const isE = sol.tipo === 'Eleição' || sol.tipo === 'Folga Eleição';
+
+      if (isBH) {
         updatedColab.bancohoras = Math.max(0, targetColab.bancohoras - 12);
-      } else if (sol.tipo === 'Folga Enfermagem') {
+      } else if (isFE) {
         updatedColab.folgaenf = Math.max(0, targetColab.folgaenf - 1);
-      } else if (sol.tipo === 'Folga Feriado') {
+      } else if (isFF) {
         updatedColab.folgaferiado = Math.max(0, targetColab.folgaferiado - 1);
-      } else if (sol.tipo === 'Folga Brigada') {
+      } else if (isB) {
         updatedColab.brigada = Math.max(0, targetColab.brigada - 1);
-      } else if (sol.tipo === 'Folga Eleição') {
+      } else if (isE) {
         updatedColab.eleicao = Math.max(0, targetColab.eleicao - 1);
       }
 
@@ -918,15 +980,21 @@ export default function FolgasView({
           let updatedColab = { ...targetColab };
           const carimbo = `[${new Date().toLocaleString('pt-BR')} - ${usuarioLogado.nome}]: Estornada/cancelada folga de ${sol.data.split('-').reverse().join('/')}. Saldo re-creditado.`;
 
-          if (sol.tipo === 'Banco de Horas') {
+          const isBH = sol.tipo === 'Banco de Horas';
+          const isFE = sol.tipo === 'Folga Enfermagem';
+          const isFF = sol.tipo === 'Folga Feriado';
+          const isB = sol.tipo === 'Brigada de Incêndio' || sol.tipo === 'Folga Brigada';
+          const isE = sol.tipo === 'Eleição' || sol.tipo === 'Folga Eleição';
+
+          if (isBH) {
             updatedColab.bancohoras = targetColab.bancohoras + 12;
-          } else if (sol.tipo === 'Folga Enfermagem') {
+          } else if (isFE) {
             updatedColab.folgaenf = targetColab.folgaenf + 1;
-          } else if (sol.tipo === 'Folga Feriado') {
+          } else if (isFF) {
             updatedColab.folgaferiado = targetColab.folgaferiado + 1;
-          } else if (sol.tipo === 'Folga Brigada') {
+          } else if (isB) {
             updatedColab.brigada = targetColab.brigada + 1;
-          } else if (sol.tipo === 'Folga Eleição') {
+          } else if (isE) {
             updatedColab.eleicao = targetColab.eleicao + 1;
           }
 
@@ -1408,8 +1476,8 @@ export default function FolgasView({
           <span className="text-slate-400 uppercase tracking-wider text-[9px]">Gabarito Visual:</span>
           
           <div className="flex items-center gap-1.5">
-            <span className="w-4 h-4 bg-emerald-600 rounded text-white flex items-center justify-center text-[9px] font-extrabold shadow-xs">FS</span>
-            <span>Folga de Escala</span>
+            <span className="w-4 h-4 bg-emerald-600 rounded text-white flex items-center justify-center text-[9px] font-extrabold shadow-xs">F</span>
+            <span>Folga</span>
           </div>
 
           <div className="flex items-center gap-1.5">
@@ -1418,33 +1486,58 @@ export default function FolgasView({
           </div>
 
           <div className="flex items-center gap-1.5">
+            <span className="w-4 h-4 bg-emerald-600 rounded text-white flex items-center justify-center text-[9px] font-extrabold shadow-xs">B</span>
+            <span>Brigada de Incêndio</span>
+          </div>
+
+          <div className="flex items-center gap-1.5">
             <span className="w-4 h-4 bg-emerald-600 rounded text-white flex items-center justify-center text-[9px] font-extrabold shadow-xs">FF</span>
             <span>Folga Feriado</span>
           </div>
 
           <div className="flex items-center gap-1.5">
-            <span className="w-4 h-4 bg-emerald-600 rounded text-white flex items-center justify-center text-[9px] font-extrabold shadow-xs">FE</span>
-            <span>Folga Eleitoral</span>
+            <span className="w-4 h-4 bg-emerald-600 rounded text-white flex items-center justify-center text-[9px] font-extrabold shadow-xs">I</span>
+            <span>Integração</span>
           </div>
 
           <div className="flex items-center gap-1.5">
-            <span className="w-4 h-4 bg-emerald-600 rounded text-white flex items-center justify-center text-[9px] font-extrabold shadow-xs">FB</span>
-            <span>Folga Brigada</span>
+            <span className="w-4 h-4 bg-emerald-600 rounded text-white flex items-center justify-center text-[9px] font-extrabold shadow-xs">FE</span>
+            <span>Folga Enfermagem</span>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <span className="w-4 h-4 bg-emerald-600 rounded text-white flex items-center justify-center text-[9px] font-extrabold shadow-xs">F</span>
+            <span>Férias</span>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <span className="w-4 h-4 bg-rose-600 rounded text-white flex items-center justify-center text-[9px] font-extrabold shadow-xs">AT</span>
+            <span>Atestado</span>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <span className="w-4 h-4 bg-rose-600 rounded text-white flex items-center justify-center text-[9px] font-extrabold shadow-xs">A</span>
+            <span>Ausente - Falta s/ justificativa</span>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <span className="w-4 h-4 bg-emerald-600 rounded text-white flex items-center justify-center text-[9px] font-extrabold shadow-xs">E</span>
+            <span>Eleição</span>
           </div>
 
           <div className="flex items-center gap-1.5">
             <span className="w-4 h-4 bg-amber-400 text-slate-900 rounded flex items-center justify-center text-[9px] font-black shadow-xs tracking-tighter">?</span>
-            <span>Solicitação Pendente (Homologar)</span>
+            <span>Pendente</span>
           </div>
 
           <div className="flex items-center gap-1.5 border-l border-slate-200 pl-4">
             <span className="w-4 h-3.5 bg-white border border-slate-200 rounded"></span>
-            <span>Dia Plantão (12h)</span>
+            <span>Plantão Escalado</span>
           </div>
 
           <div className="flex items-center gap-1.5">
             <span className="w-4 h-3.5 bg-slate-100 rounded border border-slate-200"></span>
-            <span>Dia Descanso Regular (E/F)</span>
+            <span>Descanso Regular</span>
           </div>
         </div>
 
@@ -1558,6 +1651,51 @@ export default function FolgasView({
                                     const dateStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(dNum).padStart(2, '0')}`;
                                     const req = solicitacoesLookup[`${colab.matricula}-${dateStr}`];
                                     const { isWorkDay } = checkRosteredStatus(colab, dNum);
+
+                                    const chStatus = chamadaStatusLookup[`${colab.matricula}-${dateStr}`];
+                                    if (chStatus) {
+                                      if (chStatus.status === 'Presente' && !isWorkDay) {
+                                        const cellTitle = `${colab.nome}\nData: ${dNum}/${currentMonth}/${currentYear}\nPlantão Adicional: ${chStatus.turno}`;
+                                        return (
+                                          <td key={dNum} onClick={() => handleCellClick(colab, dNum)} className="p-1 border-b border-r border-slate-200 text-center cursor-pointer align-middle bg-gradient-to-br from-emerald-50 to-sky-50" title={cellTitle}>
+                                            <div className="mx-auto w-7 h-7 bg-sky-500 hover:bg-sky-600 text-white font-extrabold text-[8px] rounded-lg shadow-sm flex flex-col items-center justify-center transition-all duration-150 hover:scale-105 select-none font-sans leading-none">
+                                              <span className="text-[6px] opacity-75">PL</span>
+                                              <span className="text-[7px] truncate max-w-full px-0.5">{chStatus.turno === 'Diurno A' ? 'DA' : chStatus.turno === 'Diurno B' ? 'DB' : chStatus.turno === 'Noturno A' ? 'NA' : chStatus.turno === 'Noturno B' ? 'NB' : 'DIR'}</span>
+                                            </div>
+                                          </td>
+                                        );
+                                      }
+                                      if (chStatus.status === 'Falta') {
+                                        const cellTitle = `${colab.nome}\nData: ${dNum}/${currentMonth}/${currentYear}\nFalta (Chamada Diária)`;
+                                        return (
+                                          <td key={dNum} onClick={() => handleCellClick(colab, dNum)} className="p-1 border-b border-r border-slate-200 text-center cursor-pointer align-middle bg-rose-50" title={cellTitle}>
+                                            <div className="mx-auto w-7 h-7 bg-red-150 text-red-600 border border-red-300 font-extrabold text-[10px] rounded-lg shadow-sm flex items-center justify-center transition-all duration-150 hover:scale-105 select-none font-sans">
+                                              A
+                                            </div>
+                                          </td>
+                                        );
+                                      }
+                                      if (chStatus.status === 'Folga') {
+                                        const cellTitle = `${colab.nome}\nData: ${dNum}/${currentMonth}/${currentYear}\nFolga (Chamada Diária)`;
+                                        return (
+                                          <td key={dNum} onClick={() => handleCellClick(colab, dNum)} className="p-1 border-b border-r border-slate-200 text-center cursor-pointer align-middle bg-emerald-50" title={cellTitle}>
+                                            <div className="mx-auto w-7 h-7 bg-emerald-600 text-white font-extrabold text-[10px] rounded-lg shadow-sm flex items-center justify-center transition-all duration-150 hover:scale-105 select-none font-sans">
+                                              F
+                                            </div>
+                                          </td>
+                                        );
+                                      }
+                                      if (chStatus.status === 'Atestado') {
+                                        const cellTitle = `${colab.nome}\nData: ${dNum}/${currentMonth}/${currentYear}\nAtestado (Chamada Diária)`;
+                                        return (
+                                          <td key={dNum} onClick={() => handleCellClick(colab, dNum)} className="p-1 border-b border-r border-slate-200 text-center cursor-pointer align-middle bg-rose-50" title={cellTitle}>
+                                            <div className="mx-auto w-7 h-7 bg-red-100 text-red-600 border border-red-300 font-extrabold text-[10px] rounded-lg shadow-sm flex items-center justify-center transition-all duration-150 hover:scale-105 select-none font-sans">
+                                              AT
+                                            </div>
+                                          </td>
+                                        );
+                                      }
+                                    }
 
                                     const hasInss = isColabOnInssOnDay(colab, currentYear, currentMonth, dNum);
                                     if (hasInss) {
@@ -2116,15 +2254,17 @@ export default function FolgasView({
                         onChange={(e: any) => setModalTipoFolga(e.target.value)}
                         className="w-full font-bold bg-slate-50 border border-slate-200 p-2 rounded-xl text-slate-700 text-xs focus:outline-none focus:ring-1 focus:ring-sky-500 cursor-pointer"
                       >
-                        <option value="Folga de Escala">Folga de Escala (FS)</option>
+                        <option value="Folga">Folga (F)</option>
                         <option value="Banco de Horas">Banco de Horas (BH)</option>
+                        <option value="Brigada de Incêndio">Brigada de Incêndio (B)</option>
                         <option value="Folga Feriado">Folga Feriado (FF)</option>
-                        <option value="Folga Enfermagem font-semibold">Folga Enfermagem (FE - Doação/Treinamento)</option>
-                        <option value="Folga Brigada">Folga Brigada (FB)</option>
-                        <option value="Folga Eleição">Folga Eleição (FE - Eleitoral)</option>
-                        <option value="Integração">Integração</option>
-                        <option value="Falta">Falta / Ausência</option>
-                        <option value="Folga Troca de Plantão">Folga Troca de Plantão</option>
+                        <option value="Integração">Integração (I)</option>
+                        <option value="Folga Enfermagem">Folga Enfermagem (FE)</option>
+                        <option value="Férias">Férias (F)</option>
+                        <option value="Atestado">Atestado (AT)</option>
+                        <option value="Ausente - Falta s/ justificativa">Ausente - Falta s/ justificativa (A)</option>
+                        <option value="Eleição">Eleição (E)</option>
+                        <option value="Folga Troca de Plantão">Troca de Plantão (X)</option>
                       </select>
                     </div>
 
@@ -2146,9 +2286,9 @@ export default function FolgasView({
 
                   <button
                     type="submit"
-                    className="bg-indigo-650 hover:bg-indigo-750 text-white font-extrabold py-2.5 px-4 rounded-xl cursor-pointer w-full text-center shadow-xs hover:shadow-md transition active:scale-95"
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-2.5 px-4 rounded-xl cursor-pointer w-full text-center shadow-xs hover:shadow-md transition active:scale-95"
                   >
-                    Conceder / Lançar Folga
+                    Salvar Folga
                   </button>
                 </form>
               )}
@@ -2499,24 +2639,27 @@ export default function FolgasView({
               <div>
                 <span className="text-slate-750 font-extrabold block mb-1">GABARITO DE LEGENDAS:</span>
                 <span>(Vazio): Plantão Escalado de 12 horas</span><br/>
-                <span>-: Dia de Descanso Operacional / Folga de Equipe</span>
+                <span>-: Descanso Operacional / Folga de Equipe</span><br/>
+                <span><b>F</b>: Folga / Férias</span>
               </div>
               <div>
                 <span className="text-slate-750 font-extrabold block mb-1">AFASTAMENTOS:</span>
-                <span><b>INSS</b>: Afastamento Previdenciário ou Licença</span><br/>
-                <span><b>AT</b>: Atestado de Saúde Homologado</span>
+                <span><b>INSS</b>: Afastamento Previdenciário</span><br/>
+                <span><b>AT</b>: Atestado</span><br/>
+                <span><b>A</b>: Ausente - Falta s/ justificativa</span>
               </div>
               <div>
                 <span className="text-slate-755 font-extrabold block mb-1">FOLGAS CONCEDIDAS:</span>
-                <span><b>FS</b>: Folga de Escala mensal comum</span><br/>
-                <span><b>BH</b>: Lançamento de folga por Banco de Horas</span><br/>
-                <span><b>FF</b>: Folga Feriado (Compensatória)</span>
+                <span><b>BH</b>: Banco de Horas</span><br/>
+                <span><b>FF</b>: Folga Feriado</span><br/>
+                <span><b>FE</b>: Folga Enfermagem</span>
               </div>
               <div>
-                <span className="text-slate-755 font-extrabold block mb-1">OUTROS REQUISITOS:</span>
-                <span><b>FE</b>: Folga por Convocação Eleitoral</span><br/>
-                <span><b>FB</b>: Folga decorrente de Brigada de Incêndio</span><br/>
-                <span><b>REM</b>: Profissional remanejado para outro setor assistencial</span>
+                <span className="text-slate-755 font-extrabold block mb-1">OUTROS:</span>
+                <span><b>B</b>: Brigada de Incêndio</span><br/>
+                <span><b>I</b>: Integração</span><br/>
+                <span><b>E</b>: Eleição</span><br/>
+                <span><b>REM</b>: Remanejado de Setor</span>
               </div>
             </div>
 
