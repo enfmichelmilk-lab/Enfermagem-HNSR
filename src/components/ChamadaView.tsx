@@ -672,13 +672,42 @@ export default function ChamadaView({
     }
   };
 
+  const fallbackCopyText = (text: string) => {
+    try {
+      const textArea = document.createElement("textarea");
+      textArea.value = text;
+      textArea.style.top = "0";
+      textArea.style.left = "0";
+      textArea.style.position = "fixed";
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      const successful = document.execCommand('copy');
+      document.body.removeChild(textArea);
+      if (successful) {
+        setCopiedSuccess(true);
+        setTimeout(() => setCopiedSuccess(false), 2500);
+      } else {
+        alert("Não foi possível copiar automaticamente. Por favor, copie manualmente do campo de texto.");
+      }
+    } catch (err) {
+      console.error('Fallback copy fail: ', err);
+      alert("Não foi possível copiar automaticamente. Por favor, copie manualmente.");
+    }
+  };
+
   const handleCopyTextToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text).then(() => {
-      setCopiedSuccess(true);
-      setTimeout(() => setCopiedSuccess(false), 2500);
-    }).catch(err => {
-      console.error('Failed to copy text: ', err);
-    });
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(() => {
+        setCopiedSuccess(true);
+        setTimeout(() => setCopiedSuccess(false), 2500);
+      }).catch(err => {
+        console.warn('Clipboard API failed, trying fallback: ', err);
+        fallbackCopyText(text);
+      });
+    } else {
+      fallbackCopyText(text);
+    }
   };
 
   // Grouping of draft colaboradores by sector for easy form layout
@@ -1505,9 +1534,12 @@ export default function ChamadaView({
 
               {/* Text formatting view block */}
               <div className="relative">
-                <pre className="p-4 bg-slate-50 border border-slate-200 rounded-2xl text-[11px] text-slate-750 font-mono overflow-auto max-h-96 whitespace-pre-wrap leading-normal leading-relaxed select-all">
-                  {viewingReportText}
-                </pre>
+                <textarea
+                  value={viewingReportText}
+                  onChange={(e) => setViewingReportText(e.target.value)}
+                  className="w-full p-4 pr-32 bg-slate-50 border border-slate-200 rounded-2xl text-[11px] text-slate-750 font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500 overflow-auto h-80 whitespace-pre-wrap leading-relaxed select-all"
+                  placeholder="Texto da chamada..."
+                />
 
                 <button
                   type="button"

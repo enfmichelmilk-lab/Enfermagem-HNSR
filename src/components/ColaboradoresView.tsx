@@ -2255,8 +2255,40 @@ Atenciosamente,
                   const textToCopy = hasAccess 
                     ? whatsappNotification.message 
                     : whatsappNotification.message.replaceAll(senhaProvisoria, '••••••••');
-                  navigator.clipboard.writeText(textToCopy);
-                  alert("Mensagem copiada para a área de transferência com sucesso!");
+                    
+                  try {
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                      navigator.clipboard.writeText(textToCopy).then(() => {
+                        alert("Mensagem copiada para a área de transferência com sucesso!");
+                      }).catch(() => {
+                        const textArea = document.createElement("textarea");
+                        textArea.value = textToCopy;
+                        textArea.style.position = "fixed";
+                        textArea.style.top = "0";
+                        textArea.style.left = "0";
+                        document.body.appendChild(textArea);
+                        textArea.focus();
+                        textArea.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(textArea);
+                        alert("Mensagem copiada para a área de transferência com sucesso!");
+                      });
+                    } else {
+                      const textArea = document.createElement("textarea");
+                      textArea.value = textToCopy;
+                      textArea.style.position = "fixed";
+                      textArea.style.top = "0";
+                      textArea.style.left = "0";
+                      document.body.appendChild(textArea);
+                      textArea.focus();
+                      textArea.select();
+                      document.execCommand('copy');
+                      document.body.removeChild(textArea);
+                      alert("Mensagem copiada para a área de transferência com sucesso!");
+                    }
+                  } catch (err) {
+                    alert("Mensagem não pôde ser copiada automaticamente. Copie manualmente do texto.");
+                  }
                 }}
                 className="px-4 py-2 border border-slate-300 text-slate-600 font-bold rounded-xl text-xs hover:bg-slate-100 transition whitespace-nowrap font-sans"
               >
