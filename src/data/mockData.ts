@@ -287,40 +287,323 @@ export const SOLICITACOES_FOLGA_INICIAL: SolicitacaoFolga[] = [
 export const CURSOS_INICIAIS: Curso[] = [
   {
     id: "CUR-001",
-    nome: "Suporte Avançado de Vida (SAV)",
-    descricao: "Protocolos essenciais de PCR, desfibrilação e vias aéreas avançadas.",
+    nome: "Aprenda a Notificar Incidentes e Buscar Documentos",
+    descricao: "Guia prático para registro de ocorrências assistenciais e consulta de manuais institucionais.",
     targets: [
-      { cargo: "Enfermeiro(a)", obrigatorio: true },
-      { cargo: "Tec. Enf.", obrigatorio: true },
       { cargo: "Supervisor(a)", obrigatorio: true },
-      { cargo: "Coordenador(a)", obrigatorio: true }
-    ],
-    dataCriacao: "2026-06-25"
-  },
-  {
-    id: "CUR-002",
-    nome: "Prevenção de Lesões por Pressão (LPP)",
-    descricao: "Diretrizes nacionais para avaliação de escala de Braden e cuidado à pele.",
-    targets: [
-      { cargo: "Enfermeiro(a)", obrigatorio: true },
-      { cargo: "Tec. Enf.", obrigatorio: true },
-      { cargo: "Aux. Enf.", obrigatorio: true }
-    ],
-    dataCriacao: "2026-06-25"
-  },
-  {
-    id: "CUR-003",
-    nome: "NR-32: Segurança na Saúde",
-    descricao: "Norma regulamentadora para proteção e segurança de profissionais da saúde.",
-    targets: [
+      { cargo: "Coordenador(a)", obrigatorio: true },
+      { cargo: "Gerente", obrigatorio: true },
       { cargo: "Enfermeiro(a)", obrigatorio: true },
       { cargo: "Tec. Enf.", obrigatorio: true },
       { cargo: "Aux. Enf.", obrigatorio: true },
       { cargo: "Administrativo", obrigatorio: true },
       { cargo: "Estagiária", obrigatorio: true },
-      { cargo: "Gerente", obrigatorio: true },
+      { cargo: "Outros", obrigatorio: true }
+    ],
+    dataCriacao: "2026-06-25"
+  },
+  {
+    id: "CUR-002",
+    nome: "Assédio e Discriminação",
+    descricao: "Treinamento obrigatório sobre ética, respeito e canais de denúncia no ambiente corporativo.",
+    targets: [
       { cargo: "Supervisor(a)", obrigatorio: true },
-      { cargo: "Coordenador(a)", obrigatorio: true }
+      { cargo: "Coordenador(a)", obrigatorio: true },
+      { cargo: "Gerente", obrigatorio: true },
+      { cargo: "Enfermeiro(a)", obrigatorio: true },
+      { cargo: "Tec. Enf.", obrigatorio: true },
+      { cargo: "Aux. Enf.", obrigatorio: true },
+      { cargo: "Administrativo", obrigatorio: true },
+      { cargo: "Estagiária", obrigatorio: true },
+      { cargo: "Outros", obrigatorio: true }
+    ],
+    dataCriacao: "2026-06-25"
+  },
+  {
+    id: "CUR-003",
+    nome: "Gerenciamento de Resíduos – 2026",
+    descricao: "Boas práticas de descarte, segregação e sustentabilidade no ambiente hospitalar.",
+    targets: [
+      { cargo: "Supervisor(a)", obrigatorio: true },
+      { cargo: "Coordenador(a)", obrigatorio: true },
+      { cargo: "Gerente", obrigatorio: true },
+      { cargo: "Enfermeiro(a)", obrigatorio: true },
+      { cargo: "Tec. Enf.", obrigatorio: true },
+      { cargo: "Aux. Enf.", obrigatorio: true },
+      { cargo: "Administrativo", obrigatorio: true },
+      { cargo: "Estagiária", obrigatorio: true },
+      { cargo: "Outros", obrigatorio: true }
+    ],
+    dataCriacao: "2026-06-25"
+  },
+  {
+    id: "CUR-004",
+    nome: "Integridade e Compliance – 2026",
+    descricao: "Diretrizes de conformidade, transparência e conduta ética no HNSR.",
+    targets: [
+      { cargo: "Supervisor(a)", obrigatorio: true },
+      { cargo: "Coordenador(a)", obrigatorio: true },
+      { cargo: "Gerente", obrigatorio: true },
+      { cargo: "Enfermeiro(a)", obrigatorio: true },
+      { cargo: "Tec. Enf.", obrigatorio: true },
+      { cargo: "Aux. Enf.", obrigatorio: true },
+      { cargo: "Administrativo", obrigatorio: true },
+      { cargo: "Estagiária", obrigatorio: true },
+      { cargo: "Outros", obrigatorio: true }
+    ],
+    dataCriacao: "2026-06-25"
+  },
+  {
+    id: "CUR-005",
+    nome: "LGPD – 2026",
+    descricao: "Princípios da Lei Geral de Proteção de Dados aplicados ao sigilo e prontuário do paciente.",
+    targets: [
+      { cargo: "Supervisor(a)", obrigatorio: true },
+      { cargo: "Coordenador(a)", obrigatorio: true },
+      { cargo: "Gerente", obrigatorio: true },
+      { cargo: "Enfermeiro(a)", obrigatorio: true },
+      { cargo: "Tec. Enf.", obrigatorio: true },
+      { cargo: "Aux. Enf.", obrigatorio: true },
+      { cargo: "Administrativo", obrigatorio: true },
+      { cargo: "Estagiária", obrigatorio: true },
+      { cargo: "Outros", obrigatorio: true }
+    ],
+    dataCriacao: "2026-06-25"
+  },
+  {
+    id: "CUR-006",
+    nome: "Metas Internacionais de Segurança do Paciente",
+    descricao: "As 6 metas essenciais estabelecidas pela OMS para assegurar a excelência clínica.",
+    targets: [
+      { cargo: "Supervisor(a)", obrigatorio: true },
+      { cargo: "Coordenador(a)", obrigatorio: true },
+      { cargo: "Gerente", obrigatorio: true },
+      { cargo: "Enfermeiro(a)", obrigatorio: true },
+      { cargo: "Tec. Enf.", obrigatorio: true },
+      { cargo: "Aux. Enf.", obrigatorio: true },
+      { cargo: "Administrativo", obrigatorio: true },
+      { cargo: "Estagiária", obrigatorio: true },
+      { cargo: "Outros", obrigatorio: true }
+    ],
+    dataCriacao: "2026-06-25"
+  },
+  {
+    id: "CUR-007",
+    nome: "Treinamento SCIH/SCIRAS",
+    descricao: "Critérios de vigilância epidemiológica e controle de infecção relacionada à assistência à saúde.",
+    targets: [
+      { cargo: "Supervisor(a)", obrigatorio: true },
+      { cargo: "Coordenador(a)", obrigatorio: true },
+      { cargo: "Gerente", obrigatorio: true },
+      { cargo: "Enfermeiro(a)", obrigatorio: true },
+      { cargo: "Tec. Enf.", obrigatorio: true },
+      { cargo: "Aux. Enf.", obrigatorio: true },
+      { cargo: "Administrativo", obrigatorio: true },
+      { cargo: "Estagiária", obrigatorio: true },
+      { cargo: "Outros", obrigatorio: true }
+    ],
+    dataCriacao: "2026-06-25"
+  },
+  {
+    id: "CUR-008",
+    nome: "Missão Prevenção: Uma Jornada Contra Infecções",
+    descricao: "Uso correto de EPIs, higienização de mãos e isolamento preventivo de germes multirresistentes.",
+    targets: [
+      { cargo: "Supervisor(a)", obrigatorio: true },
+      { cargo: "Coordenador(a)", obrigatorio: true },
+      { cargo: "Gerente", obrigatorio: true },
+      { cargo: "Enfermeiro(a)", obrigatorio: true },
+      { cargo: "Tec. Enf.", obrigatorio: true },
+      { cargo: "Aux. Enf.", obrigatorio: true },
+      { cargo: "Administrativo", obrigatorio: true },
+      { cargo: "Estagiária", obrigatorio: true },
+      { cargo: "Outros", obrigatorio: true }
+    ],
+    dataCriacao: "2026-06-25"
+  },
+  {
+    id: "CUR-009",
+    nome: "Práticas Assistenciais e Projetos Salvam Vidas",
+    descricao: "Melhoria contínua de processos assistenciais na enfermagem para redução de desfechos adversos.",
+    targets: [
+      { cargo: "Supervisor(a)", obrigatorio: true },
+      { cargo: "Coordenador(a)", obrigatorio: true },
+      { cargo: "Gerente", obrigatorio: true },
+      { cargo: "Enfermeiro(a)", obrigatorio: true },
+      { cargo: "Tec. Enf.", obrigatorio: true },
+      { cargo: "Aux. Enf.", obrigatorio: true },
+      { cargo: "Administrativo", obrigatorio: true },
+      { cargo: "Estagiária", obrigatorio: true },
+      { cargo: "Outros", obrigatorio: true }
+    ],
+    dataCriacao: "2026-06-25"
+  },
+  {
+    id: "CUR-010",
+    nome: "Procedimentos Privativos da Enfermagem",
+    descricao: "COFEN e orientações institucionais sobre passagem de sondas, acessos centrais e curativos especiais.",
+    targets: [
+      { cargo: "Supervisor(a)", obrigatorio: true },
+      { cargo: "Coordenador(a)", obrigatorio: true },
+      { cargo: "Gerente", obrigatorio: true },
+      { cargo: "Enfermeiro(a)", obrigatorio: true },
+      { cargo: "Tec. Enf.", obrigatorio: true },
+      { cargo: "Aux. Enf.", obrigatorio: true },
+      { cargo: "Administrativo", obrigatorio: true },
+      { cargo: "Estagiária", obrigatorio: true },
+      { cargo: "Outros", obrigatorio: true }
+    ],
+    dataCriacao: "2026-06-25"
+  },
+  {
+    id: "CUR-011",
+    nome: "Protocolo Institucional de Tromboembolismo Venoso (TEV)",
+    descricao: "Estratificação de risco e profilaxia medicamentosa e mecânica adequada para pacientes internados.",
+    targets: [
+      { cargo: "Supervisor(a)", obrigatorio: true },
+      { cargo: "Coordenador(a)", obrigatorio: true },
+      { cargo: "Gerente", obrigatorio: true },
+      { cargo: "Enfermeiro(a)", obrigatorio: true },
+      { cargo: "Tec. Enf.", obrigatorio: true },
+      { cargo: "Aux. Enf.", obrigatorio: true },
+      { cargo: "Administrativo", obrigatorio: true },
+      { cargo: "Estagiária", obrigatorio: true },
+      { cargo: "Outros", obrigatorio: true }
+    ],
+    dataCriacao: "2026-06-25"
+  },
+  {
+    id: "CUR-012",
+    nome: "Segurança da Informação – 2026",
+    descricao: "Prevenção contra engenharia social, phishing e uso seguro das senhas dos sistemas hospitalares.",
+    targets: [
+      { cargo: "Supervisor(a)", obrigatorio: true },
+      { cargo: "Coordenador(a)", obrigatorio: true },
+      { cargo: "Gerente", obrigatorio: true },
+      { cargo: "Enfermeiro(a)", obrigatorio: true },
+      { cargo: "Tec. Enf.", obrigatorio: true },
+      { cargo: "Aux. Enf.", obrigatorio: true },
+      { cargo: "Administrativo", obrigatorio: true },
+      { cargo: "Estagiária", obrigatorio: true },
+      { cargo: "Outros", obrigatorio: true }
+    ],
+    dataCriacao: "2026-06-25"
+  },
+  {
+    id: "CUR-013",
+    nome: "Treinamento de SBV – Suporte Básico à Vida",
+    descricao: "Compressões torácicas de alta qualidade, ventilação e manuseio rápido do DEA.",
+    targets: [
+      { cargo: "Supervisor(a)", obrigatorio: true },
+      { cargo: "Coordenador(a)", obrigatorio: true },
+      { cargo: "Gerente", obrigatorio: true },
+      { cargo: "Enfermeiro(a)", obrigatorio: true },
+      { cargo: "Tec. Enf.", obrigatorio: true },
+      { cargo: "Aux. Enf.", obrigatorio: true },
+      { cargo: "Administrativo", obrigatorio: true },
+      { cargo: "Estagiária", obrigatorio: true },
+      { cargo: "Outros", obrigatorio: true }
+    ],
+    dataCriacao: "2026-06-25"
+  },
+  {
+    id: "CUR-014",
+    nome: "Trilha Centro Cirúrgico",
+    descricao: "Checklist de cirurgia segura, escovação cirúrgica e segurança na instrumentação.",
+    targets: [
+      { cargo: "Supervisor(a)", obrigatorio: true },
+      { cargo: "Coordenador(a)", obrigatorio: true },
+      { cargo: "Gerente", obrigatorio: true },
+      { cargo: "Enfermeiro(a)", obrigatorio: true },
+      { cargo: "Tec. Enf.", obrigatorio: true },
+      { cargo: "Aux. Enf.", obrigatorio: true },
+      { cargo: "Administrativo", obrigatorio: true },
+      { cargo: "Estagiária", obrigatorio: true },
+      { cargo: "Outros", obrigatorio: true }
+    ],
+    dataCriacao: "2026-06-25"
+  },
+  {
+    id: "CUR-015",
+    nome: "Trilha CME – Módulo 01",
+    descricao: "Limpeza, desinfecção e acondicionamento seguro de artigos termossensíveis e instrumentais.",
+    targets: [
+      { cargo: "Supervisor(a)", obrigatorio: true },
+      { cargo: "Coordenador(a)", obrigatorio: true },
+      { cargo: "Gerente", obrigatorio: true },
+      { cargo: "Enfermeiro(a)", obrigatorio: true },
+      { cargo: "Tec. Enf.", obrigatorio: true },
+      { cargo: "Aux. Enf.", obrigatorio: true },
+      { cargo: "Administrativo", obrigatorio: true },
+      { cargo: "Estagiária", obrigatorio: true },
+      { cargo: "Outros", obrigatorio: true }
+    ],
+    dataCriacao: "2026-06-25"
+  },
+  {
+    id: "CUR-016",
+    nome: "Guia de Boas Práticas: Uso e Remoção Segura de Hypafix",
+    descricao: "Fixação e cuidados de curativos sem causar lesões por fricção ou remoção traumática.",
+    targets: [
+      { cargo: "Supervisor(a)", obrigatorio: true },
+      { cargo: "Coordenador(a)", obrigatorio: true },
+      { cargo: "Gerente", obrigatorio: true },
+      { cargo: "Enfermeiro(a)", obrigatorio: true },
+      { cargo: "Tec. Enf.", obrigatorio: true },
+      { cargo: "Aux. Enf.", obrigatorio: true },
+      { cargo: "Administrativo", obrigatorio: true },
+      { cargo: "Estagiária", obrigatorio: true },
+      { cargo: "Outros", obrigatorio: true }
+    ],
+    dataCriacao: "2026-06-25"
+  },
+  {
+    id: "CUR-017",
+    nome: "Cadeia Medicamentosa",
+    descricao: "Os 9 certos na administração de medicamentos e dupla checagem de fármacos de alta vigilância.",
+    targets: [
+      { cargo: "Supervisor(a)", obrigatorio: true },
+      { cargo: "Coordenador(a)", obrigatorio: true },
+      { cargo: "Gerente", obrigatorio: true },
+      { cargo: "Enfermeiro(a)", obrigatorio: true },
+      { cargo: "Tec. Enf.", obrigatorio: true },
+      { cargo: "Aux. Enf.", obrigatorio: true },
+      { cargo: "Administrativo", obrigatorio: true },
+      { cargo: "Estagiária", obrigatorio: true },
+      { cargo: "Outros", obrigatorio: true }
+    ],
+    dataCriacao: "2026-06-25"
+  },
+  {
+    id: "CUR-018",
+    nome: "Módulo 01 – Tipos de Documentos para Gestores",
+    descricao: "Gestão documental, políticas de arquivamento e validação de manuais operacionais padrão (SOP).",
+    targets: [
+      { cargo: "Supervisor(a)", obrigatorio: true },
+      { cargo: "Coordenador(a)", obrigatorio: true },
+      { cargo: "Gerente", obrigatorio: true }
+    ],
+    dataCriacao: "2026-06-25"
+  },
+  {
+    id: "CUR-019",
+    nome: "Módulo 02 – Workflow das Notificações em Sistema para Gestores",
+    descricao: "Tratamento de desvios, plano de ação corretivo e fluxo de aprovação de eventos adversos.",
+    targets: [
+      { cargo: "Supervisor(a)", obrigatorio: true },
+      { cargo: "Coordenador(a)", obrigatorio: true },
+      { cargo: "Gerente", obrigatorio: true }
+    ],
+    dataCriacao: "2026-06-25"
+  },
+  {
+    id: "CUR-020",
+    nome: "Módulo 02 – Tipos de Documentos para Gestores",
+    descricao: "Auditoria, validação e revisão sistemática de diretrizes organizacionais assistenciais.",
+    targets: [
+      { cargo: "Supervisor(a)", obrigatorio: true },
+      { cargo: "Coordenador(a)", obrigatorio: true },
+      { cargo: "Gerente", obrigatorio: true }
     ],
     dataCriacao: "2026-06-25"
   }

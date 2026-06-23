@@ -29,7 +29,8 @@ import {
   Clipboard,
   FileText,
   Sparkles,
-  Pencil
+  Pencil,
+  RefreshCw
 } from 'lucide-react';
 import { Curso, CertificadoCurso, Colaborador, CourseTarget } from '../types';
 import { subscribeCollection, saveDocument, removeDocument } from '../lib/firebase';
@@ -74,12 +75,6 @@ export default function UniversidadeView({ colaboradores }: UniversidadeViewProp
   const [newCourseNome, setNewCourseNome] = useState('');
   const [newCourseDesc, setNewCourseDesc] = useState('');
   const [newCourseTargets, setNewCourseTargets] = useState<{ [cargo: string]: { selected: boolean; obrigatorio: boolean } }>({});
-
-  // BULK COURSE STATES
-  const [isBulkAddingCourses, setIsBulkAddingCourses] = useState(false);
-  const [bulkPastedCoursesText, setBulkPastedCoursesText] = useState('');
-  const [isExtractingCoursesBulk, setIsExtractingCoursesBulk] = useState(false);
-  const [bulkExtractedCoursesDrafts, setBulkExtractedCoursesDrafts] = useState<any[]>([]);
 
   // Initialize targets for form
   useEffect(() => {
@@ -207,7 +202,6 @@ export default function UniversidadeView({ colaboradores }: UniversidadeViewProp
     });
     setNewCourseTargets(initial);
     setIsAddingCourse(true);
-    setIsBulkAddingCourses(false);
     
     // Scroll smoothly to form
     setTimeout(() => {
@@ -229,6 +223,36 @@ export default function UniversidadeView({ colaboradores }: UniversidadeViewProp
     } catch (err) {
       console.error(err);
       customAlert("Erro ao remover curso do banco.");
+    }
+  };
+
+  // Helper: Clean and Reset Course Database to default mock standard courses
+  const handleResetCoursesDatabase = async () => {
+    const confirm = await customConfirm("ATENÇÃO: Deseja realmente LIMPAR e corrigr o banco de dados de cursos? Todos os cursos personalizados serão excluídos e os cursos padrão clínicos do HNSR serão restaurados.");
+    if (!confirm) return;
+
+    try {
+      // 1. Delete all current courses from Firestore & localStorage backup
+      for (const curso of cursos) {
+        await removeDocument('universidade_cursos', curso.id);
+      }
+
+      // 2. Clear local storage backup completely
+      localStorage.removeItem('hnsr_universidade_cursos_db');
+
+      // 3. Write standard clinical mock courses to Firestore
+      for (const item of CURSOS_INICIAIS) {
+        await saveDocument('universidade_cursos', item.id, item);
+      }
+
+      // 4. Update local state
+      setCursos(CURSOS_INICIAIS);
+      localStorage.setItem('hnsr_universidade_cursos_db', JSON.stringify(CURSOS_INICIAIS));
+
+      customAlert("Banco de dados de cursos limpo e corrigido com sucesso!");
+    } catch (err) {
+      console.error("Erro ao resetar banco de dados de cursos:", err);
+      customAlert("Erro ao limpar e resetar o banco de dados de cursos.");
     }
   };
 
@@ -501,93 +525,6 @@ export default function UniversidadeView({ colaboradores }: UniversidadeViewProp
     setExtractedTextList([]);
     setPastedText('');
     customAlert(`${successes} certificados em lote foram homologados e integrados com sucesso ao sistema!`);
-  };
-
-  // BULK COURSES IA EXTRACTION
-  const handleBulkCourseExtract = async () => {
-    if (!bulkPastedCoursesText.trim()) {
-      customAlert("Por favor, cole uma lista de cursos ou objetivos pedagógicos!");
-      return;
-    }
-
-    setIsExtractingCoursesBulk(true);
-    setBulkExtractedCoursesDrafts([]);
-
-    try {
-      const res = await fetch('/api/universidade/extract-courses-bulk', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ textContent: bulkPastedCoursesText })
-      });
-
-      if (!res.ok) {
-        throw new Error("Falha no servidor ao processar os cursos.");
-      }
-
-      const listResult = await res.json();
-      if (!Array.isArray(listResult)) {
-        throw new Error("Resposta em formato inválido do servidor.");
-      }
-
-      // Map each course to have a temporary ID and selection state
-      const mapped = listResult.map((item: any, idx: number) => ({
-        id: `BULK-${idx}-${Date.now()}`,
-        nome: item.nome || '',
-        descricao: item.descricao || '',
-        targets: item.targets || [],
-        selected: true
-      }));
-
-      setBulkExtractedCoursesDrafts(mapped);
-      if (mapped.length === 0) {
-        customAlert("Nenhum curso foi identificado no texto inserido.");
-      }
-    } catch (err: any) {
-      console.error(err);
-      customAlert(`Erro na extração: ${err.message || String(err)}`);
-    } finally {
-      setIsExtractingCoursesBulk(false);
-    }
-  };
-
-  // SAVE BULK EXTRACTED COURSES
-  const handleSaveBulkCourses = async () => {
-    const selectedDrafts = bulkExtractedCoursesDrafts.filter(d => d.selected);
-    if (selectedDrafts.length === 0) {
-      customAlert("Selecione pelo menos um curso válido para cadastrar!");
-      return;
-    }
-
-    let successes = 0;
-    const addedCursos: Curso[] = [];
-
-    for (const draft of selectedDrafts) {
-      const newCurso: Curso = {
-        id: `CUR-${Date.now()}-${successes}`,
-        nome: draft.nome.trim(),
-        descricao: draft.descricao.trim(),
-        targets: draft.targets,
-        dataCriacao: new Date().toISOString().split('T')[0]
-      };
-
-      try {
-        await saveDocument('universidade_cursos', newCurso.id, newCurso);
-        addedCursos.push(newCurso);
-        successes++;
-      } catch (err) {
-        console.error("Erro ao salvar curso em lote:", err);
-      }
-    }
-
-    if (successes > 0) {
-      setCursos(prev => [...addedCursos, ...prev]);
-      setBulkExtractedCoursesDrafts([]);
-      setBulkPastedCoursesText('');
-      setIsBulkAddingCourses(false);
-      customAlert(`${successes} cursos foram cadastrados em lote com sucesso!`);
-    } else {
-      customAlert("Nenhum curso pôde ser cadastrado devido a falhas de rede ou banco.");
-    }
   };
 
   // Helper Delete Certificate
@@ -1059,9 +996,6 @@ export default function UniversidadeView({ colaboradores }: UniversidadeViewProp
                 <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
                   <button
                     onClick={() => {
-                      if (isBulkAddingCourses) {
-                        setIsBulkAddingCourses(false);
-                      }
                       if (isAddingCourse && editingCourseId) {
                         // Reset editing mode and set to create mode
                         setEditingCourseId(null);
@@ -1089,21 +1023,12 @@ export default function UniversidadeView({ colaboradores }: UniversidadeViewProp
                   </button>
 
                   <button
-                    onClick={() => {
-                      setIsAddingCourse(false);
-                      setEditingCourseId(null);
-                      setIsBulkAddingCourses(prev => !prev);
-                    }}
-                    className="px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white font-extrabold rounded-xl text-xs flex items-center justify-center gap-1.5 transition cursor-pointer"
+                    onClick={handleResetCoursesDatabase}
+                    className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-extrabold rounded-xl text-xs flex items-center justify-center gap-1.5 transition cursor-pointer shadow-md shadow-rose-650/10"
+                    title="Limpar e Corrigir Banco de Cursos"
                   >
-                    {isBulkAddingCourses ? (
-                      <span>Fechar Lote</span>
-                    ) : (
-                      <>
-                        <Sparkles className="w-4 h-4 text-amber-300" />
-                        <span>Cadastrar em Massa</span>
-                      </>
-                    )}
+                    <RefreshCw className="w-4 h-4 animate-spin-hover" />
+                    <span>Limpar e Corrigir Banco</span>
                   </button>
                 </div>
               </div>
@@ -1284,206 +1209,6 @@ export default function UniversidadeView({ colaboradores }: UniversidadeViewProp
                       </button>
                     </div>
                   </form>
-                </motion.div>
-              )}
-
-              {/* BULK COURSE INGESTION FORM */}
-              {isBulkAddingCourses && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="bg-white border border-slate-200 rounded-3xl p-6 shadow-md overflow-hidden space-y-5"
-                >
-                  <div className="border-b border-slate-100 pb-3">
-                    <h3 className="font-extrabold text-slate-900 text-xs uppercase tracking-wider flex items-center gap-1.5">
-                      <Sparkles className="w-4 h-4 text-amber-500" />
-                      <span>Cadastrar Cursos em Massa (Lote com IA)</span>
-                    </h3>
-                    <p className="text-[10px] text-slate-500">
-                      Digite ou cole uma lista de novos cursos, treinamentos planejados ou ementas. Nossa inteligência artificial (Gemini) vai identificar automaticamente o nome, descrição de cada curso e o público-alvo recomendado ou obrigatório de acordo com as diretrizes hospitalares!
-                    </p>
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-[11px] font-extrabold text-slate-600 block">Texto livre ou lista de treinamentos:</label>
-                    <textarea
-                      rows={5}
-                      value={bulkPastedCoursesText}
-                      onChange={(e) => setBulkPastedCoursesText(e.target.value)}
-                      placeholder={`Exemplo de lista para colar:\n- Curso de Prevenção de Infecção Hospitalar obrigatório para todos da Enfermagem.\n- SAV (Suporte Avançado de Vida) com PCR, desfibrilador e intubação, obrigatório para Enfermeiros, Coordenadores e Supervisores.\n- Farmacologia aplicada de modo recomendado para técnicos de enfermagem e estagiárias.`}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-xs focus:outline-none focus:ring-1 focus:ring-sky-500 font-semibold"
-                    />
-                  </div>
-
-                  <div className="flex justify-end gap-2 pt-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsBulkAddingCourses(false);
-                        setBulkPastedCoursesText('');
-                        setBulkExtractedCoursesDrafts([]);
-                      }}
-                      className="px-4 py-2 border border-slate-200 hover:bg-slate-100 font-extrabold rounded-xl text-xs text-slate-500 transition cursor-pointer"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleBulkCourseExtract}
-                      disabled={isExtractingCoursesBulk}
-                      className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-extrabold rounded-xl text-xs flex items-center gap-2 transition cursor-pointer disabled:opacity-50"
-                    >
-                      {isExtractingCoursesBulk ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          <span>Analisando e Extraindo com IA...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles className="w-4 h-4 text-amber-400" />
-                          <span>Identificar e Gerar Cursos com IA</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-
-                  {/* DRAFT PREVIEW LIST */}
-                  {bulkExtractedCoursesDrafts.length > 0 && (
-                    <div className="space-y-4 border-t border-slate-100 pt-5 mt-4">
-                      <div className="bg-sky-50 border border-sky-100 p-4 rounded-2xl">
-                        <span className="text-xs font-black text-sky-850 block">🎉 Cursos Identificados pela IA</span>
-                        <p className="text-[10px] text-sky-700 font-bold">Confirme a ementa e os públicos-alvo recomendados antes de salvar definitivamente no banco de dados.</p>
-                      </div>
-
-                      <div className="space-y-3">
-                        {bulkExtractedCoursesDrafts.map((draft, idx) => (
-                          <div 
-                            key={draft.id} 
-                            className="p-4 border border-slate-200 rounded-2xl bg-slate-50/50 space-y-3 relative hover:border-slate-300 transition"
-                          >
-                            <div className="flex items-start justify-between gap-4">
-                              <div className="flex-1 space-y-1.5">
-                                <div className="flex items-center gap-2">
-                                  <input
-                                    type="checkbox"
-                                    checked={draft.selected}
-                                    onChange={(e) => {
-                                      setBulkExtractedCoursesDrafts(prev => prev.map(item => 
-                                        item.id === draft.id ? { ...item, selected: e.target.checked } : item
-                                      ));
-                                    }}
-                                    className="w-4 h-4 text-sky-600 border-slate-300 rounded focus:ring-sky-500 cursor-pointer"
-                                  />
-                                  <input
-                                    type="text"
-                                    value={draft.nome}
-                                    onChange={(e) => {
-                                      setBulkExtractedCoursesDrafts(prev => prev.map(item => 
-                                        item.id === draft.id ? { ...item, nome: e.target.value } : item
-                                      ));
-                                    }}
-                                    className="bg-transparent font-black text-slate-900 text-xs focus:bg-white focus:ring-1 focus:ring-sky-500 px-1 py-0.5 rounded outline-none border-b border-transparent hover:border-slate-300 transition"
-                                  />
-                                </div>
-                                <input
-                                  type="text"
-                                  value={draft.descricao}
-                                  onChange={(e) => {
-                                    setBulkExtractedCoursesDrafts(prev => prev.map(item => 
-                                      item.id === draft.id ? { ...item, descricao: e.target.value } : item
-                                    ));
-                                  }}
-                                  className="w-full bg-transparent text-[11px] text-slate-500 focus:bg-white focus:ring-1 focus:ring-sky-500 px-1 py-0.5 rounded outline-none border-b border-transparent hover:border-slate-300 transition"
-                                />
-                              </div>
-
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setBulkExtractedCoursesDrafts(prev => prev.filter(item => item.id !== draft.id));
-                                }}
-                                className="text-slate-400 hover:text-rose-600 p-1.5 rounded-lg hover:bg-rose-50 transition cursor-pointer"
-                                title="Descartar Curso"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-
-                            {/* TARGETS FOR POSITION */}
-                            <div className="space-y-1.5 border-t border-slate-100 pt-2">
-                              <span className="text-[9px] text-slate-400 font-extrabold uppercase tracking-wider block">Público Alvo do Curso (Clique para alterar):</span>
-                              <div className="flex flex-wrap gap-1.5">
-                                {CARGOS_ENFERMAGEM.map(cargo => {
-                                  const targetMatch = draft.targets.find((t: any) => t.cargo === cargo);
-                                  const isSelected = !!targetMatch;
-                                  const isObrigatorio = targetMatch ? targetMatch.obrigatorio : false;
-
-                                  return (
-                                    <button
-                                      key={cargo}
-                                      type="button"
-                                      onClick={() => {
-                                        setBulkExtractedCoursesDrafts(prev => prev.map(item => {
-                                          if (item.id !== draft.id) return item;
-                                          let newTargets = [...item.targets];
-                                          const index = newTargets.findIndex((t: any) => t.cargo === cargo);
-                                          if (index > -1) {
-                                            // Toggle: if mandatory, make recommended; if recommended, remove
-                                            const current = newTargets[index];
-                                            if (current.obrigatorio) {
-                                              newTargets[index] = { cargo, obrigatorio: false };
-                                            } else {
-                                              newTargets.splice(index, 1);
-                                            }
-                                          } else {
-                                            // Add as mandatory by default
-                                            newTargets.push({ cargo, obrigatorio: true });
-                                          }
-                                          return { ...item, targets: newTargets };
-                                        }));
-                                      }}
-                                      className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold transition duration-150 flex items-center gap-1 border cursor-pointer ${
-                                        isSelected
-                                          ? isObrigatorio
-                                            ? 'bg-rose-50 text-rose-800 border-rose-150 hover:bg-rose-100'
-                                            : 'bg-sky-50 text-sky-800 border-sky-150 hover:bg-sky-100'
-                                          : 'bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200'
-                                      }`}
-                                    >
-                                      <span>{cargo}</span>
-                                      {isSelected && (
-                                        <span className="text-[8px] opacity-75">
-                                          {isObrigatorio ? '(Obrig.)' : '(Recom.)'}
-                                        </span>
-                                      )}
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-
-                      <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
-                        <button
-                          type="button"
-                          onClick={() => setBulkExtractedCoursesDrafts([])}
-                          className="px-4 py-2 border border-slate-200 hover:bg-slate-100 font-extrabold rounded-xl text-xs text-slate-500 transition cursor-pointer"
-                        >
-                          Descartar Resultados
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleSaveBulkCourses}
-                          className="px-5 py-2 bg-sky-600 hover:bg-sky-700 text-white font-extrabold rounded-xl text-xs shadow-md shadow-sky-600/10 transition cursor-pointer"
-                        >
-                          Confirmar e Importar {bulkExtractedCoursesDrafts.filter(d => d.selected).length} Cursos
-                        </button>
-                      </div>
-                    </div>
-                  )}
                 </motion.div>
               )}
 

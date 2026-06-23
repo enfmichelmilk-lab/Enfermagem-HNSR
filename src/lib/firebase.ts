@@ -131,22 +131,33 @@ export function subscribeCollection<T>(
       localStorage.setItem(fallbackLocalStorageKey, JSON.stringify(list));
     }
   }, (error) => {
-    handleFirestoreError(error, OperationType.LIST, collectionName);
+    console.error(`[Firestore Subscription Error] on ${collectionName}:`, error);
+    // Graceful fallback to localStorage
+    const cached = localStorage.getItem(fallbackLocalStorageKey);
+    const localList = cached ? JSON.parse(cached) : initialMockData;
+    onData(localList);
   });
 
   return unsubscribe;
 }
 
 // 3. Document Writer Helpers
+const getStorageKey = (colName: string) => {
+  if (colName === 'dynamic_selos') return 'hnsr_dynamic_selos';
+  return `hnsr_${colName}_db`;
+};
+
 export async function saveDocument(collectionName: string, docId: string, data: any): Promise<void> {
   const cleanId = String(docId).trim(); // Keep ID exactly as provided (e.g. emails with dots)
   if (!cleanId) {
     console.warn(`[Firebase] Action ignored: Attempted to save document in "${collectionName}" with an empty ID.`);
     return;
   }
-  if (!db) {
-    // Write directly to backup storage
-    const cached = localStorage.getItem(`hnsr_${collectionName}_db`);
+
+  // Always update local storage for robust instant backup
+  try {
+    const backupKey = getStorageKey(collectionName);
+    const cached = localStorage.getItem(backupKey);
     let items = cached ? JSON.parse(cached) : [];
     if (Array.isArray(items)) {
       const idx = items.findIndex((i: any) => (i.id === docId || i.matricula === docId || i.email === docId));
@@ -155,14 +166,17 @@ export async function saveDocument(collectionName: string, docId: string, data: 
       } else {
         items.push({ id: docId, ...data });
       }
-      localStorage.setItem(`hnsr_${collectionName}_db`, JSON.stringify(items));
+      localStorage.setItem(backupKey, JSON.stringify(items));
     } else {
-      // Map structures like remanejamentos
+      // Map structures
       items[docId] = data;
-      localStorage.setItem(`hnsr_${collectionName}_db`, JSON.stringify(items));
+      localStorage.setItem(backupKey, JSON.stringify(items));
     }
-    return;
+  } catch (err) {
+    console.warn("Failed to write backup to localStorage:", err);
   }
+
+  if (!db) return;
 
   try {
     const docRef = doc(db, collectionName, cleanId);
@@ -180,18 +194,24 @@ export async function removeDocument(collectionName: string, docId: string): Pro
     console.warn(`[Firebase] Action ignored: Attempted to remove document from "${collectionName}" with an empty ID.`);
     return;
   }
-  if (!db) {
-    const cached = localStorage.getItem(`hnsr_${collectionName}_db`);
+
+  // Always update local storage for robust instant backup
+  try {
+    const backupKey = getStorageKey(collectionName);
+    const cached = localStorage.getItem(backupKey);
     let items = cached ? JSON.parse(cached) : [];
     if (Array.isArray(items)) {
       items = items.filter((i: any) => (i.id !== docId && i.matricula !== docId && i.email !== docId));
-      localStorage.setItem(`hnsr_${collectionName}_db`, JSON.stringify(items));
+      localStorage.setItem(backupKey, JSON.stringify(items));
     } else {
       delete items[docId];
-      localStorage.setItem(`hnsr_${collectionName}_db`, JSON.stringify(items));
+      localStorage.setItem(backupKey, JSON.stringify(items));
     }
-    return;
+  } catch (err) {
+    console.warn("Failed to remove backup from localStorage:", err);
   }
+
+  if (!db) return;
 
   try {
     const docRef = doc(db, collectionName, cleanId);
