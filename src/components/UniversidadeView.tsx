@@ -37,16 +37,17 @@ import {
   CheckSquare,
   Square
 } from 'lucide-react';
-import { Curso, CertificadoCurso, Colaborador, CourseTarget } from '../types';
+import { Curso, CertificadoCurso, Colaborador, CourseTarget, Ferias } from '../types';
 import { subscribeCollection, saveDocument, removeDocument } from '../lib/firebase';
 import { CARGOS_ENFERMAGEM, SETORES_HOSPITALARES, EQUIPES_ESCALA, CURSOS_INICIAIS } from '../data/mockData';
 import { customAlert, customConfirm } from '../utils/customDialog';
 
 interface UniversidadeViewProps {
   colaboradores: Colaborador[];
+  ferias?: Ferias[];
 }
 
-export default function UniversidadeView({ colaboradores }: UniversidadeViewProps) {
+export default function UniversidadeView({ colaboradores, ferias = [] }: UniversidadeViewProps) {
   const [cursos, setCursos] = useState<Curso[]>([]);
   const [certificados, setCertificados] = useState<CertificadoCurso[]>([]);
   
@@ -279,6 +280,12 @@ export default function UniversidadeView({ colaboradores }: UniversidadeViewProp
   // Course filter states
   const [courseSearch, setCourseSearch] = useState('');
   const [certSearch, setCertSearch] = useState('');
+
+  // Dashboard filter states
+  const [dashSearchColab, setDashSearchColab] = useState('');
+  const [dashFilterSetor, setDashFilterSetor] = useState('');
+  const [dashFilterTurno, setDashFilterTurno] = useState('');
+  const [manualColabSearch, setManualColabSearch] = useState('');
 
   // Saven Handler Course
   const handleSaveCourse = async (e: React.FormEvent) => {
@@ -866,14 +873,78 @@ export default function UniversidadeView({ colaboradores }: UniversidadeViewProp
     };
   };
 
+  // Filtered list of collaborators for the dashboard
+  const dashboardColaboradores = activeColaboradores.filter(colab => {
+    if (dashSearchColab) {
+      const s = dashSearchColab.toLowerCase();
+      const nameMatch = colab.nome.toLowerCase().includes(s);
+      const matMatch = colab.matricula.toLowerCase().includes(s);
+      const cargoMatch = colab.cargo.toLowerCase().includes(s);
+      if (!nameMatch && !matMatch && !cargoMatch) return false;
+    }
+    if (dashFilterSetor) {
+      if (colab.setor !== dashFilterSetor) return false;
+    }
+    if (dashFilterTurno) {
+      if (colab.equipe !== dashFilterTurno) return false;
+    }
+    return true;
+  });
+
   // Overall completion average %
   const getOverallProgress = (): number => {
-    if (activeColaboradores.length === 0) return 0;
+    if (dashboardColaboradores.length === 0) return 0;
     let sum = 0;
-    activeColaboradores.forEach(c => {
+    dashboardColaboradores.forEach(c => {
       sum += getColaboradorProgress(c).pct;
     });
-    return Math.round(sum / activeColaboradores.length);
+    return Math.round(sum / dashboardColaboradores.length);
+  };
+
+  // Real active compliance adhesion (excluding INSS and vacation)
+  const getAdhesionProgress = (): { pct: number; workingCount: number; inssCount: number; feriasCount: number } => {
+    const hoje = new Date().toISOString().split('T')[0];
+    
+    const isCurrentlyINSS = (c: Colaborador) => {
+      if (c.inss_check === 'Sim') {
+        const hasRetorno = c.inss_retorno && c.inss_retorno.trim() !== '';
+        if (!hasRetorno || hoje < c.inss_retorno) {
+          return true;
+        }
+      }
+      return false;
+    };
+
+    const isCurrentlyOnVacation = (c: Colaborador) => {
+      return (ferias || []).some(f => 
+        f.matricula === c.matricula &&
+        f.status === 'Aprovado' &&
+        hoje >= f.dataInicio &&
+        hoje <= f.dataFim
+      );
+    };
+
+    const inssCount = activeColaboradores.filter(isCurrentlyINSS).length;
+    const feriasCount = activeColaboradores.filter(isCurrentlyOnVacation).length;
+
+    const workingColabs = activeColaboradores.filter(c => !isCurrentlyINSS(c) && !isCurrentlyOnVacation(c));
+    
+    if (workingColabs.length === 0) {
+      return { pct: 0, workingCount: 0, inssCount, feriasCount };
+    }
+
+    let sum = 0;
+    workingColabs.forEach(c => {
+      sum += getColaboradorProgress(c).pct;
+    });
+    
+    const pct = Math.round(sum / workingColabs.length);
+    return {
+      pct,
+      workingCount: workingColabs.length,
+      inssCount,
+      feriasCount
+    };
   };
 
   // Progress by turno / equipe
@@ -1043,7 +1114,7 @@ export default function UniversidadeView({ colaboradores }: UniversidadeViewProp
               className="space-y-6"
             >
               {/* Top Summary Widgets */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
                 
                 {/* Total de Concluídos Geral */}
                 <div className="bg-white border border-slate-200 rounded-3xl p-5 flex items-center justify-between shadow-xs relative overflow-hidden">
@@ -1067,6 +1138,33 @@ export default function UniversidadeView({ colaboradores }: UniversidadeViewProp
                       />
                     </svg>
                     <span className="absolute text-[11px] font-black text-slate-800">{getOverallProgress()}%</span>
+                  </div>
+                </div>
+
+                {/* Porcentagem de Adesão (Ativos Sem Férias / INSS) */}
+                <div className="bg-emerald-50/40 border border-emerald-250 rounded-3xl p-5 flex items-center justify-between shadow-xs relative overflow-hidden">
+                  <div className="space-y-1 z-10">
+                    <span className="text-[10px] text-emerald-800 font-black uppercase tracking-widest">Adesão Real (Ativos)</span>
+                    <h3 className="text-3xl font-black text-emerald-950">{getAdhesionProgress().pct}%</h3>
+                    <div className="text-[9px] text-slate-500 font-bold leading-tight">
+                      <p>Ativos: <span className="text-emerald-800 font-black">{getAdhesionProgress().workingCount} profs</span></p>
+                      <p className="text-[9px] text-slate-400 font-medium">
+                        Excluídos: {getAdhesionProgress().feriasCount} Férias | {getAdhesionProgress().inssCount} INSS
+                      </p>
+                    </div>
+                  </div>
+                  {/* Circular progress meter */}
+                  <div className="relative w-16 h-16 flex items-center justify-center z-10">
+                    <svg className="w-full h-full transform -rotate-90">
+                      <circle cx="32" cy="32" r="28" className="stroke-emerald-100" strokeWidth="5" fill="transparent" />
+                      <circle 
+                        cx="32" cy="32" r="28" 
+                        className="stroke-emerald-600" strokeWidth="5.5" fill="transparent"
+                        strokeDasharray={2 * Math.PI * 28}
+                        strokeDashoffset={(2 * Math.PI * 28) * (1 - getAdhesionProgress().pct / 100)}
+                      />
+                    </svg>
+                    <span className="absolute text-[11px] font-black text-emerald-800">{getAdhesionProgress().pct}%</span>
                   </div>
                 </div>
 
@@ -1095,7 +1193,7 @@ export default function UniversidadeView({ colaboradores }: UniversidadeViewProp
                 <div className="bg-white border border-slate-200 rounded-3xl p-5 flex items-center justify-between shadow-xs">
                   <div className="space-y-1">
                     <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-widest text-[#cf1515]">Auditório Regulado</span>
-                    <h3 className="text-3xl font-black text-slate-900">{activeColaboradores.length}</h3>
+                    <h3 className="text-3xl font-black text-slate-900">{dashboardColaboradores.length}</h3>
                     <p className="text-[10px] text-slate-500 font-semibold">Profissionais sob monitoramento</p>
                   </div>
                   <div className="bg-orange-50 text-orange-600 p-3 rounded-2xl">
@@ -1103,6 +1201,72 @@ export default function UniversidadeView({ colaboradores }: UniversidadeViewProp
                   </div>
                 </div>
 
+              </div>
+
+              {/* DASHBOARD SEARCH & FILTERS */}
+              <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-xs grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-1.5">
+                  <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">
+                    Buscar Colaborador
+                  </label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400 pointer-events-none" />
+                    <input
+                      type="text"
+                      placeholder="Nome, matrícula ou cargo..."
+                      value={dashSearchColab}
+                      onChange={(e) => setDashSearchColab(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 hover:border-slate-305 pl-9 pr-8 py-2 text-xs rounded-xl focus:outline-none focus:ring-1 focus:ring-sky-500 font-semibold"
+                    />
+                    {dashSearchColab && (
+                      <button 
+                        type="button"
+                        onClick={() => setDashSearchColab('')}
+                        className="absolute right-3 top-2 text-slate-400 hover:text-slate-600 font-black cursor-pointer text-sm"
+                      >
+                        &times;
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">
+                    Filtrar por Setor
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={dashFilterSetor}
+                      onChange={(e) => setDashFilterSetor(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 hover:border-slate-305 px-3 py-2 text-xs rounded-xl focus:outline-none focus:ring-1 focus:ring-sky-500 font-semibold appearance-none cursor-pointer"
+                    >
+                      <option value="">Todos os Setores</option>
+                      {SETORES_HOSPITALARES.map(s => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                    <div className="absolute right-3 top-3.5 w-0 h-0 border-l-[4px] border-l-transparent border-r-[4px] border-r-transparent border-t-[4px] border-t-slate-500 pointer-events-none"></div>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">
+                    Filtrar por Turno
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={dashFilterTurno}
+                      onChange={(e) => setDashFilterTurno(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 hover:border-slate-305 px-3 py-2 text-xs rounded-xl focus:outline-none focus:ring-1 focus:ring-sky-500 font-semibold appearance-none cursor-pointer"
+                    >
+                      <option value="">Todos os Turnos</option>
+                      {EQUIPES_ESCALA.map(e => (
+                        <option key={e} value={e}>{e}</option>
+                      ))}
+                    </select>
+                    <div className="absolute right-3 top-3.5 w-0 h-0 border-l-[4px] border-l-transparent border-r-[4px] border-r-transparent border-t-[4px] border-t-slate-500 pointer-events-none"></div>
+                  </div>
+                </div>
               </div>
 
               {/* POR SETOR REQUISITADO */}
@@ -1199,58 +1363,66 @@ export default function UniversidadeView({ colaboradores }: UniversidadeViewProp
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 font-medium text-[11px] text-slate-705">
-                      {activeColaboradores.map((colab) => {
-                        const progress = getColaboradorProgress(colab);
-                        return (
-                          <tr key={colab.matricula} className="hover:bg-slate-50/50 transition">
-                            <td className="p-3.5 pl-6">
-                              <div>
-                                <span className="font-extrabold text-slate-900">{colab.nome}</span>
-                                <p className="text-[9px] text-slate-400 font-bold tracking-tight">Matrícula: {colab.matricula}</p>
-                              </div>
-                            </td>
-                            <td className="p-3.5">
-                              <div>
-                                <span className="text-slate-800 font-semibold">{colab.cargo}</span>
-                                <p className="text-[9px] text-slate-500 font-bold">{colab.setor}</p>
-                              </div>
-                            </td>
-                            <td className="p-3.5 text-center">
-                              <span className="font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full text-[10px]">
-                                {progress.completedCount} de {progress.requiredCount}
-                              </span>
-                            </td>
-                            <td className="p-3.5 max-w-[200px]">
-                              <div className="flex items-center gap-2">
-                                <div className="flex-1 bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                                  <div 
-                                    className={`h-full rounded-full ${
-                                      progress.pct === 100 ? 'bg-emerald-500' :
-                                      progress.pct >= 50 ? 'bg-amber-400' :
-                                      'bg-rose-400'
-                                    }`}
-                                    style={{ width: `${progress.pct}%` }}
-                                  />
+                      {dashboardColaboradores.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="p-8 text-center text-slate-400 font-extrabold uppercase tracking-wide">
+                            Nenhum colaborador encontrado com os filtros aplicados.
+                          </td>
+                        </tr>
+                      ) : (
+                        dashboardColaboradores.map((colab) => {
+                          const progress = getColaboradorProgress(colab);
+                          return (
+                            <tr key={colab.matricula} className="hover:bg-slate-50/50 transition">
+                              <td className="p-3.5 pl-6">
+                                <div>
+                                  <span className="font-extrabold text-slate-900">{colab.nome}</span>
+                                  <p className="text-[9px] text-slate-400 font-bold tracking-tight">Matrícula: {colab.matricula}</p>
                                 </div>
-                                <span className="font-black text-slate-800 shrink-0 text-[10px]">{progress.pct}%</span>
-                              </div>
-                            </td>
-                            <td className="p-3.5 text-right pr-6">
-                              {progress.pct === 100 ? (
-                                <span className="inline-flex items-center gap-0.5 bg-emerald-50 text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-150 text-[10px] font-black">
-                                  <Check className="w-3 h-3" />
-                                  <span>Regularizado</span>
+                              </td>
+                              <td className="p-3.5">
+                                <div>
+                                  <span className="text-slate-800 font-semibold">{colab.cargo}</span>
+                                  <p className="text-[9px] text-slate-500 font-bold">{colab.setor}</p>
+                                </div>
+                              </td>
+                              <td className="p-3.5 text-center">
+                                <span className="font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full text-[10px]">
+                                  {progress.completedCount} de {progress.requiredCount}
                                 </span>
-                              ) : (
-                                <span className="inline-flex items-center gap-0.5 bg-rose-50 text-rose-800 px-2 py-0.5 rounded-full border border-rose-150 text-[10px] font-black">
-                                  <AlertCircle className="w-3 h-3" />
-                                  <span>Pendente</span>
-                                </span>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
+                              </td>
+                              <td className="p-3.5 max-w-[200px]">
+                                <div className="flex items-center gap-2">
+                                  <div className="flex-1 bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                                    <div 
+                                      className={`h-full rounded-full ${
+                                        progress.pct === 100 ? 'bg-emerald-500' :
+                                        progress.pct >= 50 ? 'bg-amber-400' :
+                                        'bg-rose-400'
+                                      }`}
+                                      style={{ width: `${progress.pct}%` }}
+                                    />
+                                  </div>
+                                  <span className="font-black text-slate-800 shrink-0 text-[10px]">{progress.pct}%</span>
+                                </div>
+                              </td>
+                              <td className="p-3.5 text-right pr-6">
+                                {progress.pct === 100 ? (
+                                  <span className="inline-flex items-center gap-0.5 bg-emerald-50 text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-150 text-[10px] font-black">
+                                    <Check className="w-3 h-3" />
+                                    <span>Regularizado</span>
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-0.5 bg-rose-50 text-rose-800 px-2 py-0.5 rounded-full border border-rose-150 text-[10px] font-black">
+                                    <AlertCircle className="w-3 h-3" />
+                                    <span>Pendente</span>
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -1618,7 +1790,7 @@ export default function UniversidadeView({ colaboradores }: UniversidadeViewProp
 
               {certMode === 'ia' ? (
                 <>
-                  /* INTERACTIVE IMPORTER AREA (TWO MODES: MULTI-FILE OR TEXT LIST) */
+                  {/* AREA DE IMPORTADORES INTERATIVOS (DOIS MODOS: MULTI-ARQUIVOS OU LISTA EM TEXTO) */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 
                 {/* MODE A: OCR CERTIFICATE FILE ANALYZER via Gemini (MULTIPLES FILES & DRAG-AND-DROP) */}
@@ -2010,29 +2182,64 @@ export default function UniversidadeView({ colaboradores }: UniversidadeViewProp
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     {/* Colaborador Selection Dropdown Card */}
                     <div className="md:col-span-1 bg-slate-50 border border-slate-200/60 rounded-2xl p-5 space-y-4 h-fit">
-                      <label className="block text-xs font-extrabold text-slate-700 uppercase tracking-wide">
-                        1. Selecione o Colaborador
-                      </label>
-                      <div className="relative">
-                        <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400 pointer-events-none" />
-                        <select
-                          value={manualSelectedMatricula}
-                          onChange={(e) => {
-                            setManualSelectedMatricula(e.target.value);
-                            setManualFiles({});
-                            setManualCompletionDates({});
-                            setManualCheckedCourses({});
-                          }}
-                          className="w-full bg-white border border-slate-200 pl-9 pr-8 py-2 text-xs rounded-xl focus:outline-none focus:ring-1 focus:ring-sky-500 font-semibold appearance-none cursor-pointer"
-                        >
-                          <option value="">-- Escolha um colaborador --</option>
-                          {activeColaboradores.map(c => (
-                            <option key={c.matricula} value={c.matricula}>
-                              {c.nome} ({c.cargo})
-                            </option>
-                          ))}
-                        </select>
-                        <div className="absolute right-3 top-3.5 w-0 h-0 border-l-[4px] border-l-transparent border-r-[4px] border-r-transparent border-t-[4px] border-t-slate-500 pointer-events-none"></div>
+                      <div className="space-y-1.5">
+                        <label className="block text-xs font-extrabold text-slate-700 uppercase tracking-wide">
+                          1. Buscar Colaborador
+                        </label>
+                        <div className="relative">
+                          <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400 pointer-events-none" />
+                          <input
+                            type="text"
+                            placeholder="Pesquisar por nome, cargo ou matr..."
+                            value={manualColabSearch}
+                            onChange={(e) => setManualColabSearch(e.target.value)}
+                            className="w-full bg-white border border-slate-200 pl-9 pr-8 py-2 text-xs rounded-xl focus:outline-none focus:ring-1 focus:ring-sky-500 font-semibold"
+                          />
+                          {manualColabSearch && (
+                            <button
+                              type="button"
+                              onClick={() => setManualColabSearch('')}
+                              className="absolute right-3 top-2 text-slate-400 hover:text-slate-600 font-black cursor-pointer text-sm"
+                            >
+                              &times;
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="block text-xs font-extrabold text-slate-700 uppercase tracking-wide">
+                          Selecione o Colaborador
+                        </label>
+                        <div className="relative">
+                          <select
+                            value={manualSelectedMatricula}
+                            onChange={(e) => {
+                              setManualSelectedMatricula(e.target.value);
+                              setManualFiles({});
+                              setManualCompletionDates({});
+                              setManualCheckedCourses({});
+                            }}
+                            className="w-full bg-white border border-slate-200 px-3 py-2 text-xs rounded-xl focus:outline-none focus:ring-1 focus:ring-sky-500 font-semibold appearance-none cursor-pointer"
+                          >
+                            <option value="">-- Escolha um colaborador --</option>
+                            {activeColaboradores
+                              .filter(c => {
+                                if (!manualColabSearch) return true;
+                                const s = manualColabSearch.toLowerCase();
+                                return c.nome.toLowerCase().includes(s) || 
+                                       c.matricula.toLowerCase().includes(s) || 
+                                       c.cargo.toLowerCase().includes(s);
+                              })
+                              .map(c => (
+                                <option key={c.matricula} value={c.matricula}>
+                                  {c.nome} ({c.cargo})
+                                </option>
+                              ))
+                            }
+                          </select>
+                          <div className="absolute right-3 top-3.5 w-0 h-0 border-l-[4px] border-l-transparent border-r-[4px] border-r-transparent border-t-[4px] border-t-slate-500 pointer-events-none"></div>
+                        </div>
                       </div>
 
                       {/* Selected Colaborador Profile Mini-card */}

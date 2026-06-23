@@ -531,6 +531,7 @@ export default function App() {
         return (
           <UniversidadeView 
             colaboradores={colaboradores}
+            ferias={ferias}
           />
         );
       case 'usuarios':
