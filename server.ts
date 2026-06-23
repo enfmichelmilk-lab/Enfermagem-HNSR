@@ -439,6 +439,237 @@ Gere apenas o vetor JSON válido, seguindo o esquema abaixo. Caso a data de iní
     }
   });
 
+  // Corporate University: AI-Powered Certificate File Analyzer
+  app.post("/api/universidade/extract", async (req, res) => {
+    try {
+      const { fileBase64, mimeType } = req.body;
+      if (!fileBase64 || !mimeType) {
+        return res.status(400).json({ error: "Parâmetros 'fileBase64' e 'mimeType' são obrigatórios." });
+      }
+
+      let cleanBase64 = fileBase64;
+      if (fileBase64.includes(";base64,")) {
+        cleanBase64 = fileBase64.split(";base64,").pop();
+      }
+
+      const client = getGeminiClient();
+      const response = await client.models.generateContent({
+        model: "gemini-3.5-flash",
+        contents: [
+          {
+            inlineData: {
+              mimeType: mimeType,
+              data: cleanBase64,
+            },
+          },
+          {
+            text: `Você é um sistema especialista em OCR e processamento de documentos hospitalares.
+Sua tarefa é analisar a imagem ou PDF do certificado de conclusão de curso anexado e extrair as seguintes informações com máxima precisão:
+
+1. NOME COMPLETO DO COLABORADOR (Beneficiário):
+   - Localize o nome do profissional de saúde que concluiu o treinamento.
+   - Geralmente aparece após termos como: "Certificamos que", "conferido a", "concedido a", "outorgado a", "atribuído a", "aluno(a)", "ao(à) profissional".
+   - IGNORE nomes de diretores, palestrantes, coordenadores, secretários ou professores que assinam o certificado (ex: "Diretor Geral", "Coordenador de Enfermagem", "Palestrante").
+   - O nome deve vir limpo de cargos ou títulos anteriores/posteriores (ex: remova "Enf.", "Dr.", "Técnico(a)" se fizerem parte do preenchimento, retorne apenas o nome próprio).
+
+2. NOME DO CURSO OU CAPACITAÇÃO:
+   - Identifique o título exato do curso, treinamento, palestra ou capacitação realizado.
+   - Costuma vir destacado em negrito, entre aspas, em fonte maior ou após palavras como: "concluiu o curso de", "participou do treinamento de", "na capacitação em", "no workshop".
+   - Exemplos comuns no hospital: "Suporte Avançado de Vida (SAV)", "SAV", "Prevenção de Lesões por Pressão (LPP)", "LPP", "NR-32", "Segurança do Paciente", "Ética Profissional".
+
+3. DATA DE CONCLUSÃO:
+   - Extraia a data em que o treinamento foi finalizado ou o certificado foi emitido.
+   - Procure por formatos como "DD/MM/AAAA", "AAAA-MM-DD", ou por extenso "XX de [Mês] de [Ano]" (ex: "23 de Junho de 2026").
+   - Converta obrigatoriamente a data localizada para o formato ISO padrão: YYYY-MM-DD.
+   - Caso nenhuma data de emissão ou conclusão seja localizada no documento inteiro, retorne a data atual padrão: "${new Date().toISOString().split("T")[0]}".
+
+Seja extremamente rigoroso na extração para evitar falsos positivos ou trocar o nome do aluno pelo nome do emissor do certificado. Retorne as informações estruturadas no formato JSON especificado.`,
+          }
+        ],
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              colaborador_nome_original: { 
+                type: Type.STRING, 
+                description: "Nome completo do aluno/colaborador/profissional da saúde beneficiado pelo certificado." 
+              },
+              curso_nome: { 
+                type: Type.STRING, 
+                description: "Título ou nome de capacitação do curso concluído (ex: Suporte Avançado de Vida, Brigada, Ética, NR32, etc.)." 
+              },
+              data_conclusao: { 
+                type: Type.STRING, 
+                description: "Data em que o curso foi finalizado ou o certificado emitido, formato YYYY-MM-DD." 
+              }
+            },
+            required: ["colaborador_nome_original", "curso_nome", "data_conclusao"]
+          }
+        }
+      });
+
+      const text = response.text || "{}";
+      res.json(JSON.parse(text));
+    } catch (error: any) {
+      console.error("Erro na extração do certificado da universidade corporativa via Gemini:", error);
+      res.status(500).json({
+        error: "Erro ao analisar o certificado via Inteligência Artificial.",
+        details: error.message || String(error)
+      });
+    }
+  });
+
+  // Corporate University: AI-Powered Certificate Copied Text List Analyzer
+  app.post("/api/universidade/extract-text-list", async (req, res) => {
+    try {
+      const { textContent } = req.body;
+      if (!textContent || !textContent.trim()) {
+        return res.status(400).json({ error: "O parâmetro 'textContent' não pode estar vazio." });
+      }
+
+      const client = getGeminiClient();
+      const response = await client.models.generateContent({
+        model: "gemini-3.5-flash",
+        contents: [
+          {
+            text: `Você é um assistente de gestão de universidade corporativa hospitalar. Analise o seguinte texto (que pode ser a cópia de uma conversa de WhatsApp, notas de reuniões, comprovantes de conclusão, ou uma lista digitada livremente) e identifique TODOS OS CURSOS E CERTIFICADOS concluídos e reportados pelos profissionais de enfermagem.
+
+Texto para análise:
+"""
+${textContent}
+"""
+
+Extraia as informações e responda estritamente com o JSON contendo uma lista de objetos. Se nada for identificado, retorne uma lista vazia.
+
+Gere apenas o vetor JSON válido compatível com o esquema abaixo. Caso a data de conclusão não esteja explícita, use o dia atual (${new Date().toISOString().split("T")[0]}).`,
+          }
+        ],
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                colaborador_nome_original: { 
+                  type: Type.STRING, 
+                  description: "Nome completo do colaborador citado como concluinte." 
+                },
+                curso_nome: { 
+                  type: Type.STRING, 
+                  description: "Nome ou título do curso ou treinamento realizado." 
+                },
+                data_conclusao: { 
+                  type: Type.STRING, 
+                  description: "Data de conclusão ou homologação no formato YYYY-MM-DD." 
+                }
+              },
+              required: ["colaborador_nome_original", "curso_nome", "data_conclusao"]
+            }
+          }
+        }
+      });
+
+      const text = response.text || "[]";
+      res.json(JSON.parse(text));
+    } catch (error: any) {
+      console.error("Erro ao extrair texto de certificados via Gemini:", error);
+      res.status(500).json({
+        error: "Erro ao processar as conclusões de cursos enviadas via IA.",
+        details: error.message || String(error)
+      });
+    }
+  });
+
+
+  // Corporate University: AI-Powered Bulk Course Ingestion
+  app.post("/api/universidade/extract-courses-bulk", async (req, res) => {
+    try {
+      const { textContent } = req.body;
+      if (!textContent || !textContent.trim()) {
+        return res.status(400).json({ error: "O parâmetro 'textContent' não pode estar vazio." });
+      }
+
+      const client = getGeminiClient();
+      const response = await client.models.generateContent({
+        model: "gemini-3.5-flash",
+        contents: [
+          {
+            text: `Você é um gestor de universidade corporativa em um hospital de alta complexidade.
+Sua missão é ler o texto fornecido pelo usuário contendo solicitações de novos cursos ou um planejamento de treinamentos, identificar cada curso que deve ser criado, e determinar para quais cargos de enfermagem e saúde o curso deve ser direcionado (marcando se é obrigatório ou recomendado).
+
+Cargos disponíveis no sistema (use EXATAMENTE estes nomes na propriedade 'cargo'):
+- "Supervisor(a)"
+- "Coordenador(a)"
+- "Gerente"
+- "Enfermeiro(a)"
+- "Tec. Enf."
+- "Aux. Enf."
+- "Administrativo"
+- "Estagiária"
+- "Outros"
+
+Texto para análise:
+"""
+${textContent}
+"""
+
+Extraia os cursos e seus respectivos públicos-alvo de acordo com o texto ou a melhor prática hospitalar caso o texto não seja totalmente explícito sobre a obrigatoriedade. Responda estritamente com o JSON contendo uma lista de objetos. Se nada for identificado, retorne uma lista vazia.`,
+          }
+        ],
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                nome: { 
+                  type: Type.STRING, 
+                  description: "Nome ou título do curso/treinamento." 
+                },
+                descricao: { 
+                  type: Type.STRING, 
+                  description: "Ementa, descrição ou objetivo do treinamento." 
+                },
+                targets: { 
+                  type: Type.ARRAY,
+                  description: "Lista de cargos alvo e suas respectivas obrigatoriedades.",
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      cargo: {
+                        type: Type.STRING,
+                        description: "O nome exato do cargo conforme os disponíveis."
+                      },
+                      obrigatorio: {
+                        type: Type.BOOLEAN,
+                        description: "Se o curso é obrigatório (true) ou apenas recomendado (false) para este cargo."
+                      }
+                    },
+                    required: ["cargo", "obrigatorio"]
+                  }
+                }
+              },
+              required: ["nome", "descricao", "targets"]
+            }
+          }
+        }
+      });
+
+      const text = response.text || "[]";
+      res.json(JSON.parse(text));
+    } catch (error: any) {
+      console.error("Erro ao extrair lista de cursos em massa via Gemini:", error);
+      res.status(500).json({
+        error: "Erro ao processar o cadastro em massa de cursos via IA.",
+        details: error.message || String(error)
+      });
+    }
+  });
+
+
   // Hot Reload and Dev Server integrations or Static serving in production
   if (process.env.NODE_ENV !== "production" && process.env.DISABLE_HMR !== "true") {
     // Dynamic import of development-only dependency Vite to prevent execution crashes on Hostinger

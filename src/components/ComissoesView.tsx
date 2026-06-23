@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { Colaborador, Usuario } from '../types';
 import SearchableColaboradorSelect from './SearchableColaboradorSelect';
+import { customAlert, customConfirm } from '../utils/customDialog';
 
 interface ComissoesViewProps {
   colaboradores: Colaborador[];
@@ -92,13 +93,13 @@ export default function ComissoesView({
   };
 
   // Handle removing a collaborator from active seal
-  const handleRemoveColabFromSelo = (matricula: string) => {
+  const handleRemoveColabFromSelo = async (matricula: string) => {
     if (!isAuthorizedAdmin()) {
-      alert("Apenas coordenadores ou supervisores possuem autorização para alterar comissões e selos.");
+      customAlert("Apenas coordenadores ou supervisores possuem autorização para alterar comissões e selos.");
       return;
     }
 
-    if (!confirm(`Deseja realmente remover este colaborador do selo "${activeSelo}"?`)) {
+    if (!await customConfirm(`Deseja realmente remover este colaborador do selo "${activeSelo}"?`)) {
       return;
     }
 
@@ -124,7 +125,7 @@ export default function ComissoesView({
     if (!name) return;
 
     if (allSelos.some(s => s.toLowerCase() === name.toLowerCase())) {
-      alert("Este selo já existe no sistema!");
+      customAlert("Este selo já existe no sistema!");
       return;
     }
 
@@ -135,7 +136,7 @@ export default function ComissoesView({
     setActiveSelo(name);
     setNewSeloName('');
     setIsNewSeloModalOpen(false);
-    alert(`Novo selo "${name}" criado com sucesso! Ele foi integrado ao cadastro de colaboradores.`);
+    customAlert(`Novo selo "${name}" criado com sucesso! Ele foi integrado ao cadastro de colaboradores.`);
   };
 
   return (
@@ -159,8 +160,8 @@ export default function ComissoesView({
         <div className="flex gap-2.5 flex-wrap">
           {usuarioLogado?.email?.toLowerCase() === 'enfmichelmilk@gmail.com' && (
             <button
-              onClick={() => {
-                if (window.confirm("ATENÇÃO: Deseja realmente resetar TODOS os selos e comissões de todos os colaboradores e remover todos os selos personalizados permanentemente? Esta ação é irreversível.")) {
+              onClick={async () => {
+                if (await customConfirm("ATENÇÃO: Deseja realmente resetar TODOS os selos e comissões de todos os colaboradores e remover todos os selos personalizados permanentemente? Esta ação é irreversível.")) {
                   const resetColaboradores = colaboradores.map(c => ({
                     ...c,
                     selo_etica: 'Não' as const,
@@ -171,7 +172,7 @@ export default function ComissoesView({
                   onUpdateColaboradores(resetColaboradores);
                   onUpdateDynamicSelos([]);
                   setActiveSelo('Comissão de Ética');
-                  alert("Todas as comissões, selos nativos e selos personalizados foram redefinidos para o estado padrão com sucesso!");
+                  customAlert("Todas as comissões, selos nativos e selos personalizados foram redefinidos para o estado padrão com sucesso!");
                 }
               }}
               className="bg-red-650 hover:bg-red-700 border border-red-500 text-white font-extrabold py-2.5 px-4 rounded-xl text-xs flex items-center gap-1.5 transition duration-150 cursor-pointer active:scale-95 shadow-md shadow-red-550/10"
@@ -184,7 +185,7 @@ export default function ComissoesView({
           <button
             onClick={() => {
               if (!isAuthorizedAdmin()) {
-                alert("Apenas coordenadores ou supervisores possuem autorização para criar novos selos.");
+                customAlert("Apenas coordenadores ou supervisores possuem autorização para criar novos selos.");
                 return;
               }
               setIsNewSeloModalOpen(true);

@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { Usuario } from '../types';
 import { SETORES_HOSPITALARES } from '../data/mockData';
+import { customAlert, customConfirm } from '../utils/customDialog';
 
 interface UsuariosViewProps {
   usuarios: Usuario[];
@@ -38,21 +39,21 @@ export default function UsuariosView({ usuarios, usuarioLogado, onUpdateUsuarios
     e.preventDefault();
 
     if (!nome.trim() || !email.trim()) {
-      alert("Por favor, preencha o Nome Completo e o E-mail corporativo.");
+      customAlert("Por favor, preencha o Nome Completo e o E-mail corporativo.");
       return;
     }
 
     // Role block rule from 4_Modulo_Usuarios.gs
     const perfilLower = perfil.toLowerCase();
     if (perfilLower.includes("tecnico") || perfilLower.includes("técnico") || perfilLower.includes("tec")) {
-      alert("Técnicos de enfermagem não possuem permissão de acesso ao painel Gestão RH Enfermagem HNSR.");
+      customAlert("Técnicos de enfermagem não possuem permissão de acesso ao painel Gestão RH Enfermagem HNSR.");
       return;
     }
 
     // Checking email pre-existence
     const isEmailExists = usuarios.some(u => u.email.toLowerCase() === email.trim().toLowerCase());
     if (isEmailExists) {
-      alert("Este e-mail já está cadastrado no sistema.");
+      customAlert("Este e-mail já está cadastrado no sistema.");
       return;
     }
 
@@ -69,7 +70,7 @@ export default function UsuariosView({ usuarios, usuarioLogado, onUpdateUsuarios
     };
 
     onUpdateUsuarios([novoUsuario, ...usuarios]);
-    alert("Credencial criada com sucesso! O e-mail simulado com o link de acesso direto do sistema e o código provisório foi gerado abaixo.");
+    customAlert("Credencial criada com sucesso! O e-mail simulado com o link de acesso direto do sistema e o código provisório foi gerado abaixo.");
 
     const systemLink = window.location.origin;
     
@@ -120,7 +121,7 @@ export default function UsuariosView({ usuarios, usuarioLogado, onUpdateUsuarios
   const handleToggleStatus = (targetEmail: string) => {
     // Cannot toggle yourself off
     if (targetEmail.toLowerCase() === usuarioLogado.email.toLowerCase()) {
-      alert("Não é possível suspender ou inativar seu próprio acesso administrativo!");
+      customAlert("Não é possível suspender ou inativar seu próprio acesso administrativo!");
       return;
     }
 
@@ -135,16 +136,16 @@ export default function UsuariosView({ usuarios, usuarioLogado, onUpdateUsuarios
     onUpdateUsuarios(novosUsuarios);
   };
 
-  const handleDeleteUser = (targetEmail: string) => {
+  const handleDeleteUser = async (targetEmail: string) => {
     if (targetEmail.toLowerCase() === usuarioLogado.email.toLowerCase()) {
-      alert("Não é possível excluir seu próprio acesso administrativo!");
+      customAlert("Não é possível excluir seu próprio acesso administrativo!");
       return;
     }
 
-    if (window.confirm(`ATENÇÃO: Deseja realmente excluir permanentemente o usuário ${targetEmail}? Esta ação é irreversível.`)) {
+    if (await customConfirm(`ATENÇÃO: Deseja realmente excluir permanentemente o usuário ${targetEmail}? Esta ação é irreversível.`)) {
       const novosUsuarios = usuarios.filter(u => u.email.toLowerCase() !== targetEmail.toLowerCase());
       onUpdateUsuarios(novosUsuarios);
-      alert("Usuário excluído com sucesso!");
+      customAlert("Usuário excluído com sucesso!");
     }
   };
 
@@ -173,7 +174,7 @@ export default function UsuariosView({ usuarios, usuarioLogado, onUpdateUsuarios
 
     onUpdateUsuarios(novosUsuarios);
     setEditingUser(null);
-    alert("Alterações nas credenciais salvas com sucesso!");
+    customAlert("Alterações nas credenciais salvas com sucesso!");
   };
 
   return (
@@ -385,10 +386,10 @@ export default function UsuariosView({ usuarios, usuarioLogado, onUpdateUsuarios
                 </p>
               </div>
               <button
-                onClick={() => {
-                  if (window.confirm("Aviso: Isso irá redefinir todas as escalas, colaboradores, atestados e férias para os valores de teste iniciais. Deseja continuar?")) {
+                onClick={async () => {
+                  if (await customConfirm("Aviso: Isso irá redefinir todas as escalas, colaboradores, atestados e férias para os valores de teste iniciais. Deseja continuar?")) {
                     onResetSystem('default');
-                    alert("Banco de dados local do Hospital HNSR foi reestruturado para as configurações iniciais com sucesso!");
+                    customAlert("Banco de dados local do Hospital HNSR foi reestruturado para as configurações iniciais com sucesso!");
                   }
                 }}
                 className="mt-1 w-fit bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-4 rounded-lg shadow-sm transition flex items-center gap-1.5"
@@ -409,10 +410,10 @@ export default function UsuariosView({ usuarios, usuarioLogado, onUpdateUsuarios
                 </p>
               </div>
               <button
-                onClick={() => {
-                  if (window.confirm("CUIDADO: Esta ação é irreversível e excluirá permanentemente todos os registros, colaboradores e escalas do sistema. Deseja iniciar do zero com o banco limpo?")) {
+                onClick={async () => {
+                  if (await customConfirm("CUIDADO: Esta ação é irreversível e excluirá permanentemente todos os registros, colaboradores e escalas do sistema. Deseja iniciar do zero com o banco limpo?")) {
                     onResetSystem('empty');
-                    alert("Todas as bases foram limpas! Você está pronto para cadastrar ou importar novos colaboradores de uma planilha limpa.");
+                    customAlert("Todas as bases foram limpas! Você está pronto para cadastrar ou importar novos colaboradores de uma planilha limpa.");
                   }
                 }}
                 className="mt-1 w-fit bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg shadow-sm transition flex items-center gap-1.5"

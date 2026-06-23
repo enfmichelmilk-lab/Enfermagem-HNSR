@@ -16,6 +16,7 @@ import { SolicitacaoFolga, Colaborador, Usuario, Absenteismo, Ferias, Chamada } 
 import { SETORES_HOSPITALARES } from '../data/mockData';
 import { subscribeCollection, saveDocument, removeDocument } from '../lib/firebase';
 import HapvidaLogo from './HapvidaLogo';
+import { customAlert, customConfirm } from '../utils/customDialog';
 
 const equipesDisponiveis = ['Todos', 'Diurno A', 'Diurno B', 'Noturno A', 'Noturno B', 'Diarista'];
 
@@ -792,7 +793,7 @@ export default function FolgasView({
         [remKey]: modalCustomRemSetor.trim()
       }));
     }
-    alert("Remanejamento atualizado com sucesso!");
+    customAlert("Remanejamento atualizado com sucesso!");
     setIsModalOpen(false);
   };
 
@@ -811,23 +812,23 @@ export default function FolgasView({
       const isF = modalTipoFolga === 'Folga' || modalTipoFolga === 'Folga de Escala' || modalTipoFolga === 'Férias';
 
       if (isBH && modalTargetColab.bancohoras <= 0) {
-        alert(`Aviso: O colaborador selecionado não possui saldo positivo de Banco de Horas (${modalTargetColab.bancohoras}h).`);
+        customAlert(`Aviso: O colaborador selecionado não possui saldo positivo de Banco de Horas (${modalTargetColab.bancohoras}h).`);
         return;
       }
       if (isFE && modalTargetColab.folgaenf <= 0) {
-        alert(`Aviso: O colaborador possui saldo insuficiente para Folga Enfermagem (${modalTargetColab.folgaenf} dia[s]).`);
+        customAlert(`Aviso: O colaborador possui saldo insuficiente para Folga Enfermagem (${modalTargetColab.folgaenf} dia[s]).`);
         return;
       }
       if (isFF && modalTargetColab.folgaferiado <= 0) {
-        alert(`Aviso: O colaborador possui saldo insuficiente para Folga Feriado (${modalTargetColab.folgaferiado} dia[s]).`);
+        customAlert(`Aviso: O colaborador possui saldo insuficiente para Folga Feriado (${modalTargetColab.folgaferiado} dia[s]).`);
         return;
       }
       if (isB && modalTargetColab.brigada <= 0) {
-        alert(`Aviso: Saldo insuficiente de Folga Brigada (${modalTargetColab.brigada} dia[s]).`);
+        customAlert(`Aviso: Saldo insuficiente de Folga Brigada (${modalTargetColab.brigada} dia[s]).`);
         return;
       }
       if (isE && modalTargetColab.eleicao <= 0) {
-        alert(`Aviso: Saldo insuficiente de Eleição (${modalTargetColab.eleicao} dia[s]).`);
+        customAlert(`Aviso: Saldo insuficiente de Eleição (${modalTargetColab.eleicao} dia[s]).`);
         return;
       }
       // Enforce at most 2 Folga de Escala (F) per month
@@ -842,7 +843,7 @@ export default function FolgasView({
         ).length;
 
         if (existingCount >= 2) {
-          alert(`Erro: O limite máximo de 2 Folgas de Escala por direito ao mês foi atingido para este colaborador neste mês (${parts[1]}/${parts[0]}).`);
+          customAlert(`Erro: O limite máximo de 2 Folgas de Escala por direito ao mês foi atingido para este colaborador neste mês (${parts[1]}/${parts[0]}).`);
           return;
         }
       }
@@ -896,7 +897,7 @@ export default function FolgasView({
     }
 
     onUpdateSolicitacoes([novaSolicitacao, ...solicitacoes]);
-    alert(statusDesejado === 'Aprovado' 
+    customAlert(statusDesejado === 'Aprovado' 
       ? `Folga concedida e registrada. Saldo debitado do profissional.` 
       : "Solicitação enviada! Aguardando homologação superior."
     );
@@ -920,7 +921,7 @@ export default function FolgasView({
       ).length;
 
       if (existingCount >= 2) {
-        alert(`Erro: Não é possível aprovar. O colaborador já possui o limite máximo de 2 Folgas de Escala aprovadas para este mês (${parts[1]}/${parts[0]}).`);
+        customAlert(`Erro: Não é possível aprovar. O colaborador já possui o limite máximo de 2 Folgas de Escala aprovadas para este mês (${parts[1]}/${parts[0]}).`);
         return;
       }
     }
@@ -956,23 +957,23 @@ export default function FolgasView({
 
     const novasSols = solicitacoes.map(s => s.id === sol.id ? { ...s, status: 'Aprovado' as const } : s);
     onUpdateSolicitacoes(novasSols);
-    alert("Solicitação homologada e aprovada com sucesso!");
+    customAlert("Solicitação homologada e aprovada com sucesso!");
     setIsModalOpen(false);
   };
 
   // Action: Decline leave request inline
-  const handleRejectInline = (sol: SolicitacaoFolga) => {
-    if (confirm(`Deseja realmente recusar esta solicitação de folga para ${sol.colaborador}?`)) {
+  const handleRejectInline = async (sol: SolicitacaoFolga) => {
+    if (await customConfirm(`Deseja realmente recusar esta solicitação de folga para ${sol.colaborador}?`)) {
       const novasSols = solicitacoes.map(s => s.id === sol.id ? { ...s, status: 'Recusado' as const } : s);
       onUpdateSolicitacoes(novasSols);
-      alert("Solicitação recusada.");
+      customAlert("Solicitação recusada.");
       setIsModalOpen(false);
     }
   };
 
   // Action: Cancel/Delete approved or pending folga with restitution
-  const handleCancelInline = (sol: SolicitacaoFolga) => {
-    if (confirm(`Deseja realmente excluir/estornar esta folga de ${sol.colaborador}? Qualquer saldo deduzido será devolvido.`)) {
+  const handleCancelInline = async (sol: SolicitacaoFolga) => {
+    if (await customConfirm(`Deseja realmente excluir/estornar esta folga de ${sol.colaborador}? Qualquer saldo deduzido será devolvido.`)) {
       // Restitution process
       if (sol.status === 'Aprovado') {
         const targetColab = colaboradores.find(c => c.matricula === sol.matricula);
@@ -1006,7 +1007,7 @@ export default function FolgasView({
 
       const novasSols = solicitacoes.filter(s => s.id !== sol.id);
       onUpdateSolicitacoes(novasSols);
-      alert("Folga removida com sucesso!");
+      customAlert("Folga removida com sucesso!");
       setIsModalOpen(false);
     }
   };

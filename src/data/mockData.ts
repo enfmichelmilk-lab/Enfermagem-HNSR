@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Colaborador, Absenteismo, Usuario, SolicitacaoFolga } from '../types';
+import { Colaborador, Absenteismo, Usuario, SolicitacaoFolga, Curso } from '../types';
 import { IMPORTED_COLABORADORES, IMPORTED_ABSENTEISMO } from './importedData';
 
 export const CID_NATIVO: Record<string, string> = {
@@ -283,3 +283,46 @@ export const SOLICITACOES_FOLGA_INICIAL: SolicitacaoFolga[] = [
     dataCriacao: "2026-06-01 10:21"
   }
 ];
+
+export const CURSOS_INICIAIS: Curso[] = [
+  {
+    id: "CUR-001",
+    nome: "Suporte Avançado de Vida (SAV)",
+    descricao: "Protocolos essenciais de PCR, desfibrilação e vias aéreas avançadas.",
+    targets: [
+      { cargo: "Enfermeiro(a)", obrigatorio: true },
+      { cargo: "Tec. Enf.", obrigatorio: true },
+      { cargo: "Supervisor(a)", obrigatorio: true },
+      { cargo: "Coordenador(a)", obrigatorio: true }
+    ],
+    dataCriacao: "2026-06-25"
+  },
+  {
+    id: "CUR-002",
+    nome: "Prevenção de Lesões por Pressão (LPP)",
+    descricao: "Diretrizes nacionais para avaliação de escala de Braden e cuidado à pele.",
+    targets: [
+      { cargo: "Enfermeiro(a)", obrigatorio: true },
+      { cargo: "Tec. Enf.", obrigatorio: true },
+      { cargo: "Aux. Enf.", obrigatorio: true }
+    ],
+    dataCriacao: "2026-06-25"
+  },
+  {
+    id: "CUR-003",
+    nome: "NR-32: Segurança na Saúde",
+    descricao: "Norma regulamentadora para proteção e segurança de profissionais da saúde.",
+    targets: [
+      { cargo: "Enfermeiro(a)", obrigatorio: true },
+      { cargo: "Tec. Enf.", obrigatorio: true },
+      { cargo: "Aux. Enf.", obrigatorio: true },
+      { cargo: "Administrativo", obrigatorio: true },
+      { cargo: "Estagiária", obrigatorio: true },
+      { cargo: "Gerente", obrigatorio: true },
+      { cargo: "Supervisor(a)", obrigatorio: true },
+      { cargo: "Coordenador(a)", obrigatorio: true }
+    ],
+    dataCriacao: "2026-06-25"
+  }
+];
+

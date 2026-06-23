@@ -119,3 +119,27 @@ export interface Chamada {
   usuarioCriador?: string;
 }
 
+export interface CourseTarget {
+  cargo: string;
+  obrigatorio: boolean;
+}
+
+export interface Curso {
+  id: string;
+  nome: string;
+  descricao?: string;
+  targets: CourseTarget[];
+  dataCriacao: string;
+}
+
+export interface CertificadoCurso {
+  id: string;
+  colaboradorMatricula: string;
+  colaboradorNome: string;
+  cursoId: string;
+  cursoNome: string;
+  dataConclusao: string; // YYYY-MM-DD
+  origem: string;
+  dataCriacao: string;
+}
+

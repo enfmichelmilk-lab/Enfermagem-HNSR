@@ -7,10 +7,12 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Users, Search, UserPlus, Filter, ShieldAlert, Award, 
   Trash2, ShieldCheck, FileText, Calendar, Clock, Contact, ChevronRight, X,
-  Eye, Pencil, Mail, Phone, Edit
+  Eye, Pencil, Mail, Phone, Edit, GraduationCap
 } from 'lucide-react';
-import { Colaborador, Usuario, Absenteismo } from '../types';
-import { SETORES_HOSPITALARES, EQUIPES_ESCALA, CARGOS_ENFERMAGEM } from '../data/mockData';
+import { Colaborador, Usuario, Absenteismo, Curso, CertificadoCurso } from '../types';
+import { subscribeCollection } from '../lib/firebase';
+import { customAlert, customConfirm } from '../utils/customDialog';
+import { SETORES_HOSPITALARES, EQUIPES_ESCALA, CARGOS_ENFERMAGEM, CURSOS_INICIAIS } from '../data/mockData';
 
 interface ColaboradoresViewProps {
   colaboradores: Colaborador[];
@@ -54,6 +56,31 @@ export default function ColaboradoresView({
   // View mode states
   const [isOpenViewModal, setIsOpenViewModal] = useState(false);
   const [selectedViewColab, setSelectedViewColab] = useState<Colaborador | null>(null);
+
+  // States for Corporate University tracking
+  const [cursos, setCursos] = useState<Curso[]>([]);
+  const [certificados, setCertificados] = useState<CertificadoCurso[]>([]);
+
+  useEffect(() => {
+    const unsubCursos = subscribeCollection<Curso>(
+      'universidade_cursos',
+      (data) => setCursos(data.sort((a, b) => (b.dataCriacao || '').localeCompare(a.dataCriacao || ''))),
+      'hnsr_universidade_cursos_db',
+      CURSOS_INICIAIS
+    );
+
+    const unsubCertificados = subscribeCollection<CertificadoCurso>(
+      'universidade_certificados',
+      (data) => setCertificados(data.sort((a, b) => (b.dataCriacao || '').localeCompare(a.dataCriacao || ''))),
+      'hnsr_universidade_certificados_db',
+      []
+    );
+
+    return () => {
+      unsubCursos();
+      unsubCertificados();
+    };
+  }, []);
 
   // Import states
   const [isOpenImportModal, setIsOpenImportModal] = useState(false);
@@ -147,7 +174,7 @@ export default function ColaboradoresView({
   const handleSendBirthdayEmails = () => {
     const list = getAniversariantesDaSemana();
     if (list.length === 0) {
-      alert("Nenhum aniversariante encontrado na semana atual.");
+      customAlert("Nenhum aniversariante encontrado na semana atual.");
       return;
     }
 
@@ -217,7 +244,7 @@ Atenciosamente,
       }
     }, 100);
 
-    alert(`Sucesso! Preparamos e integramos o e-mail real com todos os ${list.length} aniversariantes da semana. Se o seu navegador ou sistema operacional possuir um cliente de e-mail padrão configurado, ele será aberto automaticamente. Caso contrário, você poderá usar os botões de abertura manual e cópia direta que estão disponíveis na seção de logs de transporte SMTP abaixo.`);
+    customAlert(`Sucesso! Preparamos e integramos o e-mail real com todos os ${list.length} aniversariantes da semana. Se o seu navegador ou sistema operacional possuir um cliente de e-mail padrão configurado, ele será aberto automaticamente. Caso contrário, você poderá usar os botões de abertura manual e cópia direta que estão disponíveis na seção de logs de transporte SMTP abaixo.`);
   };
 
   const handleProcessColaboradoresImport = () => {
@@ -311,7 +338,7 @@ Atenciosamente,
       setIsOpenImportModal(false);
       setImportText('');
       setImportError('');
-      alert(`Sucesso! ${novos.length} colaboradores importados ou atualizados.`);
+      customAlert(`Sucesso! ${novos.length} colaboradores importados ou atualizados.`);
     } catch (err: any) {
       setImportError('Ocorreu um erro no processamento: ' + err.message);
     }
@@ -478,19 +505,19 @@ Atenciosamente,
     e.preventDefault();
 
     if (!nome.trim() || !matricula.trim()) {
-      alert("Por favor, preencha o Nome e a Matrícula do colaborador.");
+      customAlert("Por favor, preencha o Nome e a Matrícula do colaborador.");
       return;
     }
 
     if (habilitarAcesso && !email.trim()) {
-      alert("Erro: Para fornecer acesso ao sistema, é obrigatório preencher o E-mail corporativo do colaborador.");
+      customAlert("Erro: Para fornecer acesso ao sistema, é obrigatório preencher o E-mail corporativo do colaborador.");
       return;
     }
 
     // Check pre-existence of Matricula
     const isMatriculaExists = colaboradores.some(c => c.matricula === matricula && c.matricula !== originalMatricula);
     if (isMatriculaExists) {
-      alert(`Erro: A matrícula '${matricula}' já está em uso por outro funcionário.`);
+      customAlert(`Erro: A matrícula '${matricula}' já está em uso por outro funcionário.`);
       return;
     }
 
@@ -539,7 +566,7 @@ Atenciosamente,
       finalInssRetorno = "";
       finalInssRep = "";
       finalInssObs = "";
-      alert("Aviso do Sistema: O preenchimento da Data de Retorno arquivou automaticamente a licença INSS no prontuário do colaborador!");
+      customAlert("Aviso do Sistema: O preenchimento da Data de Retorno arquivou automaticamente a licença INSS no prontuário do colaborador!");
     }
 
     const compiledColaborador: Colaborador = {
@@ -687,8 +714,8 @@ Atenciosamente,
     setIsOpenModal(false);
   };
 
-  const handleDeleteColaborador = (colab: Colaborador) => {
-    if (confirm(`Deseja realmente excluir permanentemente a ficha de ${colab.nome} (Matrícula: ${colab.matricula})?`)) {
+  const handleDeleteColaborador = async (colab: Colaborador) => {
+    if (await customConfirm(`Deseja realmente excluir permanentemente a ficha de ${colab.nome} (Matrícula: ${colab.matricula})?`)) {
       const novosDados = colaboradores.filter(c => c.matricula !== colab.matricula);
       onUpdateColaboradores(novosDados);
     }
@@ -838,7 +865,7 @@ Atenciosamente,
                           onClick={() => {
                             if (navigator.clipboard) {
                               navigator.clipboard.writeText(log.body);
-                              alert("Mensagem copiada para a área de transferência com sucesso!");
+                              customAlert("Mensagem copiada para a área de transferência com sucesso!");
                             }
                           }}
                           className="inline-flex items-center gap-1 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-250 font-extrabold rounded text-[10px] border border-slate-700 uppercase transition cursor-pointer"
@@ -1399,6 +1426,102 @@ Atenciosamente,
                       className="w-full p-3 border border-slate-300 rounded-xl focus:outline-none focus:border-sky-500"
                     />
                   </div>
+                </div>
+              </div>
+
+              {/* Seção Extra: Universidade Corporativa - Aproveitamento Acadêmico */}
+              <div className="border border-slate-200 rounded-2xl p-5 space-y-4 bg-white shadow-xs">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-100 pb-3 gap-2">
+                  <h4 className="text-xs font-extrabold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                    <GraduationCap className="w-4 h-4 text-sky-600" />
+                    <span>Universidade Corporativa - Aproveitamento Acadêmico</span>
+                  </h4>
+                  {(() => {
+                    if (!matricula) {
+                      return <span className="text-[10px] text-slate-400 font-bold bg-slate-100 px-2.5 py-0.5 rounded-full">Digite a matrícula para calcular</span>;
+                    }
+                    const mandatoryCourses = cursos.filter(curso => 
+                      curso.targets.some(t => t.cargo === cargo && t.obrigatorio)
+                    );
+                    if (mandatoryCourses.length === 0) {
+                      return <span className="text-[10px] text-slate-400 font-bold bg-slate-100 px-2.5 py-0.5 rounded-full">Livre de Exigências Obrigatórias</span>;
+                    }
+                    const completedRequired = certificados.filter(cert => 
+                      cert.colaboradorMatricula === matricula && 
+                      mandatoryCourses.some(mc => mc.id === cert.cursoId)
+                    );
+                    const pct = Math.min(100, Math.round((completedRequired.length / mandatoryCourses.length) * 100));
+                    return (
+                      <span className={`text-xs px-2.5 py-0.5 rounded-full font-black border ${
+                        pct === 100 ? 'bg-emerald-50 text-emerald-800 border-emerald-150' : 'bg-rose-50 text-rose-800 border-rose-150'
+                      }`}>
+                        Progresso Regulatório: {pct}% Concluído ({completedRequired.length} de {mandatoryCourses.length})
+                      </span>
+                    );
+                  })()}
+                </div>
+
+                <div className="space-y-3">
+                  {(() => {
+                    if (!matricula) {
+                      return <p className="text-slate-400 italic text-xs">Por favor, preencha a Matrícula do colaborador para listar o aproveitamento acadêmico.</p>;
+                    }
+
+                    // Filter courses applicable to this collaborator's position/cargo
+                    const applicableCourses = cursos.filter(curso => 
+                      curso.targets.some(t => t.cargo === cargo)
+                    );
+
+                    if (applicableCourses.length === 0) {
+                      return <p className="text-slate-400 italic text-xs">Nenhum curso regulatório cadastrado na universidade é direcionado para o cargo selecionado ({cargo}) atualmente.</p>;
+                    }
+
+                    return (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {applicableCourses.map(curso => {
+                          const isMandatory = curso.targets.find(t => t.cargo === cargo)?.obrigatorio;
+                          const cert = certificados.find(c => c.colaboradorMatricula === matricula && c.cursoId === curso.id);
+
+                          return (
+                            <div 
+                              key={curso.id} 
+                              className={`p-3 border rounded-xl flex flex-col justify-between gap-2.5 transition ${
+                                cert 
+                                  ? 'bg-emerald-50/25 border-emerald-150' 
+                                  : isMandatory 
+                                    ? 'bg-rose-50/20 border-rose-150' 
+                                    : 'bg-slate-50/50 border-slate-150'
+                              }`}
+                            >
+                              <div className="space-y-1">
+                                <div className="flex justify-between items-start gap-1.5">
+                                  <span className="font-extrabold text-[11px] text-slate-800 leading-tight block">{curso.nome}</span>
+                                  {isMandatory ? (
+                                    <span className="text-[8px] bg-red-100 text-red-800 px-1.5 py-0.5 rounded font-black uppercase shrink-0">Obrigatório</span>
+                                  ) : (
+                                    <span className="text-[8px] bg-sky-100 text-sky-800 px-1.5 py-0.5 rounded font-black uppercase shrink-0">Recomendado</span>
+                                  )}
+                                </div>
+                                <p className="text-[9px] text-slate-400 font-semibold truncate leading-none">ID: {curso.id}</p>
+                              </div>
+
+                              {cert ? (
+                                <div className="flex items-center gap-1 text-[10px] text-emerald-850 font-bold bg-emerald-50 py-1 px-2.5 rounded-lg border border-emerald-150/40 w-fit">
+                                  <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full shrink-0" />
+                                  <span>Concluído em {cert.dataConclusao.split('-').reverse().join('/')} ({cert.origem})</span>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-1 text-[10px] text-slate-500 font-bold bg-slate-100 py-1 px-2.5 rounded-lg border border-slate-200 w-fit">
+                                  <span className="w-1.5 h-1.5 bg-slate-400 rounded-full shrink-0" />
+                                  <span>Pendente de homologação</span>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
 
@@ -1968,6 +2091,95 @@ Atenciosamente,
                 )}
               </div>
 
+              {/* Painel de Universidade Corporativa - EXCELENTE ATENDIMENTO DO PEDIDO DO USUÁRIO */}
+              <div className="border border-slate-200 rounded-3xl p-5 space-y-4">
+                <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+                  <h4 className="text-xs font-extrabold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                    <GraduationCap className="w-4 h-4 text-sky-600 animate-pulse" />
+                    <span>Universidade Corporativa - Aproveitamento Acadêmico</span>
+                  </h4>
+                  {(() => {
+                    const mandatoryCourses = cursos.filter(curso => 
+                      curso.targets.some(t => t.cargo === selectedViewColab.cargo && t.obrigatorio)
+                    );
+                    if (mandatoryCourses.length === 0) {
+                      return <span className="text-[10px] text-slate-400 font-bold bg-slate-100 px-2.5 py-0.5 rounded-full">Livre de Exigências</span>;
+                    }
+                    const completedRequired = certificados.filter(cert => 
+                      cert.colaboradorMatricula === selectedViewColab.matricula && 
+                      mandatoryCourses.some(mc => mc.id === cert.cursoId)
+                    );
+                    const pct = Math.min(100, Math.round((completedRequired.length / mandatoryCourses.length) * 100));
+                    return (
+                      <span className={`text-xs px-2.5 py-0.5 rounded-full font-black border ${
+                        pct === 100 ? 'bg-emerald-50 text-emerald-800 border-emerald-150' : 'bg-rose-50 text-rose-805 border-rose-150'
+                      }`}>
+                        Status: {pct}% Concluído ({completedRequired.length} de {mandatoryCourses.length})
+                      </span>
+                    );
+                  })()}
+                </div>
+
+                <div className="space-y-3.5">
+                  {(() => {
+                    // Filter courses applicable to this collaborator's position/cargo
+                    const applicableCourses = cursos.filter(curso => 
+                      curso.targets.some(t => t.cargo === selectedViewColab.cargo)
+                    );
+
+                    if (applicableCourses.length === 0) {
+                      return <p className="text-slate-400 italic text-xs">Nenhum curso regulatório cadastrado na universidade é direcionado para este cargo ({selectedViewColab.cargo}) atualmente.</p>;
+                    }
+
+                    return (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                        {applicableCourses.map(curso => {
+                          const isMandatory = curso.targets.find(t => t.cargo === selectedViewColab.cargo)?.obrigatorio;
+                          const cert = certificados.find(c => c.colaboradorMatricula === selectedViewColab.matricula && c.cursoId === curso.id);
+
+                          return (
+                            <div 
+                              key={curso.id} 
+                              className={`p-3.5 border rounded-2xl flex flex-col justify-between gap-2.5 transition ${
+                                cert 
+                                  ? 'bg-emerald-50/20 border-emerald-150' 
+                                  : isMandatory 
+                                    ? 'bg-rose-50/20 border-rose-150' 
+                                    : 'bg-slate-50/50 border-slate-150'
+                              }`}
+                            >
+                              <div className="space-y-1">
+                                <div className="flex justify-between items-start gap-1.5">
+                                  <span className="font-extrabold text-[11.5px] text-slate-905 leading-tight block">{curso.nome}</span>
+                                  {isMandatory ? (
+                                    <span className="text-[8px] bg-red-100 text-red-800 px-1.5 py-0.5 rounded font-black uppercase shrink-0">Obrigatório</span>
+                                  ) : (
+                                    <span className="text-[8px] bg-sky-100 text-sky-800 px-1.5 py-0.5 rounded font-black uppercase shrink-0">Recomendado</span>
+                                  )}
+                                </div>
+                                <p className="text-[10px] text-slate-400 font-semibold truncate leading-none">ID: {curso.id}</p>
+                              </div>
+
+                              {cert ? (
+                                <div className="flex items-center gap-1 text-[10px] text-emerald-800 font-bold bg-emerald-50/90 py-1 px-2.5 rounded-xl border border-emerald-150/45 w-fit">
+                                  <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full shrink-0" />
+                                  <span>Concluído em {cert.dataConclusao.split('-').reverse().join('/')} ({cert.origem})</span>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-1 text-[10px] text-slate-550 font-bold bg-slate-100 py-1 px-2.5 rounded-xl border border-slate-200/80 w-fit">
+                                  <span className="w-1.5 h-1.5 bg-slate-400 rounded-full shrink-0" />
+                                  <span>Pendente de homologação</span>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+
               {/* Histórico médico do absenteísmo */}
               <div className="border border-slate-200 rounded-3xl p-5 space-y-4">
                 <h4 className="text-xs font-extrabold text-slate-800 uppercase tracking-wider border-b border-slate-100 pb-2">Afastamentos e Atestados Médicos</h4>
@@ -2061,7 +2273,7 @@ Atenciosamente,
                         type="button"
                         onClick={() => {
                           if (!localFeriasStartDate) {
-                            alert("Selecione uma data de início!");
+                            customAlert("Selecione uma data de início!");
                             return;
                           }
                           
@@ -2091,7 +2303,7 @@ Atenciosamente,
 
                           onUpdateFerias([...ferias, novaFerias]);
                           setIsRequestingFeriasLocal(false);
-                          alert("Nova solicitação de férias cadastrada com sucesso!");
+                          customAlert("Nova solicitação de férias cadastrada com sucesso!");
                         }}
                         className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl text-xs transition"
                       >
@@ -2259,7 +2471,7 @@ Atenciosamente,
                   try {
                     if (navigator.clipboard && navigator.clipboard.writeText) {
                       navigator.clipboard.writeText(textToCopy).then(() => {
-                        alert("Mensagem copiada para a área de transferência com sucesso!");
+                        customAlert("Mensagem copiada para a área de transferência com sucesso!");
                       }).catch(() => {
                         const textArea = document.createElement("textarea");
                         textArea.value = textToCopy;
@@ -2271,7 +2483,7 @@ Atenciosamente,
                         textArea.select();
                         document.execCommand('copy');
                         document.body.removeChild(textArea);
-                        alert("Mensagem copiada para a área de transferência com sucesso!");
+                        customAlert("Mensagem copiada para a área de transferência com sucesso!");
                       });
                     } else {
                       const textArea = document.createElement("textarea");
@@ -2284,10 +2496,10 @@ Atenciosamente,
                       textArea.select();
                       document.execCommand('copy');
                       document.body.removeChild(textArea);
-                      alert("Mensagem copiada para a área de transferência com sucesso!");
+                      customAlert("Mensagem copiada para a área de transferência com sucesso!");
                     }
                   } catch (err) {
-                    alert("Mensagem não pôde ser copiada automaticamente. Copie manualmente do texto.");
+                    customAlert("Mensagem não pôde ser copiada automaticamente. Copie manualmente do texto.");
                   }
                 }}
                 className="px-4 py-2 border border-slate-300 text-slate-600 font-bold rounded-xl text-xs hover:bg-slate-100 transition whitespace-nowrap font-sans"

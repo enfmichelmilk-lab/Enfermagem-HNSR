@@ -22,6 +22,8 @@ import UsuariosView from './components/UsuariosView';
 import FeriasView from './components/FeriasView';
 import ComissoesView from './components/ComissoesView';
 import ChamadaView from './components/ChamadaView';
+import UniversidadeView from './components/UniversidadeView';
+import CustomDialogContainer from './components/CustomDialogContainer';
 import { subscribeCollection, saveDocument, removeDocument } from './lib/firebase';
 
 export default function App() {
@@ -525,6 +527,12 @@ export default function App() {
             usuarioLogado={usuarioLogado}
           />
         );
+      case 'universidade':
+        return (
+          <UniversidadeView 
+            colaboradores={colaboradores}
+          />
+        );
       case 'usuarios':
         if (usuarioLogado?.email?.toLowerCase() !== 'enfmichelmilk@gmail.com') {
           return (
@@ -562,6 +570,7 @@ export default function App() {
 
   return (
     <>
+      <CustomDialogContainer />
       {!usuarioLogado ? (
         <LoginView 
           usuarios={usuarios} 

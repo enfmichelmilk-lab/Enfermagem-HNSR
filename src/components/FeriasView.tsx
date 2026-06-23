@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { Ferias, Colaborador, Usuario } from '../types';
 import SearchableColaboradorSelect from './SearchableColaboradorSelect';
+import { customAlert, customConfirm } from '../utils/customDialog';
 
 interface FeriasViewProps {
   ferias: Ferias[];
@@ -82,17 +83,17 @@ export default function FeriasView({
     e.preventDefault();
 
     if (!selectedColabMatricula) {
-      alert("Por favor, selecione um colaborador.");
+      customAlert("Por favor, selecione um colaborador.");
       return;
     }
     if (!startDate) {
-      alert("Por favor, informe a data de início das férias.");
+      customAlert("Por favor, informe a data de início das férias.");
       return;
     }
 
     const selectedColab = colaboradores.find(c => c.matricula === selectedColabMatricula);
     if (!selectedColab) {
-      alert("Colaborador não encontrado.");
+      customAlert("Colaborador não encontrado.");
       return;
     }
 
@@ -115,7 +116,7 @@ export default function FeriasView({
     });
 
     if (hasOverlap) {
-      alert(`O colaborador ${selectedColab.nome} já possui férias registradas que se sobrepõem a esse período.`);
+      customAlert(`O colaborador ${selectedColab.nome} já possui férias registradas que se sobrepõem a esse período.`);
       return;
     }
 
@@ -135,7 +136,7 @@ export default function FeriasView({
     const novasFeriasList = [...ferias, novaSolicitacao];
     onUpdateFerias(novasFeriasList);
     
-    alert(`Férias solicitadas com sucesso! Período: de ${startDate.split('-').reverse().join('/')} até ${dataFim.split('-').reverse().join('/')}. Retorno em ${dataRetorno.split('-').reverse().join('/')}.`);
+    customAlert(`Férias solicitadas com sucesso! Período: de ${startDate.split('-').reverse().join('/')} até ${dataFim.split('-').reverse().join('/')}. Retorno em ${dataRetorno.split('-').reverse().join('/')}.`);
     
     // Reset Form
     setSelectedColabMatricula('');
@@ -145,8 +146,8 @@ export default function FeriasView({
   };
 
   // Delete vacation
-  const handleDeleteFerias = (id: string) => {
-    if (confirm("Deseja realmente excluir/cancelar este registro de férias? Isso removerá o bloqueio correspondente na escala.")) {
+  const handleDeleteFerias = async (id: string) => {
+    if (await customConfirm("Deseja realmente excluir/cancelar este registro de férias? Isso removerá o bloqueio correspondente na escala.")) {
       const updated = ferias.filter(f => f.id !== id);
       onUpdateFerias(updated);
     }
@@ -659,7 +660,7 @@ export default function FeriasView({
                 type="button"
                 onClick={() => {
                   if (!editStartDate) {
-                    alert("Informe a data de início!");
+                    customAlert("Informe a data de início!");
                     return;
                   }
 
@@ -690,7 +691,7 @@ export default function FeriasView({
 
                   onUpdateFerias(updatedList);
                   setEditingFerias(null);
-                  alert("Registro de férias atualizado com sucesso!");
+                  customAlert("Registro de férias atualizado com sucesso!");
                 }}
                 className="px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white font-extrabold rounded-xl text-xs transition"
               >

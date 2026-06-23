@@ -144,6 +144,35 @@
         "usuarioCriador": { "type": "string" }
       },
       "required": ["id", "data", "turno", "enfermeiroReferencia", "statusColaboradores", "metricasSetor", "dataCriacao"]
+    },
+    "Curso": {
+      "title": "Curso",
+      "description": "Courses registered in corporate university",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "nome": { "type": "string" },
+        "descricao": { "type": "string" },
+        "targets": { "type": "array" },
+        "dataCriacao": { "type": "string" }
+      },
+      "required": ["id", "nome", "targets", "dataCriacao"]
+    },
+    "CertificadoCurso": {
+      "title": "CertificadoCurso",
+      "description": "Completed course certificates logged by employees",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "colaboradorMatricula": { "type": "string" },
+        "colaboradorNome": { "type": "string" },
+        "cursoId": { "type": "string" },
+        "cursoNome": { "type": "string" },
+        "dataConclusao": { "type": "string" },
+        "origem": { "type": "string" },
+        "dataCriacao": { "type": "string" }
+      },
+      "required": ["id", "colaboradorMatricula", "colaboradorNome", "cursoId", "cursoNome", "dataConclusao", "dataCriacao"]
     }
   },
   "firestore": {
@@ -178,6 +207,14 @@
     "/chamadas/{chamadaId}": {
       "schema": "Chamada",
       "description": "Daily attendance and clinical checkpoint records"
+    },
+    "/universidade_cursos/{cursoId}": {
+      "schema": "Curso",
+      "description": "Registered training programs and classes"
+    },
+    "/universidade_certificados/{certificadoId}": {
+      "schema": "CertificadoCurso",
+      "description": "Individual training completion logs with details"
     }
   }
 }

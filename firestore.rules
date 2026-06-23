@@ -26,5 +26,11 @@ service cloud.firestore {
     match /chamadas/{document} {
       allow read, write: if true;
     }
+    match /universidade_cursos/{document} {
+      allow read, write: if true;
+    }
+    match /universidade_certificados/{document} {
+      allow read, write: if true;
+    }
   }
 }

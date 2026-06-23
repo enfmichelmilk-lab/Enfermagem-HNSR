@@ -13,6 +13,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieCha
 import { Absenteismo, Colaborador, Usuario } from '../types';
 import SearchableColaboradorSelect from './SearchableColaboradorSelect';
 import { CID_NATIVO, SETORES_HOSPITALARES, EQUIPES_ESCALA } from '../data/mockData';
+import { customAlert, customConfirm } from '../utils/customDialog';
 
 export interface DraftCertificado {
   id: string;
@@ -440,7 +441,7 @@ export default function AbsenteismoView({
     e.preventDefault();
 
     if (!colaboradorNome || !inicio || !duracaoNum) {
-      alert("Por favor, preencha todos os campos obrigatórios do lançamento.");
+      customAlert("Por favor, preencha todos os campos obrigatórios do lançamento.");
       return;
     }
 
@@ -522,8 +523,8 @@ export default function AbsenteismoView({
     setIsOpenModal(true);
   };
 
-  const handleDeleteAbs = (id: string, name: string) => {
-    if (confirm(`Deseja remover as faltas no prontuário de ${name} (Lançamento #${id})?`)) {
+  const handleDeleteAbs = async (id: string, name: string) => {
+    if (await customConfirm(`Deseja remover as faltas no prontuário de ${name} (Lançamento #${id})?`)) {
       onUpdateAbsenteismo(absenteismo.filter(a => a.id !== id));
     }
   };
@@ -729,7 +730,7 @@ export default function AbsenteismoView({
     const readyItems = batchDrafts.filter(d => d.status === 'sucesso' && d.nomeCorrespondente);
 
     if (readyItems.length === 0) {
-      alert('Nenhum atestado revisado com colaborador válido está pronto para ser lançado.');
+      customAlert('Nenhum atestado revisado com colaborador válido está pronto para ser lançado.');
       return;
     }
 
@@ -760,7 +761,7 @@ export default function AbsenteismoView({
     
     // Clear successfully launched ones, leave errors/unmatched
     setBatchDrafts(prev => prev.filter(d => !readyItems.some(ri => ri.id === d.id)));
-    alert(`Sucesso! ${newAbsenteismos.length} atestados foram lançados e suas escalas foram atualizadas automaticamente no sistema!`);
+    customAlert(`Sucesso! ${newAbsenteismos.length} atestados foram lançados e suas escalas foram atualizadas automaticamente no sistema!`);
 
     if (batchDrafts.length === readyItems.length) {
       setIsOpenBatchModal(false);
@@ -851,7 +852,7 @@ export default function AbsenteismoView({
       setIsOpenImportModal(false);
       setImportText('');
       setImportError('');
-      alert(`Sucesso! ${novos.length} registros de absenteísmo importados.`);
+      customAlert(`Sucesso! ${novos.length} registros de absenteísmo importados.`);
     } catch (err: any) {
       setImportError('Erro ao parsear dados: ' + err.message);
     }

@@ -7,7 +7,7 @@ import React from 'react';
 import { 
   Activity, Users, Stethoscope, CalendarCheck, UserCog, 
   LogOut, HeartHandshake, Palmtree, Award, ClipboardCheck, 
-  Smartphone, X, Pin 
+  Smartphone, X, Pin, GraduationCap
 } from 'lucide-react';
 import { Usuario } from '../types';
 import HapvidaLogo from './HapvidaLogo';
@@ -280,6 +280,25 @@ export default function Sidebar({
           >
             <Award className={`w-4 h-4 shrink-0 ${activeView === 'comissoes' ? 'text-white' : 'text-indigo-500'}`} />
             {!isSidebarCollapsed && <span>Comissões (Selos)</span>}
+          </button>
+        </li>
+
+        <li>
+          <button
+            onClick={() => onNavigate('universidade')}
+            title={isSidebarCollapsed ? 'Univ. Corporativa' : undefined}
+            className={`w-full flex items-center gap-3 transition-all duration-150 rounded-lg text-sm font-semibold cursor-pointer ${
+              isSidebarCollapsed 
+                ? 'justify-center p-2.5 h-10 w-10 shrink-0' 
+                : 'py-2.5 px-3.5 text-left'
+            } ${
+              activeView === 'universidade'
+                ? 'bg-sky-600 text-white shadow-md shadow-sky-600/10'
+                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+            }`}
+          >
+            <GraduationCap className={`w-4 h-4 shrink-0 ${activeView === 'universidade' ? 'text-white' : 'text-sky-500'}`} />
+            {!isSidebarCollapsed && <span>Univ. Corporativa</span>}
           </button>
         </li>
 

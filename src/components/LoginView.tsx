@@ -7,6 +7,7 @@ import React, { useState } from 'react';
 import { Activity, Shield, KeyRound, Eye, EyeOff, Mail, ArrowLeft, Send } from 'lucide-react';
 import { Usuario } from '../types';
 import HapvidaLogo from './HapvidaLogo';
+import { customAlert } from '../utils/customDialog';
 
 interface LoginViewProps {
   usuarios: Usuario[];
@@ -49,12 +50,12 @@ export default function LoginView({ usuarios, onLoginSuccess, onUpdateUsuarios }
     }
 
     if (!user) {
-      alert("Acesso negado: E-mail não localizado na base de dados de Usuários.");
+      customAlert("Acesso negado: E-mail não localizado na base de dados de Usuários.");
       return;
     }
 
     if (user.status !== "Ativo") {
-      alert("Acesso bloqueado: Usuário inativo ou suspenso. Procure a gestão.");
+      customAlert("Acesso bloqueado: Usuário inativo ou suspenso. Procure a gestão.");
       return;
     }
 
@@ -64,7 +65,7 @@ export default function LoginView({ usuarios, onLoginSuccess, onUpdateUsuarios }
 
     if (isFirstAccess) {
       if (isTempWord && user.senha !== senha) {
-        alert("Senha provisória incorreta.");
+        customAlert("Senha provisória incorreta.");
         return;
       }
       setCurrentUser(user);
@@ -76,18 +77,18 @@ export default function LoginView({ usuarios, onLoginSuccess, onUpdateUsuarios }
     if (user.senha === senha) {
       onLoginSuccess(user, keepConnected);
     } else {
-      alert("Senha incorreta.");
+      customAlert("Senha incorreta.");
     }
   };
 
   const handleFirstAccessSave = (e: React.FormEvent) => {
     e.preventDefault();
     if (!novaSenha || novaSenha.length < 4) {
-      alert("A nova senha deve possuir pelo menos 4 caracteres.");
+      customAlert("A nova senha deve possuir pelo menos 4 caracteres.");
       return;
     }
     if (novaSenha !== confirmaSenha) {
-      alert("As senhas digitadas não coincidem.");
+      customAlert("As senhas digitadas não coincidem.");
       return;
     }
 
@@ -99,7 +100,7 @@ export default function LoginView({ usuarios, onLoginSuccess, onUpdateUsuarios }
         return u;
       });
       onUpdateUsuarios(atualizados);
-      alert("Senha redefinida com sucesso! Acessando painel...");
+      customAlert("Senha redefinida com sucesso! Acessando painel...");
       onLoginSuccess({ ...currentUser, senha: novaSenha }, keepConnected);
     }
   };
@@ -121,11 +122,11 @@ export default function LoginView({ usuarios, onLoginSuccess, onUpdateUsuarios }
     }
 
     if (!user) {
-      alert("E-mail não cadastrado no sistema.");
+      customAlert("E-mail não cadastrado no sistema.");
       return;
     }
     if (user.status !== "Ativo") {
-      alert("Usuário inativo. Procure a gestão.");
+      customAlert("Usuário inativo. Procure a gestão.");
       return;
     }
 
@@ -143,18 +144,18 @@ export default function LoginView({ usuarios, onLoginSuccess, onUpdateUsuarios }
       setStep('reset-password');
       setSimulatorMessage(null);
     } else {
-      alert("Token inválido ou expirado.");
+      customAlert("Token inválido ou expirado.");
     }
   };
 
   const handleResetPasswordSave = (e: React.FormEvent) => {
     e.preventDefault();
     if (!novaSenha || novaSenha.length < 4) {
-      alert("A nova senha deve possuir pelo menos 4 caracteres.");
+      customAlert("A nova senha deve possuir pelo menos 4 caracteres.");
       return;
     }
     if (novaSenha !== confirmaSenha) {
-      alert("A confirmação de senha não confere.");
+      customAlert("A confirmação de senha não confere.");
       return;
     }
 
@@ -167,7 +168,7 @@ export default function LoginView({ usuarios, onLoginSuccess, onUpdateUsuarios }
     });
 
     onUpdateUsuarios(atualizados);
-    alert("Senha recuperada com sucesso! Entre com suas novas credenciais.");
+    customAlert("Senha recuperada com sucesso! Entre com suas novas credenciais.");
     setSenha('');
     setStep('login');
     setSimulatorMessage(null);

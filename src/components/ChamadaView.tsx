@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { subscribeCollection } from '../lib/firebase';
 import { Colaborador, Usuario, Absenteismo, Ferias, SolicitacaoFolga, Chamada, ColaboradorChamadaStatus, ChamadaSetorMetric } from '../types';
+import { customAlert, customConfirm } from '../utils/customDialog';
 
 interface ChamadaViewProps {
   colaboradores: Colaborador[];
@@ -445,10 +446,10 @@ export default function ChamadaView({
     setIsCreating(true);
   };
 
-  const handleUpdateDraftStatus = (matricula: string, newStatus: 'Presente' | 'Atestado' | 'Falta' | 'Folga') => {
+  const handleUpdateDraftStatus = async (matricula: string, newStatus: 'Presente' | 'Atestado' | 'Falta' | 'Folga') => {
     const colab = draftColaboradores.find(c => c.matricula === matricula);
     if (newStatus !== 'Folga' && colab && (colab.status === 'Folga' || (colab.info && colab.info.toLowerCase().includes('folga')))) {
-      const confirmChange = window.confirm(`Este colaborador (${colab.nome}) está programado de FOLGA para esta data. Tem certeza de que de deseja alterar o status para "${newStatus === 'Presente' ? 'Presente' : newStatus === 'Atestado' ? 'Atestado' : 'Falta'}"?`);
+      const confirmChange = await customConfirm(`Este colaborador (${colab.nome}) está programado de FOLGA para esta data. Tem certeza de que de deseja alterar o status para "${newStatus === 'Presente' ? 'Presente' : newStatus === 'Atestado' ? 'Atestado' : 'Falta'}"?`);
       if (!confirmChange) return;
     }
     setDraftColaboradores(prev => 
@@ -592,7 +593,7 @@ export default function ChamadaView({
 
   const handleEditChamada = (ch: Chamada) => {
     if (ch.usuarioCriador && ch.usuarioCriador !== usuarioLogado.email) {
-      alert(`Acesso Negado: Somente o usuário que criou este fechamento (${ch.usuarioCriador}) pode alterá-lo.`);
+      customAlert(`Acesso Negado: Somente o usuário que criou este fechamento (${ch.usuarioCriador}) pode alterá-lo.`);
       return;
     }
     setEditingId(ch.id);
@@ -606,7 +607,7 @@ export default function ChamadaView({
 
   const handleSaveChamada = () => {
     if (!enfermeiroRef.trim()) {
-      alert("Por favor, preencha o campo do Enfermeiro Referência.");
+      customAlert("Por favor, preencha o campo do Enfermeiro Referência.");
       return;
     }
 
@@ -659,14 +660,14 @@ export default function ChamadaView({
     setEditingId(null);
   };
 
-  const handleDeleteChamada = (id: string) => {
+  const handleDeleteChamada = async (id: string) => {
     const target = chamadas.find(c => c.id === id);
     if (target && target.usuarioCriador && target.usuarioCriador !== usuarioLogado.email) {
-      alert(`Erro de Segurança: Somente o usuário que criou este registro de chamada (${target.usuarioCriador}) pode excluí-lo.`);
+      customAlert(`Erro de Segurança: Somente o usuário que criou este registro de chamada (${target.usuarioCriador}) pode excluí-lo.`);
       return;
     }
 
-    if (window.confirm("Deseja realmente excluir este registro de chamada permanentemente?")) {
+    if (await customConfirm("Deseja realmente excluir este registro de chamada permanentemente?")) {
       const filtered = chamadas.filter(c => c.id !== id);
       onUpdateChamadas(filtered);
     }
@@ -938,8 +939,8 @@ export default function ChamadaView({
             <div className="flex items-center gap-2 shrink-0">
               <button
                 type="button"
-                onClick={() => {
-                  if (window.confirm("Deseja cancelar o preenchimento desta chamada? Seus dados serão perdidos.")) {
+                onClick={async () => {
+                  if (await customConfirm("Deseja cancelar o preenchimento desta chamada? Seus dados serão perdidos.")) {
                     setIsCreating(false);
                     setEditingId(null);
                   }
@@ -1486,8 +1487,8 @@ export default function ChamadaView({
           {/* Bottom Save Action Controls */}
           <div className="p-4 bg-slate-50 border-t border-slate-150 flex items-center justify-end gap-3">
             <button
-              onClick={() => {
-                if (window.confirm("Deseja realmente cancelar? Dados editados serão perdidos.")) {
+              onClick={async () => {
+                if (await customConfirm("Deseja realmente cancelar? Dados editados serão perdidos.")) {
                   setIsCreating(false);
                   setEditingId(null);
                 }
