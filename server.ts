@@ -599,7 +599,7 @@ Gere apenas o vetor JSON válido compatível com o esquema abaixo. Caso a data d
             text: `Você é um gestor de universidade corporativa em um hospital de alta complexidade.
 Sua missão é ler o texto fornecido pelo usuário contendo solicitações de novos cursos ou um planejamento de treinamentos, identificar cada curso que deve ser criado, e determinar para quais cargos de enfermagem e saúde o curso deve ser direcionado (marcando se é obrigatório ou recomendado).
 
-Cargos disponíveis no sistema (use EXATAMENTE estes nomes na propriedade 'cargo'):
+Cargos disponíveis no sistema (use EXATAMENTE estes nomes na propriedade 'obrigatorios' ou 'recomendados' como uma lista separada por vírgula):
 - "Supervisor(a)"
 - "Coordenador(a)"
 - "Gerente"
@@ -609,6 +609,8 @@ Cargos disponíveis no sistema (use EXATAMENTE estes nomes na propriedade 'cargo
 - "Administrativo"
 - "Estagiária"
 - "Outros"
+
+Se o curso for obrigatório para todos, preencha a propriedade 'obrigatorios' com todos esses cargos listados acima.
 
 Texto para análise:
 """
@@ -633,33 +635,115 @@ Extraia os cursos e seus respectivos públicos-alvo de acordo com o texto ou a m
                   type: Type.STRING, 
                   description: "Ementa, descrição ou objetivo do treinamento." 
                 },
-                targets: { 
-                  type: Type.ARRAY,
-                  description: "Lista de cargos alvo e suas respectivas obrigatoriedades.",
-                  items: {
-                    type: Type.OBJECT,
-                    properties: {
-                      cargo: {
-                        type: Type.STRING,
-                        description: "O nome exato do cargo conforme os disponíveis."
-                      },
-                      obrigatorio: {
-                        type: Type.BOOLEAN,
-                        description: "Se o curso é obrigatório (true) ou apenas recomendado (false) para este cargo."
-                      }
-                    },
-                    required: ["cargo", "obrigatorio"]
-                  }
+                obrigatorios: {
+                  type: Type.STRING,
+                  description: "Nomes dos cargos para os quais este curso é OBRIGATÓRIO, separados por vírgula. Ex: 'Enfermeiro(a), Supervisor(a)'"
+                },
+                recomendados: {
+                  type: Type.STRING,
+                  description: "Nomes dos cargos para os quais este curso é APENAS RECOMENDADO (não obrigatório), separados por vírgula."
                 }
               },
-              required: ["nome", "descricao", "targets"]
+              required: ["nome", "descricao", "obrigatorios", "recomendados"]
             }
           }
         }
       });
 
-      const text = response.text || "[]";
-      res.json(JSON.parse(text));
+      let rawList: any[] = [];
+      try {
+        let text = response.text || "[]";
+        text = text.trim();
+        if (text.startsWith("```json")) {
+          text = text.substring(7);
+        }
+        if (text.startsWith("```")) {
+          text = text.substring(3);
+        }
+        if (text.endsWith("```")) {
+          text = text.substring(0, text.length - 3);
+        }
+        text = text.trim();
+        rawList = JSON.parse(text);
+      } catch (e) {
+        console.error("Erro ao analisar JSON de cursos em massa:", e, response.text);
+        throw new Error("Resposta do Gemini não pôde ser analisada como um JSON válido de cursos.");
+      }
+
+      const availableCargos = [
+        "Supervisor(a)",
+        "Coordenador(a)",
+        "Gerente",
+        "Enfermeiro(a)",
+        "Tec. Enf.",
+        "Aux. Enf.",
+        "Administrativo",
+        "Estagiária",
+        "Outros"
+      ];
+
+      const processedList = rawList.map((item: any) => {
+        const targets: any[] = [];
+        
+        // Split lists by commas or semicolons
+        const obrsRaw = item.obrigatorios 
+          ? item.obrigatorios.split(/[,;]/).map((s: string) => s.trim()) 
+          : [];
+        const recsRaw = item.recomendados 
+          ? item.recomendados.split(/[,;]/).map((s: string) => s.trim()) 
+          : [];
+
+        const findMatchedCargo = (name: string) => {
+          const lowerName = name.toLowerCase().replace(/[\(]a[\)]/g, 'a').replace(/ supervisor/g, 'supervisor');
+          return availableCargos.find(c => {
+            const cleanC = c.toLowerCase().replace(/[\(]a[\)]/g, 'a');
+            return cleanC === lowerName || cleanC.includes(lowerName) || lowerName.includes(cleanC);
+          });
+        };
+
+        // If the LLM returns "todos" or "todas"
+        const isObrigatorioParaTodos = obrsRaw.some((s: string) => {
+          const sLower = s.toLowerCase();
+          return sLower === "todos" || sLower === "todos os cargos" || sLower === "toda a enfermagem" || sLower === "todas as categorias";
+        });
+
+        if (isObrigatorioParaTodos) {
+          availableCargos.forEach(cargo => {
+            targets.push({ cargo, obrigatorio: true });
+          });
+        } else {
+          obrsRaw.forEach((cargoStr: string) => {
+            if (!cargoStr) return;
+            const matched = findMatchedCargo(cargoStr);
+            if (matched) {
+              targets.push({ cargo: matched, obrigatorio: true });
+            }
+          });
+
+          recsRaw.forEach((cargoStr: string) => {
+            if (!cargoStr) return;
+            const matched = findMatchedCargo(cargoStr);
+            if (matched && !targets.some(t => t.cargo === matched)) {
+              targets.push({ cargo: matched, obrigatorio: false });
+            }
+          });
+        }
+
+        // Fallback: if targets is empty, make it recommended for all
+        if (targets.length === 0) {
+          availableCargos.forEach(cargo => {
+            targets.push({ cargo, obrigatorio: false });
+          });
+        }
+
+        return {
+          nome: item.nome || "Curso sem nome",
+          descricao: item.descricao || "Sem descrição disponível.",
+          targets
+        };
+      });
+
+      res.json(processedList);
     } catch (error: any) {
       console.error("Erro ao extrair lista de cursos em massa via Gemini:", error);
       res.status(500).json({
