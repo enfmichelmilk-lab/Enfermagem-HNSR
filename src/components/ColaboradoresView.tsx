@@ -7,10 +7,10 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Users, Search, UserPlus, Filter, ShieldAlert, Award, 
   Trash2, ShieldCheck, FileText, Calendar, Clock, Contact, ChevronRight, X,
-  Eye, Pencil, Mail, Phone, Edit, GraduationCap
+  Eye, Pencil, Mail, Phone, Edit, GraduationCap, Upload, Loader2, RefreshCw, MessageSquare
 } from 'lucide-react';
 import { Colaborador, Usuario, Absenteismo, Curso, CertificadoCurso } from '../types';
-import { subscribeCollection } from '../lib/firebase';
+import { subscribeCollection, saveDocument } from '../lib/firebase';
 import { customAlert, customConfirm } from '../utils/customDialog';
 import { SETORES_HOSPITALARES, EQUIPES_ESCALA, CARGOS_ENFERMAGEM, CURSOS_INICIAIS } from '../data/mockData';
 
@@ -139,6 +139,97 @@ export default function ColaboradoresView({
     message: string;
     colabNome: string;
   } | null>(null);
+
+  const [analyzingCourseId, setAnalyzingCourseId] = useState<string | null>(null);
+
+  const getWhatsAppMessage = (colab: Colaborador) => {
+    if (!colab) return '';
+    const name = colab.nome;
+    const cargoName = colab.cargo;
+    
+    const mandatoryC = cursos.filter(curso => 
+      curso.targets.some(t => t.cargo === cargoName && t.obrigatorio)
+    );
+    
+    const pendingC = mandatoryC.filter(curso => 
+      !certificados.some(cert => cert.colaboradorMatricula === colab.matricula && cert.cursoId === curso.id)
+    );
+
+    let message = `Olá, *${name}*! 👋\n\n`;
+    message += `Gostaríamos de ressaltar a importância da adesão à trilha de aprendizagem da *Universidade Corporativa Hapvida*. A realização destes treinamentos é fundamental para mantermos a excelência do nosso atendimento e estarmos em conformidade com as exigências regulatórias obrigatórias do seu cargo de *${cargoName}*.\n\n`;
+
+    if (pendingC.length > 0) {
+      message += `📚 *Seus cursos obrigatórios pendentes:* \n`;
+      pendingC.forEach((c, idx) => {
+        message += `${idx + 1}. *${c.nome}*\n`;
+      });
+      message += `\nPor favor, acesse a plataforma da Universidade Corporativa e realize os treinamentos assim que possível. Contamos com a sua colaboração! 🎓`;
+    } else {
+      message += `🎉 Parabéns! Você concluiu todos os cursos obrigatórios da sua trilha atualmente! Agradecemos imensamente o seu empenho e dedicação! 🎓`;
+    }
+
+    return encodeURIComponent(message);
+  };
+
+  const handleCourseCertificateUpload = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+    curso: Curso,
+    colabMatricula: string,
+    colabNome: string
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setAnalyzingCourseId(curso.id);
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const fileBase64 = reader.result as string;
+        const mimeType = file.type || 'application/pdf';
+
+        const res = await fetch('/api/universidade/extract', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fileBase64, mimeType })
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || errData.details || 'Erro na resposta do servidor.');
+        }
+
+        const parsed = await res.json();
+        
+        const certId = 'cert_' + Math.random().toString(36).substr(2, 9);
+        const newCert: CertificadoCurso = {
+          id: certId,
+          colaboradorMatricula: colabMatricula,
+          colaboradorNome: colabNome,
+          cursoId: curso.id,
+          cursoNome: curso.nome,
+          dataConclusao: parsed.data_conclusao || new Date().toISOString().split('T')[0],
+          origem: 'Upload de Certificado (IA)',
+          dataCriacao: new Date().toISOString()
+        };
+
+        await saveDocument('universidade_certificados', certId, newCert);
+        customAlert(
+          `Sucesso!\n\n` +
+          `Certificado para o curso "${curso.nome}" analisado com sucesso por IA e homologado para ${colabNome}.\n\n` +
+          `• Nome do Colaborador extraído: "${parsed.colaborador_nome_original || 'Não identificado'}"\n` +
+          `• Curso extraído: "${parsed.curso_nome || 'Não identificado'}"\n` +
+          `• Data de Conclusão: ${newCert.dataConclusao.split('-').reverse().join('/')}`
+        );
+      } catch (err: any) {
+        console.error(err);
+        customAlert(`Erro ao analisar o certificado com IA: ${err.message || 'Falha de leitura.'}`);
+      } finally {
+        setAnalyzingCourseId(null);
+        e.target.value = '';
+      }
+    };
+    reader.readAsDataURL(file);
+  };
 
   const generateTempPassword = () => {
     const chars = '0123456789';
@@ -1511,9 +1602,30 @@ Atenciosamente,
                                   <span>Concluído em {cert.dataConclusao.split('-').reverse().join('/')} ({cert.origem})</span>
                                 </div>
                               ) : (
-                                <div className="flex items-center gap-1 text-[10px] text-slate-500 font-bold bg-slate-100 py-1 px-2.5 rounded-lg border border-slate-200 w-fit">
-                                  <span className="w-1.5 h-1.5 bg-slate-400 rounded-full shrink-0" />
-                                  <span>Pendente de homologação</span>
+                                <div className="space-y-1.5 mt-1">
+                                  <div className="flex items-center gap-1 text-[10px] text-slate-500 font-bold bg-slate-100 py-1 px-2.5 rounded-lg border border-slate-200 w-fit">
+                                    <span className="w-1.5 h-1.5 bg-slate-400 rounded-full shrink-0" />
+                                    <span>Pendente de homologação</span>
+                                  </div>
+                                  <div className="pt-1">
+                                    {analyzingCourseId === curso.id ? (
+                                      <div className="flex items-center gap-1.5 text-[10px] font-extrabold text-sky-700 bg-sky-50 py-1.5 px-3 rounded-lg border border-sky-100/60 w-full justify-center">
+                                        <Loader2 className="w-3.5 h-3.5 text-sky-600 animate-spin" />
+                                        <span>Analisando com IA...</span>
+                                      </div>
+                                    ) : (
+                                      <label className="flex items-center justify-center gap-1.5 py-1.5 px-3 bg-sky-50 hover:bg-sky-100 text-sky-700 hover:text-sky-800 border border-sky-200 hover:border-sky-300 rounded-lg text-[10px] font-extrabold transition cursor-pointer w-full">
+                                        <Upload className="w-3.5 h-3.5 text-sky-600" />
+                                        <span>Carregar Certificado (IA)</span>
+                                        <input
+                                          type="file"
+                                          accept="image/*,application/pdf"
+                                          className="hidden"
+                                          onChange={(e) => handleCourseCertificateUpload(e, curso, matricula, nome)}
+                                        />
+                                      </label>
+                                    )}
+                                  </div>
                                 </div>
                               )}
                             </div>
@@ -1943,21 +2055,33 @@ Atenciosamente,
                         </a>
                       )}
                     </div>
-                    <div className="flex justify-between items-center bg-slate-50 p-2.5 rounded-xl border border-slate-150">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-slate-50 p-2.5 rounded-xl border border-slate-150 gap-2">
                       <div>
                         <span className="text-[10px] text-slate-400 font-bold uppercase block">WhatsApp / Telefone</span>
                         <span className="text-xs text-slate-800 font-bold">{selectedViewColab.whatsapp || 'Não informado'}</span>
                       </div>
                       {selectedViewColab.whatsapp && (
-                        <a 
-                          href={`https://wa.me/55${selectedViewColab.whatsapp.replace(/\D/g, '')}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-lg transition-all flex items-center gap-1 font-bold text-[10px] border border-emerald-100/50"
-                        >
-                          <Phone className="w-3.5 h-3.5" />
-                          <span>Enviar Mensagem</span>
-                        </a>
+                        <div className="flex gap-1.5 w-full sm:w-auto">
+                          <a 
+                            href={`https://wa.me/55${selectedViewColab.whatsapp.replace(/\D/g, '')}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex-1 sm:flex-initial px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-all flex items-center justify-center gap-1 font-bold text-[10px] border border-slate-200"
+                          >
+                            <Phone className="w-3 h-3 text-slate-500" />
+                            <span>Mensagem</span>
+                          </a>
+                          <a 
+                            href={`https://wa.me/55${selectedViewColab.whatsapp.replace(/\D/g, '')}?text=${getWhatsAppMessage(selectedViewColab)}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex-1 sm:flex-initial px-2.5 py-1 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-all flex items-center justify-center gap-1.5 font-extrabold text-[10px] border border-green-700 shadow-xs cursor-pointer shrink-0"
+                            title="Enviar resumo de cursos pendentes da trilha acadêmica via WhatsApp"
+                          >
+                            <MessageSquare className="w-3 h-3 text-green-100" />
+                            <span>Enviar Pendências</span>
+                          </a>
+                        </div>
                       )}
                     </div>
                     <div className="flex justify-between items-center bg-slate-50 p-2.5 rounded-xl border border-slate-150">
@@ -2166,9 +2290,30 @@ Atenciosamente,
                                   <span>Concluído em {cert.dataConclusao.split('-').reverse().join('/')} ({cert.origem})</span>
                                 </div>
                               ) : (
-                                <div className="flex items-center gap-1 text-[10px] text-slate-550 font-bold bg-slate-100 py-1 px-2.5 rounded-xl border border-slate-200/80 w-fit">
-                                  <span className="w-1.5 h-1.5 bg-slate-400 rounded-full shrink-0" />
-                                  <span>Pendente de homologação</span>
+                                <div className="space-y-1.5 mt-1">
+                                  <div className="flex items-center gap-1 text-[10px] text-slate-550 font-bold bg-slate-100 py-1 px-2.5 rounded-xl border border-slate-200/80 w-fit">
+                                    <span className="w-1.5 h-1.5 bg-slate-400 rounded-full shrink-0" />
+                                    <span>Pendente de homologação</span>
+                                  </div>
+                                  <div className="pt-1">
+                                    {analyzingCourseId === curso.id ? (
+                                      <div className="flex items-center gap-1.5 text-[10px] font-extrabold text-sky-700 bg-sky-50 py-1.5 px-3 rounded-xl border border-sky-100/60 w-full justify-center">
+                                        <Loader2 className="w-3.5 h-3.5 text-sky-600 animate-spin" />
+                                        <span>Analisando com IA...</span>
+                                      </div>
+                                    ) : (
+                                      <label className="flex items-center justify-center gap-1.5 py-1.5 px-3 bg-sky-50 hover:bg-sky-100 text-sky-700 hover:text-sky-800 border border-sky-200 hover:border-sky-300 rounded-xl text-[10px] font-extrabold transition cursor-pointer w-full">
+                                        <Upload className="w-3.5 h-3.5 text-sky-600" />
+                                        <span>Carregar Certificado (IA)</span>
+                                        <input
+                                          type="file"
+                                          accept="image/*,application/pdf"
+                                          className="hidden"
+                                          onChange={(e) => handleCourseCertificateUpload(e, curso, selectedViewColab.matricula, selectedViewColab.nome)}
+                                        />
+                                      </label>
+                                    )}
+                                  </div>
                                 </div>
                               )}
                             </div>

@@ -125,8 +125,8 @@ async function startServer() {
       }
 
       const client = getGeminiClient();
-      const response = await client.models.generateContent({
-        model: "gemini-3.5-flash",
+      let response;
+      const contentParams = {
         contents: [
           {
             inlineData: {
@@ -173,7 +173,21 @@ Seja preciso e busque nos textos legíveis do atestado. Se algum campo não for 
             required: ["colaborador_nome_original", "data_inicio", "duracao_dias"]
           }
         }
-      });
+      };
+
+      try {
+        console.log(`[Absenteismo API] Tentando extração de atestado com gemini-3.5-flash...`);
+        response = await client.models.generateContent({
+          model: "gemini-3.5-flash",
+          ...contentParams
+        });
+      } catch (firstErr: any) {
+        console.warn(`[Absenteismo API] Falha com gemini-3.5-flash: ${firstErr.message || firstErr}. Tentando fallback com gemini-2.5-flash...`);
+        response = await client.models.generateContent({
+          model: "gemini-2.5-flash",
+          ...contentParams
+        });
+      }
 
       const text = response.text || "{}";
       res.json(JSON.parse(text));
@@ -452,9 +466,11 @@ Gere apenas o vetor JSON válido, seguindo o esquema abaixo. Caso a data de iní
         cleanBase64 = fileBase64.split(";base64,").pop();
       }
 
+      console.log(`[Universidade API] Recebido arquivo para extração. mimeType: ${mimeType}, base64Length: ${cleanBase64?.length}`);
+
       const client = getGeminiClient();
-      const response = await client.models.generateContent({
-        model: "gemini-3.5-flash",
+      let response;
+      const contentParams = {
         contents: [
           {
             inlineData: {
@@ -463,27 +479,26 @@ Gere apenas o vetor JSON válido, seguindo o esquema abaixo. Caso a data de iní
             },
           },
           {
-            text: `Você é um sistema especialista em OCR e processamento de documentos hospitalares.
-Sua tarefa é analisar a imagem ou PDF do certificado de conclusão de curso anexado e extrair as seguintes informações com máxima precisão:
+            text: `Examine este documento em anexo (pode ser uma foto, escaneamento ou PDF de um certificado de conclusão de curso da Universidade Corporativa Hapvida) e extraia os campos cruciais para o registro de capacitações acadêmicas.
+Retorne as informações estritamente estruturadas no formato JSON especificado.
+Se algum campo não for encontrado, responda com string vazia ou o valor de default descrito.
 
-1. NOME COMPLETO DO COLABORADOR (Beneficiário):
+Regras de extração:
+1. NOME COMPLETO DO COLABORADOR (Aluno/Beneficiário):
    - Localize o nome do profissional de saúde que concluiu o treinamento.
-   - Geralmente aparece após termos como: "Certificamos que", "conferido a", "concedido a", "outorgado a", "atribuído a", "aluno(a)", "ao(à) profissional".
-   - IGNORE nomes de diretores, palestrantes, coordenadores, secretários ou professores que assinam o certificado (ex: "Diretor Geral", "Coordenador de Enfermagem", "Palestrante").
-   - O nome deve vir limpo de cargos ou títulos anteriores/posteriores (ex: remova "Enf.", "Dr.", "Técnico(a)" se fizerem parte do preenchimento, retorne apenas o nome próprio).
+   - No padrão Hapvida, ele aparece centralizado, em destaque e em tamanho de fonte bem maior, logo abaixo da frase "CERTIFICAMOS QUE" e acima da seção "Concluiu o treinamento".
+   - IGNORE COMPLETAMENTE e NUNCA extraia os nomes de gestores, gerentes ou diretores que assinam o certificado no final, tais como: "Claudia Perez" ou "Andrea Baldin" (Gerente de Educação Corporativa).
+   - Se não for encontrado, retorne uma string vazia.
 
 2. NOME DO CURSO OU CAPACITAÇÃO:
-   - Identifique o título exato do curso, treinamento, palestra ou capacitação realizado.
-   - Costuma vir destacado em negrito, entre aspas, em fonte maior ou após palavras como: "concluiu o curso de", "participou do treinamento de", "na capacitação em", "no workshop".
-   - Exemplos comuns no hospital: "Suporte Avançado de Vida (SAV)", "SAV", "Prevenção de Lesões por Pressão (LPP)", "LPP", "NR-32", "Segurança do Paciente", "Ética Profissional".
+   - Identifique o título exato do curso que está destacado entre aspas duplas após a frase "Concluiu o treinamento" ou similar.
+   - Exemplos reais de cursos: "Assédio e Discriminação", "Gerenciamento de Resíduos - 2026", "Guia de Boas Práticas: Uso e Remoção Segura de Hypafix®", "Integridade e Compliance - 2026".
+   - Retorne o nome do curso exatamente como está escrito dentro do documento. Se não for encontrado, retorne uma string vazia.
 
 3. DATA DE CONCLUSÃO:
-   - Extraia a data em que o treinamento foi finalizado ou o certificado foi emitido.
-   - Procure por formatos como "DD/MM/AAAA", "AAAA-MM-DD", ou por extenso "XX de [Mês] de [Ano]" (ex: "23 de Junho de 2026").
+   - Extraia a data em que o treinamento foi finalizado, que vem escrita por extenso no final da frase de conclusão.
    - Converta obrigatoriamente a data localizada para o formato ISO padrão: YYYY-MM-DD.
-   - Caso nenhuma data de emissão ou conclusão seja localizada no documento inteiro, retorne a data atual padrão: "${new Date().toISOString().split("T")[0]}".
-
-Seja extremamente rigoroso na extração para evitar falsos positivos ou trocar o nome do aluno pelo nome do emissor do certificado. Retorne as informações estruturadas no formato JSON especificado.`,
+   - Caso nenhuma data de emissão ou conclusão seja localizada, retorne a data atual padrão: "${new Date().toISOString().split("T")[0]}".`,
           }
         ],
         config: {
@@ -497,7 +512,7 @@ Seja extremamente rigoroso na extração para evitar falsos positivos ou trocar 
               },
               curso_nome: { 
                 type: Type.STRING, 
-                description: "Título ou nome de capacitação do curso concluído (ex: Suporte Avançado de Vida, Brigada, Ética, NR32, etc.)." 
+                description: "Título ou nome de capacitação do curso concluído." 
               },
               data_conclusao: { 
                 type: Type.STRING, 
@@ -507,9 +522,24 @@ Seja extremamente rigoroso na extração para evitar falsos positivos ou trocar 
             required: ["colaborador_nome_original", "curso_nome", "data_conclusao"]
           }
         }
-      });
+      };
+
+      try {
+        console.log(`[Universidade API] Tentando extração de certificado com gemini-3.5-flash...`);
+        response = await client.models.generateContent({
+          model: "gemini-3.5-flash",
+          ...contentParams
+        });
+      } catch (firstErr: any) {
+        console.warn(`[Universidade API] Falha com gemini-3.5-flash: ${firstErr.message || firstErr}. Tentando fallback com gemini-2.5-flash...`);
+        response = await client.models.generateContent({
+          model: "gemini-2.5-flash",
+          ...contentParams
+        });
+      }
 
       const text = response.text || "{}";
+      console.log("[Universidade API] Resposta bruta da IA:", text);
       res.json(JSON.parse(text));
     } catch (error: any) {
       console.error("Erro na extração do certificado da universidade corporativa via Gemini:", error);

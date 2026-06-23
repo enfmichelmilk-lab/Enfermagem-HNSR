@@ -30,7 +30,12 @@ import {
   FileText,
   Sparkles,
   Pencil,
-  RefreshCw
+  RefreshCw,
+  FileSignature,
+  Paperclip,
+  UserCheck,
+  CheckSquare,
+  Square
 } from 'lucide-react';
 import { Curso, CertificadoCurso, Colaborador, CourseTarget } from '../types';
 import { subscribeCollection, saveDocument, removeDocument } from '../lib/firebase';
@@ -85,6 +90,167 @@ export default function UniversidadeView({ colaboradores }: UniversidadeViewProp
     setNewCourseTargets(initial);
   }, [isAddingCourse]);
 
+  // MANUAL CERTIFICATE UPLOAD STATES
+  const [certMode, setCertMode] = useState<'ia' | 'manual'>('ia');
+  const [manualSelectedMatricula, setManualSelectedMatricula] = useState<string>('');
+  const [manualFiles, setManualFiles] = useState<{ [cursoId: string]: { fileName: string, fileBase64: string } }>({});
+  const [manualCompletionDates, setManualCompletionDates] = useState<{ [cursoId: string]: string }>({});
+  const [manualCheckedCourses, setManualCheckedCourses] = useState<{ [cursoId: string]: boolean }>({});
+
+  const handleManualFileChange = async (cursoId: string, file: File | null) => {
+    if (!file) {
+      setManualFiles(prev => {
+        const copy = { ...prev };
+        delete copy[cursoId];
+        return copy;
+      });
+      return;
+    }
+
+    try {
+      const fileBase64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = (err) => reject(err);
+        reader.readAsDataURL(file);
+      });
+
+      setManualFiles(prev => ({
+        ...prev,
+        [cursoId]: {
+          fileName: file.name,
+          fileBase64
+        }
+      }));
+    } catch (err) {
+      console.error("Erro ao converter arquivo de certificado manual para base64:", err);
+      customAlert("Erro ao carregar arquivo de certificado.");
+    }
+  };
+
+  const handleManualHomologate = async (curso: Curso) => {
+    if (!manualSelectedMatricula) {
+      customAlert("Por favor, selecione um colaborador antes!");
+      return;
+    }
+
+    const colab = colaboradores.find(c => c.matricula === manualSelectedMatricula);
+    if (!colab) {
+      customAlert("Colaborador não encontrado.");
+      return;
+    }
+
+    const completionDate = manualCompletionDates[curso.id] || new Date().toISOString().split('T')[0];
+    const fileData = manualFiles[curso.id];
+
+    const certId = `CERT-MAN-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
+    const newCert: CertificadoCurso = {
+      id: certId,
+      colaboradorMatricula: colab.matricula,
+      colaboradorNome: colab.nome,
+      cursoId: curso.id,
+      cursoNome: curso.nome,
+      dataConclusao: completionDate,
+      origem: "Homologação Manual (Sem IA)",
+      dataCriacao: new Date().toISOString().split('T')[0],
+      fileName: fileData ? fileData.fileName : undefined,
+      fileBase64: fileData ? fileData.fileBase64 : undefined
+    };
+
+    try {
+      await saveDocument('universidade_certificados', certId, newCert);
+      setCertificados(prev => [newCert, ...prev]);
+      
+      // Clean up inputs for this specific course
+      setManualFiles(prev => {
+        const copy = { ...prev };
+        delete copy[curso.id];
+        return copy;
+      });
+      setManualCompletionDates(prev => {
+        const copy = { ...prev };
+        delete copy[curso.id];
+        return copy;
+      });
+      setManualCheckedCourses(prev => {
+        const copy = { ...prev };
+        delete copy[curso.id];
+        return copy;
+      });
+
+      customAlert(`Sucesso!\n\nCurso "${curso.nome}" homologado manualmente com sucesso para o colaborador ${colab.nome}.`);
+    } catch (err) {
+      console.error("Erro ao salvar certificado manual:", err);
+      customAlert("Erro ao salvar homologação.");
+    }
+  };
+
+  const handleManualBulkHomologate = async () => {
+    if (!manualSelectedMatricula) {
+      customAlert("Por favor, selecione um colaborador antes!");
+      return;
+    }
+
+    const colab = colaboradores.find(c => c.matricula === manualSelectedMatricula);
+    if (!colab) {
+      customAlert("Colaborador não encontrado.");
+      return;
+    }
+
+    // Get checked courses
+    const checkedCourseIds = Object.keys(manualCheckedCourses).filter(id => manualCheckedCourses[id]);
+    if (checkedCourseIds.length === 0) {
+      customAlert("Selecione pelo menos um curso para homologar em lote!");
+      return;
+    }
+
+    let successCount = 0;
+    for (const cursoId of checkedCourseIds) {
+      const curso = cursos.find(c => c.id === cursoId);
+      if (!curso) continue;
+
+      const completionDate = manualCompletionDates[cursoId] || new Date().toISOString().split('T')[0];
+      const fileData = manualFiles[cursoId];
+
+      const certId = `CERT-MAN-${Date.now()}-${successCount}-${Math.random().toString(36).substr(2, 4)}`;
+      const newCert: CertificadoCurso = {
+        id: certId,
+        colaboradorMatricula: colab.matricula,
+        colaboradorNome: colab.nome,
+        cursoId: curso.id,
+        cursoNome: curso.nome,
+        dataConclusao: completionDate,
+        origem: "Homologação Manual (Sem IA)",
+        dataCriacao: new Date().toISOString().split('T')[0],
+        fileName: fileData ? fileData.fileName : undefined,
+        fileBase64: fileData ? fileData.fileBase64 : undefined
+      };
+
+      try {
+        await saveDocument('universidade_certificados', certId, newCert);
+        setCertificados(prev => [newCert, ...prev]);
+        successCount++;
+      } catch (err) {
+        console.error(`Erro ao salvar certificado manual em lote para ${cursoId}:`, err);
+      }
+    }
+
+    // Clean up inputs for checked courses
+    setManualFiles(prev => {
+      const copy = { ...prev };
+      checkedCourseIds.forEach(id => delete copy[id]);
+      return copy;
+    });
+    setManualCompletionDates(prev => {
+      const copy = { ...prev };
+      checkedCourseIds.forEach(id => delete copy[id]);
+      return copy;
+    });
+    setManualCheckedCourses({});
+
+    customAlert(`Sucesso!\n\n${successCount} curso(s) homologado(s) manualmente com sucesso para o colaborador ${colab.nome}.`);
+  };
+
   // AI FILE UPLOAD STATES (MULTIPLES FILES & DRAG-AND-DROP IN TUTORIAL MODE)
   interface BatchCertFileDraft {
     id: string;
@@ -96,6 +262,8 @@ export default function UniversidadeView({ colaboradores }: UniversidadeViewProp
     cursoOriginal?: string;
     matchedCourseId: string;
     dataConclusao: string;
+    fileBase64?: string;
+    mimeType?: string;
   }
 
   const [batchFileDrafts, setBatchFileDrafts] = useState<BatchCertFileDraft[]>([]);
@@ -286,17 +454,25 @@ export default function UniversidadeView({ colaboradores }: UniversidadeViewProp
           reader.readAsDataURL(file);
         });
 
+        const mimeType = file.type || 'application/pdf';
+
+        // Store fileBase64 and mimeType on the draft immediately so it can be retried later if it fails
+        setBatchFileDrafts(prev => prev.map(d => 
+          d.id === draftId ? { ...d, fileBase64, mimeType } : d
+        ));
+
         const res = await fetch('/api/universidade/extract', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             fileBase64,
-            mimeType: file.type || 'application/pdf'
+            mimeType
           })
         });
 
         if (!res.ok) {
-          throw new Error("Falha ao analisar o arquivo na IA.");
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || errData.details || "Falha ao analisar o arquivo na IA.");
         }
 
         const parsed = await res.json();
@@ -336,6 +512,66 @@ export default function UniversidadeView({ colaboradores }: UniversidadeViewProp
     // Clear file input so same files can be re-selected if desired
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
+    }
+  };
+
+  // RETRY SINGLE DRAFT EXTRACTION WITH AI
+  const handleRetryDraftExtraction = async (draftId: string) => {
+    const draft = batchFileDrafts.find(d => d.id === draftId);
+    if (!draft || !draft.fileBase64) {
+      customAlert("Não foi possível recuperar os dados do arquivo para reprocessamento.");
+      return;
+    }
+
+    setBatchFileDrafts(prev => prev.map(d => 
+      d.id === draftId ? { ...d, status: 'processando', errorMsg: undefined } : d
+    ));
+
+    try {
+      const res = await fetch('/api/universidade/extract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fileBase64: draft.fileBase64,
+          mimeType: draft.mimeType || 'application/pdf'
+        })
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || errData.details || "Falha ao analisar o arquivo na IA.");
+      }
+
+      const parsed = await res.json();
+      const matchedColab = findColaboradorByName(parsed.colaborador_nome_original);
+      const matchedCurId = findCourseByName(parsed.curso_nome);
+
+      setBatchFileDrafts(prev => prev.map(d => {
+        if (d.id === draftId) {
+          return {
+            ...d,
+            status: 'sucesso',
+            colaboradorOriginal: parsed.colaborador_nome_original || 'Não identificado',
+            matchedMatricula: matchedColab ? matchedColab.matricula : '',
+            cursoOriginal: parsed.curso_nome || 'Não identificado',
+            matchedCourseId: matchedCurId || '',
+            dataConclusao: parsed.data_conclusao || new Date().toISOString().split('T')[0]
+          };
+        }
+        return d;
+      }));
+    } catch (err: any) {
+      console.error(err);
+      setBatchFileDrafts(prev => prev.map(d => {
+        if (d.id === draftId) {
+          return {
+            ...d,
+            status: 'erro',
+            errorMsg: err.message || 'Erro semântico ou de leitura por IA.'
+          };
+        }
+        return d;
+      }));
     }
   };
 
@@ -392,36 +628,89 @@ export default function UniversidadeView({ colaboradores }: UniversidadeViewProp
   };
 
   // Helper matching tools
+  const normalizeText = (text: string): string => {
+    if (!text) return '';
+    return text
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "") // Remove accents/diacritics
+      .replace(/[®™•°ºª§]/g, '') // Remove trademark and other special symbols
+      .replace(/[-–—]/g, ' ') // Convert all kinds of hyphens/dashes to space
+      .replace(/[^\w\s]/g, ' ') // Replace other punctuation with space
+      .replace(/\s+/g, ' ') // Normalize spaces
+      .trim();
+  };
+
   const findColaboradorByName = (originalName: string): Colaborador | null => {
     if (!originalName || colaboradores.length === 0) return null;
-    const cleanOrig = originalName.toLowerCase().trim();
-    
-    // Exact match
-    const exact = colaboradores.find(c => c.nome.toLowerCase() === cleanOrig);
+    const normOrig = normalizeText(originalName);
+
+    // 1. Exact match on normalized strings
+    const exact = colaboradores.find(c => normalizeText(c.nome) === normOrig);
     if (exact) return exact;
 
-    // Substring or split matching
-    const matches = colaboradores.map(c => {
-      const score = originalName.split(' ').reduce((acc, word) => {
-        if (word.length > 2 && c.nome.toLowerCase().includes(word.toLowerCase())) {
-          return acc + 1;
-        }
-        return acc;
-      }, 0);
-      return { colab: c, score };
-    }).filter(m => m.score > 0)
-      .sort((a, b) => b.score - a.score);
+    // 2. Substring/inclusion match
+    const incl = colaboradores.find(c => {
+      const normCol = normalizeText(c.nome);
+      return normCol.includes(normOrig) || normOrig.includes(normCol);
+    });
+    if (incl) return incl;
 
-    return matches.length > 0 ? matches[0].colab : null;
+    // 3. Score-based matching on split words of length > 2
+    const origWords = normOrig.split(' ').filter(w => w.length > 2);
+    if (origWords.length > 0) {
+      let bestColab: Colaborador | null = null;
+      let maxScore = 0;
+      for (const c of colaboradores) {
+        const colabWords = normalizeText(c.nome).split(' ').filter(w => w.length > 2);
+        const score = origWords.filter(w => colabWords.includes(w)).length;
+        if (score > maxScore) {
+          maxScore = score;
+          bestColab = c;
+        }
+      }
+      // Require at least 2 words to match to avoid false positive first name matches
+      if (maxScore >= 2) {
+        return bestColab;
+      }
+    }
+
+    return null;
   };
 
   const findCourseByName = (originalCourse: string): string => {
     if (!originalCourse || cursos.length === 0) return '';
-    const cleanOrig = originalCourse.toLowerCase().trim();
+    const normOrig = normalizeText(originalCourse);
 
-    // Exact or substring match in courses
-    const exact = cursos.find(c => c.nome.toLowerCase().includes(cleanOrig) || cleanOrig.includes(c.nome.toLowerCase()));
+    // 1. Exact match on normalized strings
+    const exact = cursos.find(c => normalizeText(c.nome) === normOrig);
     if (exact) return exact.id;
+
+    // 2. Inclusion match on normalized strings
+    const incl = cursos.find(c => {
+      const normCur = normalizeText(c.nome);
+      return normCur.includes(normOrig) || normOrig.includes(normCur);
+    });
+    if (incl) return incl.id;
+
+    // 3. Fallback: Word overlap matching for slightly modified titles
+    const origWords = normOrig.split(' ').filter(w => w.length > 2);
+    if (origWords.length > 0) {
+      let bestMatch: string = '';
+      let maxScore = 0;
+      for (const cur of cursos) {
+        const curWords = normalizeText(cur.nome).split(' ').filter(w => w.length > 2);
+        const score = origWords.filter(w => curWords.includes(w)).length;
+        if (score > maxScore) {
+          maxScore = score;
+          bestMatch = cur.id;
+        }
+      }
+      // Require at least 2 words to match, or 1 word if it's the only word in input
+      if (maxScore >= 2 || (maxScore >= 1 && origWords.length === 1)) {
+        return bestMatch;
+      }
+    }
 
     return '';
   };
@@ -1299,8 +1588,38 @@ export default function UniversidadeView({ colaboradores }: UniversidadeViewProp
               className="space-y-6"
             >
               
-              {/* INTERACTIVE IMPORTER AREA (TWO MODES: MULTI-FILE OR TEXT LIST) */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* SUB-TAB SELECTOR TO TOGGLE BETWEEN IA AND MANUAL */}
+              <div className="flex border border-slate-200/80 rounded-2xl bg-slate-50 p-1 w-full sm:max-w-md">
+                <button
+                  type="button"
+                  onClick={() => setCertMode('ia')}
+                  className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-black transition cursor-pointer text-center ${
+                    certMode === 'ia'
+                      ? 'bg-white text-slate-900 shadow-xs border border-slate-200/40'
+                      : 'text-slate-550 hover:text-slate-800'
+                  }`}
+                >
+                  <Sparkles className="w-4 h-4 text-sky-500" />
+                  <span>Homologação Inteligente (IA)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCertMode('manual')}
+                  className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-black transition cursor-pointer text-center ${
+                    certMode === 'manual'
+                      ? 'bg-white text-slate-900 shadow-xs border border-slate-200/40'
+                      : 'text-slate-550 hover:text-slate-800'
+                  }`}
+                >
+                  <FileSignature className="w-4 h-4 text-emerald-500" />
+                  <span>Carregamento Manual (Sem IA)</span>
+                </button>
+              </div>
+
+              {certMode === 'ia' ? (
+                <>
+                  /* INTERACTIVE IMPORTER AREA (TWO MODES: MULTI-FILE OR TEXT LIST) */
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 
                 {/* MODE A: OCR CERTIFICATE FILE ANALYZER via Gemini (MULTIPLES FILES & DRAG-AND-DROP) */}
                 <div 
@@ -1418,8 +1737,20 @@ export default function UniversidadeView({ colaboradores }: UniversidadeViewProp
                             )}
 
                             {draft.status === 'erro' && (
-                              <div className="p-2 bg-rose-50 border border-rose-100 text-rose-800 rounded-xl text-[10px] font-semibold">
-                                Falha na leitura: {draft.errorMsg}
+                              <div className="space-y-2">
+                                <div className="p-2 bg-rose-50 border border-rose-100 text-rose-800 rounded-xl text-[10px] font-semibold">
+                                  Falha na leitura: {draft.errorMsg}
+                                </div>
+                                {draft.fileBase64 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRetryDraftExtraction(draft.id)}
+                                    className="w-full flex items-center justify-center gap-1.5 py-1.5 px-3 bg-sky-50 hover:bg-sky-100 text-sky-700 hover:text-sky-800 border border-sky-200 hover:border-sky-300 rounded-xl text-[10px] font-extrabold transition cursor-pointer"
+                                  >
+                                    <RefreshCw className="w-3 h-3 text-sky-600 animate-none" />
+                                    Tentar Novamente com IA
+                                  </button>
+                                )}
                               </div>
                             )}
 
@@ -1663,6 +1994,274 @@ export default function UniversidadeView({ colaboradores }: UniversidadeViewProp
                     </button>
                   </div>
                 </motion.div>
+              )}
+                </>
+              ) : (
+                /* MODE C: MANUAL CERTIFICATE UPLOAD MODULE (SEM IA) */
+                <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xs space-y-6">
+                  <div className="border-b border-slate-100 pb-3">
+                    <h4 className="font-extrabold text-sm text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                      <FileSignature className="w-5 h-5 text-emerald-600" />
+                      <span>Carregar Certificado Manualmente (Sem Depender de IA)</span>
+                    </h4>
+                    <p className="text-xs text-slate-500">Insira manualmente as aprovações, anexe arquivos opcionais e vincule os cursos pendentes de forma direta.</p>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {/* Colaborador Selection Dropdown Card */}
+                    <div className="md:col-span-1 bg-slate-50 border border-slate-200/60 rounded-2xl p-5 space-y-4 h-fit">
+                      <label className="block text-xs font-extrabold text-slate-700 uppercase tracking-wide">
+                        1. Selecione o Colaborador
+                      </label>
+                      <div className="relative">
+                        <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400 pointer-events-none" />
+                        <select
+                          value={manualSelectedMatricula}
+                          onChange={(e) => {
+                            setManualSelectedMatricula(e.target.value);
+                            setManualFiles({});
+                            setManualCompletionDates({});
+                            setManualCheckedCourses({});
+                          }}
+                          className="w-full bg-white border border-slate-200 pl-9 pr-8 py-2 text-xs rounded-xl focus:outline-none focus:ring-1 focus:ring-sky-500 font-semibold appearance-none cursor-pointer"
+                        >
+                          <option value="">-- Escolha um colaborador --</option>
+                          {activeColaboradores.map(c => (
+                            <option key={c.matricula} value={c.matricula}>
+                              {c.nome} ({c.cargo})
+                            </option>
+                          ))}
+                        </select>
+                        <div className="absolute right-3 top-3.5 w-0 h-0 border-l-[4px] border-l-transparent border-r-[4px] border-r-transparent border-t-[4px] border-t-slate-500 pointer-events-none"></div>
+                      </div>
+
+                      {/* Selected Colaborador Profile Mini-card */}
+                      {manualSelectedMatricula && (
+                        (() => {
+                          const colab = activeColaboradores.find(c => c.matricula === manualSelectedMatricula);
+                          if (!colab) return null;
+                          return (
+                            <motion.div
+                              initial={{ opacity: 0, scale: 0.95 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              className="bg-white border border-slate-200/80 rounded-xl p-4 space-y-2.5 text-xs shadow-xs"
+                            >
+                              <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
+                                <UserCheck className="w-4 h-4 text-emerald-600" />
+                                <span className="font-extrabold text-slate-800">Ficha do Profissional</span>
+                              </div>
+                              <div className="space-y-1.5 font-semibold text-slate-600">
+                                <div><span className="text-slate-400">Nome:</span> <span className="text-slate-900 font-extrabold">{colab.nome}</span></div>
+                                <div><span className="text-slate-400">Matrícula:</span> <span className="text-slate-900 font-bold">{colab.matricula}</span></div>
+                                <div><span className="text-slate-400">Cargo:</span> <span className="text-slate-950 font-bold">{colab.cargo}</span></div>
+                                <div><span className="text-slate-400">Equipe:</span> <span className="text-slate-900">{colab.equipe}</span></div>
+                                <div><span className="text-slate-400">Setor:</span> <span className="text-slate-900">{colab.setor}</span></div>
+                              </div>
+                            </motion.div>
+                          );
+                        })()
+                      )}
+                    </div>
+
+                    {/* Pending Courses List Card */}
+                    <div className="md:col-span-2 space-y-4">
+                      <div className="flex justify-between items-center">
+                        <label className="block text-xs font-extrabold text-slate-700 uppercase tracking-wide">
+                          2. Trilha de Cursos Pendentes
+                        </label>
+                      </div>
+
+                      {!manualSelectedMatricula ? (
+                        <div className="border border-dashed border-slate-200 rounded-2xl p-12 text-center text-slate-400 bg-slate-50/50">
+                          <Users className="w-10 h-10 mx-auto text-slate-300 mb-2" />
+                          <p className="text-xs font-bold">Por favor, selecione um colaborador no menu à esquerda para visualizar seus cursos pendentes.</p>
+                        </div>
+                      ) : (
+                        (() => {
+                          const colab = activeColaboradores.find(c => c.matricula === manualSelectedMatricula);
+                          if (!colab) return null;
+
+                          // Find all pending courses (no certificate registered yet)
+                          const pending = cursos.filter(curso => {
+                            const isCompleted = certificados.some(cert => 
+                              cert.colaboradorMatricula === colab.matricula && cert.cursoId === curso.id
+                            );
+                            return !isCompleted;
+                          });
+
+                          if (pending.length === 0) {
+                            return (
+                              <motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                className="bg-emerald-50/30 border border-emerald-100 rounded-2xl p-8 text-center text-emerald-800 space-y-2"
+                              >
+                                <CheckCircle2 className="w-10 h-10 mx-auto text-emerald-500" />
+                                <h5 className="font-extrabold text-xs uppercase tracking-wider">Tudo Concluído!</h5>
+                                <p className="text-xs font-semibold text-emerald-700 max-w-md mx-auto">Este profissional concluiu todos os cursos cadastrados na Universidade Corporativa Hapvida.</p>
+                              </motion.div>
+                            );
+                          }
+
+                          const checkedCount = Object.keys(manualCheckedCourses).filter(id => manualCheckedCourses[id]).length;
+
+                          return (
+                            <div className="space-y-4">
+                              {/* Bulk actions header */}
+                              <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-50 p-3 rounded-2xl border border-slate-200/60 text-xs">
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const allChecked: typeof manualCheckedCourses = {};
+                                      pending.forEach(c => allChecked[c.id] = true);
+                                      setManualCheckedCourses(allChecked);
+                                    }}
+                                    className="text-sky-600 hover:text-sky-850 font-extrabold transition cursor-pointer"
+                                  >
+                                    Selecionar Todos
+                                  </button>
+                                  <span className="text-slate-300">|</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setManualCheckedCourses({})}
+                                    className="text-slate-500 hover:text-slate-800 font-extrabold transition cursor-pointer"
+                                  >
+                                    Limpar Seleção
+                                  </button>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={handleManualBulkHomologate}
+                                  disabled={checkedCount === 0}
+                                  className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-lg text-xs transition disabled:opacity-40 flex items-center gap-1.5 cursor-pointer"
+                                >
+                                  <FileCheck2 className="w-3.5 h-3.5" />
+                                  <span>Homologar Selecionados ({checkedCount})</span>
+                                </button>
+                              </div>
+
+                              {/* Table list */}
+                              <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-xs">
+                                <div className="overflow-x-auto">
+                                  <table className="w-full text-left border-collapse text-xs">
+                                    <thead>
+                                      <tr className="bg-slate-50 border-b border-slate-100 text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">
+                                        <th className="p-3 w-10 text-center">Sel.</th>
+                                        <th className="p-3">Curso / Trilha</th>
+                                        <th className="p-3">Data Conclusão</th>
+                                        <th className="p-3">Certificado (PDF/IMG)</th>
+                                        <th className="p-3 text-right">Ação</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100">
+                                      {pending.map((curso) => {
+                                        const isMandatory = curso.targets.some(t => t.cargo === colab.cargo && t.obrigatorio);
+                                        const isChecked = !!manualCheckedCourses[curso.id];
+                                        const fileData = manualFiles[curso.id];
+                                        const compDate = manualCompletionDates[curso.id] || new Date().toISOString().split('T')[0];
+
+                                        return (
+                                          <tr key={curso.id} className={`hover:bg-slate-50/50 transition ${isChecked ? 'bg-sky-50/10' : ''}`}>
+                                            <td className="p-3 text-center">
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  setManualCheckedCourses(prev => ({
+                                                    ...prev,
+                                                    [curso.id]: !prev[curso.id]
+                                                  }));
+                                                }}
+                                                className="text-slate-400 hover:text-sky-600 transition cursor-pointer"
+                                              >
+                                                {isChecked ? (
+                                                  <CheckSquare className="w-4.5 h-4.5 text-sky-600" />
+                                                ) : (
+                                                  <Square className="w-4.5 h-4.5 text-slate-300" />
+                                                )}
+                                              </button>
+                                            </td>
+                                            <td className="p-3 space-y-1 max-w-xs">
+                                              <div className="font-extrabold text-slate-800 break-words">{curso.nome}</div>
+                                              <div className="flex items-center gap-1.5 flex-wrap">
+                                                {isMandatory ? (
+                                                  <span className="text-[9px] bg-rose-50 text-rose-700 px-1.5 py-0.5 rounded-full font-black uppercase tracking-wider border border-rose-100">Obrigatório</span>
+                                                ) : (
+                                                  <span className="text-[9px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-full font-black uppercase tracking-wider border border-slate-200">Opcional</span>
+                                                )}
+                                              </div>
+                                            </td>
+                                            <td className="p-3">
+                                              <input
+                                                type="date"
+                                                value={compDate}
+                                                max={new Date().toISOString().split('T')[0]}
+                                                onChange={(e) => {
+                                                  setManualCompletionDates(prev => ({
+                                                    ...prev,
+                                                    [curso.id]: e.target.value
+                                                  }));
+                                                }}
+                                                className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-[11px] font-semibold text-slate-700 focus:ring-1 focus:ring-sky-500 focus:outline-none cursor-pointer"
+                                              />
+                                            </td>
+                                            <td className="p-3">
+                                              <div className="flex items-center gap-1.5">
+                                                <input
+                                                  type="file"
+                                                  id={`manual-file-${curso.id}`}
+                                                  accept="application/pdf,image/*"
+                                                  onChange={(e) => handleManualFileChange(curso.id, e.target.files?.[0] || null)}
+                                                  className="hidden"
+                                                />
+                                                {fileData ? (
+                                                  <div className="bg-emerald-50 text-emerald-800 border border-emerald-100 rounded-lg px-2 py-1 flex items-center gap-1 text-[10px] font-black max-w-[140px] truncate" title={fileData.fileName}>
+                                                    <Paperclip className="w-3 h-3 text-emerald-600 shrink-0" />
+                                                    <span className="truncate shrink">{fileData.fileName}</span>
+                                                    <button
+                                                      type="button"
+                                                      onClick={() => handleManualFileChange(curso.id, null)}
+                                                      className="text-rose-500 hover:text-rose-700 font-black ml-1 scale-110 cursor-pointer"
+                                                    >
+                                                      &times;
+                                                    </button>
+                                                  </div>
+                                                ) : (
+                                                  <label
+                                                    htmlFor={`manual-file-${curso.id}`}
+                                                    className="bg-slate-100 hover:bg-slate-200 border border-slate-250 hover:border-slate-300 rounded-lg px-2.5 py-1 flex items-center gap-1 text-[10px] font-black text-slate-600 transition cursor-pointer"
+                                                  >
+                                                    <Upload className="w-3 h-3 text-slate-500" />
+                                                    <span>Anexar Arquivo</span>
+                                                  </label>
+                                                )}
+                                              </div>
+                                            </td>
+                                            <td className="p-3 text-right">
+                                              <button
+                                                type="button"
+                                                onClick={() => handleManualHomologate(curso)}
+                                                className="px-2.5 py-1 bg-sky-600 hover:bg-sky-700 text-white font-extrabold rounded-lg text-[10px] transition cursor-pointer flex items-center gap-1 ml-auto"
+                                              >
+                                                <Check className="w-3 h-3" />
+                                                <span>Homologar</span>
+                                              </button>
+                                            </td>
+                                          </tr>
+                                        );
+                                      })}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })()
+                      )}
+                    </div>
+                  </div>
+                </div>
               )}
 
               {/* HOMOLOGATIONS ARCHIVE / REGISTERED CERTIFICATES */}

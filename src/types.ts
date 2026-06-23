@@ -141,5 +141,7 @@ export interface CertificadoCurso {
   dataConclusao: string; // YYYY-MM-DD
   origem: string;
   dataCriacao: string;
+  fileName?: string;
+  fileBase64?: string;
 }
 
