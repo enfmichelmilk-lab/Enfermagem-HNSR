@@ -2294,7 +2294,7 @@ export default function UniversidadeView({ colaboradores, ferias = [] }: Univers
                               cert.colaboradorMatricula === colab.matricula && cert.cursoId === curso.id
                             );
                             return !isCompleted;
-                          });
+                          }).sort((a, b) => a.nome.localeCompare(b.nome));
 
                           if (pending.length === 0) {
                             return (
