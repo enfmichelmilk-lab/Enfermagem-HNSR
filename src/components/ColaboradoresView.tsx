@@ -422,14 +422,40 @@ Atenciosamente,
       }
 
       const matMap = new Map<string, Colaborador>();
-      colaboradores.forEach(c => matMap.set(c.matricula, c));
-      novos.forEach(n => matMap.set(n.matricula, n));
+      colaboradores.forEach(c => matMap.set(c.matricula, { ...c }));
+
+      let updatedCount = 0;
+      let insertedCount = 0;
+
+      novos.forEach(n => {
+        const existing = matMap.get(n.matricula);
+        if (existing) {
+          matMap.set(n.matricula, {
+            ...existing,
+            nome: n.nome || existing.nome,
+            coren: n.coren || existing.coren,
+            cargo: n.cargo || existing.cargo,
+            equipe: n.equipe || existing.equipe,
+            horario: n.horario || existing.horario,
+            setor: n.setor || existing.setor,
+            gestordireto: n.gestordireto || existing.gestordireto,
+            gestorindireto: n.gestorindireto || existing.gestorindireto,
+            email: n.email || existing.email,
+            whatsapp: n.whatsapp || existing.whatsapp,
+            historico: `${existing.historico || ''}\n[${new Date().toISOString().split('T')[0]} - Importador]: Cadastro atualizado via planilha Excel.`,
+          });
+          updatedCount++;
+        } else {
+          matMap.set(n.matricula, n);
+          insertedCount++;
+        }
+      });
 
       onUpdateColaboradores(Array.from(matMap.values()));
       setIsOpenImportModal(false);
       setImportText('');
       setImportError('');
-      customAlert(`Sucesso! ${novos.length} colaboradores importados ou atualizados.`);
+      customAlert(`Sucesso! Processamento concluído: ${insertedCount} novos colaboradores cadastrados e ${updatedCount} cadastros atualizados.`);
     } catch (err: any) {
       setImportError('Ocorreu um erro no processamento: ' + err.message);
     }
