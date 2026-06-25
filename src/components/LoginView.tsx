@@ -45,7 +45,7 @@ export default function LoginView({ usuarios, onLoginSuccess, onUpdateUsuarios }
         setor: "Gestão",
         perfil: "Programador",
         status: "Ativo",
-        senha: "@M05G05l9"
+        senha: "091215"
       };
     }
 
@@ -117,7 +117,7 @@ export default function LoginView({ usuarios, onLoginSuccess, onUpdateUsuarios }
         setor: "Gestão",
         perfil: "Programador",
         status: "Ativo",
-        senha: "@M05G05l9"
+        senha: "091215"
       };
     }
 

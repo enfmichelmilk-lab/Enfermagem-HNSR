@@ -65,7 +65,7 @@ export default function App() {
         // Identify if profiles need deletion (i.e. duplicates or incorrect casing/values)
         const needsCorrection = progUsers.length > 1 || 
           (progUsers.length === 1 && (
-            progUsers[0].senha !== '@M05G05l9' || 
+            progUsers[0].senha !== '091215' || 
             progUsers[0].perfil !== 'Programador' || 
             progUsers[0].status !== 'Ativo' ||
             progUsers[0].email !== targetEmail
@@ -91,7 +91,7 @@ export default function App() {
             setor: "Gestão",
             perfil: "Programador",
             status: "Ativo",
-            senha: "@M05G05l9"
+            senha: "091215"
           };
           await saveDocument('usuarios', targetEmail, cleanModel);
           return;
@@ -104,7 +104,7 @@ export default function App() {
             setor: "Gestão",
             perfil: "Programador",
             status: "Ativo",
-            senha: "@M05G05l9"
+            senha: "091215"
           };
           await saveDocument('usuarios', targetEmail, cleanModel);
           return;

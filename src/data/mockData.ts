@@ -65,7 +65,7 @@ export const USUARIOS_INICIAIS: Usuario[] = [
     setor: "Gestão",
     perfil: "Programador",
     status: "Ativo",
-    senha: "@M05G05l9"
+    senha: "091215"
   },
   {
     nome: "Enf. Ana Souza",
