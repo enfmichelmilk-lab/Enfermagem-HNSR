@@ -582,7 +582,7 @@ export default function App() {
         <div className="min-h-screen bg-slate-100 flex flex-col lg:flex-row font-sans">
           {/* Mobile hamburger header bar */}
           {isMobile && (
-            <div className="fixed top-0 left-0 right-0 h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 z-20 shadow-sm">
+            <div className="fixed top-0 left-0 right-0 h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 z-20 shadow-sm print:hidden">
               <div className="flex items-center gap-3">
                 <button
                   onClick={() => setMobileMenuOpen(true)}
@@ -607,30 +607,32 @@ export default function App() {
           {isMobile && mobileMenuOpen && (
             <div 
               onClick={() => setMobileMenuOpen(false)}
-              className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-25 transition-opacity duration-200" 
+              className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-25 transition-opacity duration-200 print:hidden" 
               aria-hidden="true"
             />
           )}
 
           {/* Main Hospital Sidebar navigation */}
-          <Sidebar 
-            usuario={usuarioLogado} 
-            activeView={activeView} 
-            onNavigate={(view) => {
-              setActiveView(view);
-              setMobileMenuOpen(false);
-            }} 
-            onLogout={handleLogout}
-            isCollapsed={isCollapsed}
-            onToggleCollapse={() => setIsCollapsed(!isCollapsed)}
-            isMobile={isMobile}
-            mobileMenuOpen={mobileMenuOpen}
-            onCloseMobileMenu={() => setMobileMenuOpen(false)}
-          />
+          <div className="print:hidden">
+            <Sidebar 
+              usuario={usuarioLogado} 
+              activeView={activeView} 
+              onNavigate={(view) => {
+                setActiveView(view);
+                setMobileMenuOpen(false);
+              }} 
+              onLogout={handleLogout}
+              isCollapsed={isCollapsed}
+              onToggleCollapse={() => setIsCollapsed(!isCollapsed)}
+              isMobile={isMobile}
+              mobileMenuOpen={mobileMenuOpen}
+              onCloseMobileMenu={() => setMobileMenuOpen(false)}
+            />
+          </div>
           
           {/* Main workspace arena */}
-          <main className={`flex-1 transition-all duration-305 p-4 md:p-8 min-h-screen ${isMobile ? 'ml-0 pt-20' : isCollapsed ? 'ml-20' : 'ml-64'}`}>
-            <div className="max-w-7xl mx-auto animate-fadeIn pb-12">
+          <main className={`flex-1 transition-all duration-305 p-4 md:p-8 min-h-screen print:ml-0 print:p-0 print:pt-0 print:bg-white ${isMobile ? 'ml-0 pt-20' : isCollapsed ? 'ml-20' : 'ml-64'}`}>
+            <div className="max-w-7xl mx-auto animate-fadeIn pb-12 print:pb-0">
               {renderViewContent()}
             </div>
           </main>

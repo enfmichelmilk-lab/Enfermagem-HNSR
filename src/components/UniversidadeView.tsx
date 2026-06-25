@@ -14,6 +14,8 @@ import {
   Award, 
   ShieldAlert, 
   TrendingUp, 
+  TrendingDown,
+  Printer,
   CheckCircle2, 
   Search, 
   BookOpen, 
@@ -51,7 +53,9 @@ export default function UniversidadeView({ colaboradores, ferias = [] }: Univers
   const [cursos, setCursos] = useState<Curso[]>([]);
   const [certificados, setCertificados] = useState<CertificadoCurso[]>([]);
   
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'cursos' | 'certificados'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'cursos' | 'certificados' | 'relatorios'>('dashboard');
+  const [reportFilterSetor, setReportFilterSetor] = useState('');
+  const [reportFilterTurno, setReportFilterTurno] = useState('');
   
   // Real-time subscribers
   useEffect(() => {
@@ -901,33 +905,33 @@ export default function UniversidadeView({ colaboradores, ferias = [] }: Univers
     return Math.round(sum / dashboardColaboradores.length);
   };
 
+  const checkCurrentlyINSS = (c: Colaborador): boolean => {
+    const hoje = new Date().toISOString().split('T')[0];
+    if (c.inss_check === 'Sim') {
+      const hasRetorno = c.inss_retorno && c.inss_retorno.trim() !== '';
+      if (!hasRetorno || hoje < c.inss_retorno) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  const checkCurrentlyOnVacation = (c: Colaborador): boolean => {
+    const hoje = new Date().toISOString().split('T')[0];
+    return (ferias || []).some(f => 
+      f.matricula === c.matricula &&
+      f.status === 'Aprovado' &&
+      hoje >= f.dataInicio &&
+      hoje <= f.dataFim
+    );
+  };
+
   // Real active compliance adhesion (excluding INSS and vacation)
   const getAdhesionProgress = (): { pct: number; workingCount: number; inssCount: number; feriasCount: number } => {
-    const hoje = new Date().toISOString().split('T')[0];
-    
-    const isCurrentlyINSS = (c: Colaborador) => {
-      if (c.inss_check === 'Sim') {
-        const hasRetorno = c.inss_retorno && c.inss_retorno.trim() !== '';
-        if (!hasRetorno || hoje < c.inss_retorno) {
-          return true;
-        }
-      }
-      return false;
-    };
+    const inssCount = activeColaboradores.filter(checkCurrentlyINSS).length;
+    const feriasCount = activeColaboradores.filter(checkCurrentlyOnVacation).length;
 
-    const isCurrentlyOnVacation = (c: Colaborador) => {
-      return (ferias || []).some(f => 
-        f.matricula === c.matricula &&
-        f.status === 'Aprovado' &&
-        hoje >= f.dataInicio &&
-        hoje <= f.dataFim
-      );
-    };
-
-    const inssCount = activeColaboradores.filter(isCurrentlyINSS).length;
-    const feriasCount = activeColaboradores.filter(isCurrentlyOnVacation).length;
-
-    const workingColabs = activeColaboradores.filter(c => !isCurrentlyINSS(c) && !isCurrentlyOnVacation(c));
+    const workingColabs = activeColaboradores.filter(c => !checkCurrentlyINSS(c) && !checkCurrentlyOnVacation(c));
     
     if (workingColabs.length === 0) {
       return { pct: 0, workingCount: 0, inssCount, feriasCount };
@@ -1066,10 +1070,10 @@ export default function UniversidadeView({ colaboradores, ferias = [] }: Univers
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-slate-200 gap-1 bg-slate-100/60 p-1 rounded-2xl max-w-md">
+      <div className="flex border-b border-slate-200 gap-1 bg-slate-100/60 p-1 rounded-2xl max-w-xl print:hidden">
         <button
           onClick={() => setActiveTab('dashboard')}
-          className={`flex-1 py-2 rounded-xl text-xs font-extrabold transition cursor-pointer text-center ${
+          className={`flex-1 py-2 rounded-xl text-[11px] font-extrabold transition cursor-pointer text-center ${
             activeTab === 'dashboard' 
               ? 'bg-white text-slate-900 shadow-xs' 
               : 'text-slate-500 hover:text-slate-800 hover:bg-white/40'
@@ -1079,7 +1083,7 @@ export default function UniversidadeView({ colaboradores, ferias = [] }: Univers
         </button>
         <button
           onClick={() => setActiveTab('cursos')}
-          className={`flex-1 py-2 rounded-xl text-xs font-extrabold transition cursor-pointer text-center ${
+          className={`flex-1 py-2 rounded-xl text-[11px] font-extrabold transition cursor-pointer text-center ${
             activeTab === 'cursos' 
               ? 'bg-white text-slate-900 shadow-xs' 
               : 'text-slate-500 hover:text-slate-800 hover:bg-white/40'
@@ -1089,13 +1093,23 @@ export default function UniversidadeView({ colaboradores, ferias = [] }: Univers
         </button>
         <button
           onClick={() => setActiveTab('certificados')}
-          className={`flex-1 py-2 rounded-xl text-xs font-extrabold transition cursor-pointer text-center ${
+          className={`flex-1 py-2 rounded-xl text-[11px] font-extrabold transition cursor-pointer text-center ${
             activeTab === 'certificados' 
               ? 'bg-white text-slate-900 shadow-xs' 
               : 'text-slate-500 hover:text-slate-800 hover:bg-white/40'
           }`}
         >
           Homologações ({certificados.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('relatorios')}
+          className={`flex-1 py-2 rounded-xl text-[11px] font-extrabold transition cursor-pointer text-center ${
+            activeTab === 'relatorios' 
+              ? 'bg-white text-slate-900 shadow-xs' 
+              : 'text-slate-500 hover:text-slate-800 hover:bg-white/40'
+          }`}
+        >
+          Relatório de Cursos
         </button>
       </div>
 
@@ -2542,6 +2556,329 @@ export default function UniversidadeView({ colaboradores, ferias = [] }: Univers
                   </table>
                 </div>
               </div>
+
+            </motion.div>
+          )}
+
+          {/* TAB 4: RELATÓRIOS DE CURSOS */}
+          {activeTab === 'relatorios' && (
+            <motion.div
+              key="univ-relatorios"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              transition={{ duration: 0.2 }}
+              className="space-y-6"
+            >
+              {/* PRINT-ONLY HEADER */}
+              <div className="hidden print:block border-b-2 border-slate-900 pb-4 mb-6">
+                <div className="flex justify-between items-end">
+                  <div>
+                    <h1 className="text-xl font-black text-slate-950 uppercase tracking-tight">Relatório de Conformidade de Treinamento</h1>
+                    <p className="text-[10px] text-slate-500 font-bold uppercase mt-1">Universidade Corporativa HNSR</p>
+                  </div>
+                  <div className="text-right text-[9px] font-bold text-slate-500 uppercase">
+                    <p>Emissão: {new Date().toLocaleDateString('pt-BR')} {new Date().toLocaleTimeString('pt-BR')}</p>
+                    <p>Status: Ativos Operacionais (Excl. Férias/INSS)</p>
+                  </div>
+                </div>
+                <div className="mt-4 grid grid-cols-2 gap-4 bg-slate-50 p-3 rounded-xl border border-slate-200 text-[10px] font-bold">
+                  <div>
+                    <span className="text-slate-400 uppercase text-[8px] block">Setor Filtrado</span>
+                    <span className="text-slate-900">{reportFilterSetor || 'TODOS OS SETORES'}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 uppercase text-[8px] block">Turno/Equipe Filtrado</span>
+                    <span className="text-slate-900">{reportFilterTurno || 'TODOS OS TURNOS'}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* ACTION TOOLBAR (Hidden in actual printout) */}
+              <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-xs flex flex-col md:flex-row gap-4 justify-between items-stretch md:items-center print:hidden">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 flex-1">
+                  
+                  {/* Setor Filter */}
+                  <div className="space-y-1.5">
+                    <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">
+                      Filtrar por Setor
+                    </label>
+                    <div className="relative">
+                      <select
+                        value={reportFilterSetor}
+                        onChange={(e) => setReportFilterSetor(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 px-3 py-2 text-xs rounded-xl focus:outline-none focus:ring-1 focus:ring-sky-500 font-semibold appearance-none cursor-pointer"
+                      >
+                        <option value="">Todos os Setores</option>
+                        {SETORES_HOSPITALARES.map(s => (
+                          <option key={s} value={s}>{s}</option>
+                        ))}
+                      </select>
+                      <div className="absolute right-3 top-3.5 w-0 h-0 border-l-[4px] border-l-transparent border-r-[4px] border-r-transparent border-t-[4px] border-t-slate-500 pointer-events-none"></div>
+                    </div>
+                  </div>
+
+                  {/* Turno Filter */}
+                  <div className="space-y-1.5">
+                    <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">
+                      Filtrar por Turno
+                    </label>
+                    <div className="relative">
+                      <select
+                        value={reportFilterTurno}
+                        onChange={(e) => setReportFilterTurno(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 px-3 py-2 text-xs rounded-xl focus:outline-none focus:ring-1 focus:ring-sky-500 font-semibold appearance-none cursor-pointer"
+                      >
+                        <option value="">Todos os Turnos</option>
+                        {EQUIPES_ESCALA.map(e => (
+                          <option key={e} value={e}>{e}</option>
+                        ))}
+                      </select>
+                      <div className="absolute right-3 top-3.5 w-0 h-0 border-l-[4px] border-l-transparent border-r-[4px] border-r-transparent border-t-[4px] border-t-slate-500 pointer-events-none"></div>
+                    </div>
+                  </div>
+
+                </div>
+
+                <div className="flex items-end shrink-0">
+                  <button
+                    onClick={() => window.print()}
+                    className="w-full md:w-auto px-5 py-3 bg-slate-900 hover:bg-slate-800 text-white font-extrabold rounded-2xl text-xs flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition cursor-pointer"
+                  >
+                    <Printer className="w-4 h-4" />
+                    <span>Imprimir Relatório</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* CORE DATA CALCULATION FOR REPORT */}
+              {(() => {
+                const reportWorkingColaboradores = activeColaboradores.filter(c => !checkCurrentlyINSS(c) && !checkCurrentlyOnVacation(c));
+                
+                const reportFilteredColabs = reportWorkingColaboradores.filter(c => {
+                  if (reportFilterSetor && c.setor !== reportFilterSetor) return false;
+                  if (reportFilterTurno && c.equipe !== reportFilterTurno) return false;
+                  return true;
+                });
+
+                const reportCoursesWithStats = cursos.map(curso => {
+                  const requiredColabs = reportFilteredColabs.filter(colab =>
+                    curso.targets.some(t => t.cargo === colab.cargo && t.obrigatorio)
+                  );
+                  const completedCount = requiredColabs.filter(colab =>
+                    certificados.some(cert => cert.colaboradorMatricula === colab.matricula && cert.cursoId === curso.id)
+                  ).length;
+                  const totalRequired = requiredColabs.length;
+                  const pct = totalRequired === 0 ? 100 : Math.round((completedCount / totalRequired) * 100);
+                  return {
+                    curso,
+                    completedCount,
+                    totalRequired,
+                    pct
+                  };
+                }).sort((a, b) => {
+                  if (a.totalRequired === 0 && b.totalRequired > 0) return 1;
+                  if (b.totalRequired === 0 && a.totalRequired > 0) return -1;
+                  return a.pct - b.pct;
+                });
+
+                const colabsWithProgress = reportFilteredColabs.map(colab => {
+                  const progress = getColaboradorProgress(colab);
+                  return {
+                    colab,
+                    progress
+                  };
+                });
+
+                const top5Colabs = [...colabsWithProgress]
+                  .sort((a, b) => b.progress.pct - a.progress.pct || a.colab.nome.localeCompare(b.colab.nome))
+                  .slice(0, 5);
+
+                const bottom5Colabs = [...colabsWithProgress]
+                  .sort((a, b) => a.progress.pct - b.progress.pct || a.colab.nome.localeCompare(b.colab.nome))
+                  .slice(0, 5);
+
+                return (
+                  <div className="space-y-6">
+
+                    {/* TWO PRIMARY PANELS FOR THE REPORT */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+                      
+                      {/* COURSES COMPLETION LIST TABLE (Takes 2 columns) */}
+                      <div className="lg:col-span-2 bg-white border border-slate-200 rounded-3xl p-6 shadow-xs print:border-none print:shadow-none print:p-0">
+                        <div className="flex items-center justify-between mb-5">
+                          <div>
+                            <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider">Adesão dos Cursos</h3>
+                            <p className="text-[10px] text-slate-500 font-bold mt-0.5">Ordenado do menor para o maior índice de conclusão obrigatória.</p>
+                          </div>
+                          <span className="bg-slate-100 text-slate-700 px-3 py-1 rounded-full text-[9px] font-black uppercase print:hidden">
+                            {cursos.length} Cursos Mapeados
+                          </span>
+                        </div>
+
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left border-collapse">
+                            <thead>
+                              <tr className="border-b border-slate-150 text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
+                                <th className="pb-3 pl-2">Curso</th>
+                                <th className="pb-3 text-center">Concluintes / Obrigados</th>
+                                <th className="pb-3">Percentual</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 text-[11px] font-semibold text-slate-700">
+                              {reportCoursesWithStats.map(({ curso, completedCount, totalRequired, pct }) => (
+                                <tr key={curso.id} className="hover:bg-slate-50/40 transition">
+                                  <td className="py-3.5 pl-2 max-w-[280px]">
+                                    <div>
+                                      <span className="font-extrabold text-slate-900 text-xs block">{curso.nome}</span>
+                                      <span className="text-[9px] text-slate-400 font-mono">ID: {curso.id}</span>
+                                    </div>
+                                  </td>
+                                  <td className="py-3.5 text-center font-bold text-slate-600">
+                                    {totalRequired === 0 ? (
+                                      <span className="bg-slate-50 text-slate-400 px-2 py-0.5 rounded-full text-[9px] font-black uppercase">
+                                        Não se aplica
+                                      </span>
+                                    ) : (
+                                      <span className="bg-slate-100 text-slate-800 px-2 py-0.5 rounded-full text-[10px] font-black">
+                                        {completedCount} de {totalRequired}
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="py-3.5 pr-2">
+                                    {totalRequired === 0 ? (
+                                      <span className="text-slate-400 italic text-[10px]">Sem alvos obrigatórios</span>
+                                    ) : (
+                                      <div className="flex items-center gap-3">
+                                        <div className="flex-1 bg-slate-100 h-2 rounded-full overflow-hidden w-24">
+                                          <div 
+                                            className={`h-full rounded-full ${
+                                              pct === 100 ? 'bg-emerald-500' :
+                                              pct >= 50 ? 'bg-amber-400' :
+                                              'bg-rose-400'
+                                            }`}
+                                            style={{ width: `${pct}%` }}
+                                          />
+                                        </div>
+                                        <span className="font-black text-slate-900 shrink-0 text-xs">{pct}%</span>
+                                      </div>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+
+                      {/* INDIVIDUAL COLLABORATORS BOARDS (melhores / piores) - TAKES 1 column on web, styled perfectly for print */}
+                      <div className="space-y-6 lg:col-span-1 print:grid print:grid-cols-2 print:gap-6 print:space-y-0 print:col-span-3">
+                        
+                        {/* BOARD A: 5 MELHORES COLABORADORES */}
+                        <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-xs print:border print:border-slate-300 print:shadow-none print:rounded-2xl">
+                          <div className="flex items-center gap-2 mb-4 border-b border-slate-100 pb-3">
+                            <div className="bg-emerald-50 text-emerald-600 p-2 rounded-xl print:bg-white print:border print:border-emerald-200">
+                              <TrendingUp className="w-5 h-5" />
+                            </div>
+                            <div>
+                              <h4 className="text-xs font-black text-slate-950 uppercase tracking-wider">Top 5 - Maior Conclusão</h4>
+                              <p className="text-[9px] text-slate-400 font-bold">Colaboradores com maior adesão aos cursos obrigatórios.</p>
+                            </div>
+                          </div>
+
+                          <div className="space-y-3">
+                            {top5Colabs.length > 0 ? (
+                              top5Colabs.map(({ colab, progress }, idx) => (
+                                <div key={colab.matricula} className="flex items-center justify-between p-2.5 rounded-xl bg-emerald-50/30 border border-emerald-100/50 hover:bg-emerald-50/50 transition">
+                                  <div className="flex items-center gap-2.5 min-w-0">
+                                    <span className="w-5 h-5 flex items-center justify-center bg-emerald-500 text-white rounded-full text-[10px] font-black shrink-0">
+                                      {idx + 1}
+                                    </span>
+                                    <div className="min-w-0">
+                                      <span className="font-extrabold text-slate-900 text-xs block truncate" title={colab.nome}>
+                                        {colab.nome}
+                                      </span>
+                                      <span className="text-[9px] text-slate-400 font-bold block truncate">
+                                        {colab.cargo} ({colab.setor})
+                                      </span>
+                                    </div>
+                                  </div>
+                                  <div className="text-right shrink-0">
+                                    <span className="text-xs font-black text-emerald-800">{progress.pct}%</span>
+                                    <span className="text-[8px] text-slate-400 font-bold block">{progress.completedCount}/{progress.requiredCount} curs</span>
+                                  </div>
+                                </div>
+                              ))
+                            ) : (
+                              <p className="text-[10px] text-slate-400 italic text-center py-4">Nenhum colaborador elegível.</p>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* BOARD B: 5 PIORES COLABORADORES */}
+                        <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-xs print:border print:border-slate-300 print:shadow-none print:rounded-2xl">
+                          <div className="flex items-center gap-2 mb-4 border-b border-slate-100 pb-3">
+                            <div className="bg-rose-50 text-rose-600 p-2 rounded-xl print:bg-white print:border print:border-rose-200">
+                              <TrendingDown className="w-5 h-5" />
+                            </div>
+                            <div>
+                              <h4 className="text-xs font-black text-slate-950 uppercase tracking-wider">Top 5 - Menor Conclusão</h4>
+                              <p className="text-[9px] text-slate-400 font-bold">Colaboradores com menor adesão aos cursos obrigatórios.</p>
+                            </div>
+                          </div>
+
+                          <div className="space-y-3">
+                            {bottom5Colabs.length > 0 ? (
+                              bottom5Colabs.map(({ colab, progress }, idx) => (
+                                <div key={colab.matricula} className="flex items-center justify-between p-2.5 rounded-xl bg-rose-50/30 border border-rose-100/50 hover:bg-rose-50/50 transition">
+                                  <div className="flex items-center gap-2.5 min-w-0">
+                                    <span className="w-5 h-5 flex items-center justify-center bg-rose-500 text-white rounded-full text-[10px] font-black shrink-0">
+                                      {idx + 1}
+                                    </span>
+                                    <div className="min-w-0">
+                                      <span className="font-extrabold text-slate-900 text-xs block truncate" title={colab.nome}>
+                                        {colab.nome}
+                                      </span>
+                                      <span className="text-[9px] text-slate-400 font-bold block truncate">
+                                        {colab.cargo} ({colab.setor})
+                                      </span>
+                                    </div>
+                                  </div>
+                                  <div className="text-right shrink-0">
+                                    <span className="text-xs font-black text-rose-800">{progress.pct}%</span>
+                                    <span className="text-[8px] text-slate-400 font-bold block">{progress.completedCount}/{progress.requiredCount} curs</span>
+                                  </div>
+                                </div>
+                              ))
+                            ) : (
+                              <p className="text-[10px] text-slate-400 italic text-center py-4">Nenhum colaborador elegível.</p>
+                            )}
+                          </div>
+                        </div>
+
+                      </div>
+
+                    </div>
+
+                    {/* PRINT-ONLY SIGNATURE SECTION */}
+                    <div className="hidden print:block mt-12 pt-8 border-t border-slate-200">
+                      <div className="grid grid-cols-2 gap-12 text-center text-[10px] font-bold">
+                        <div>
+                          <div className="border-b border-slate-400 w-48 mx-auto h-8 mb-2"></div>
+                          <span>Assinatura do Responsável Técnico</span>
+                          <span className="block text-[8px] text-slate-400">Universidade Corporativa HNSR</span>
+                        </div>
+                        <div>
+                          <div className="border-b border-slate-400 w-48 mx-auto h-8 mb-2"></div>
+                          <span>Núcleo de Educação Permanente (NEP)</span>
+                          <span className="block text-[8px] text-slate-400">Gerência de Enfermagem</span>
+                        </div>
+                      </div>
+                    </div>
+
+                  </div>
+                );
+              })()}
 
             </motion.div>
           )}
