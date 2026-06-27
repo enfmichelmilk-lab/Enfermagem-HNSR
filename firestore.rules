@@ -32,5 +32,8 @@ service cloud.firestore {
     match /universidade_certificados/{document} {
       allow read, write: if true;
     }
+    match /saldos_historico/{document} {
+      allow read, write: if true;
+    }
   }
 }

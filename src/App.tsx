@@ -11,7 +11,7 @@ import {
   SOLICITACOES_FOLGA_INICIAL,
   mapSector
 } from './data/mockData';
-import { Usuario, Colaborador, Absenteismo, SolicitacaoFolga, Ferias, Chamada } from './types';
+import { Usuario, Colaborador, Absenteismo, SolicitacaoFolga, Ferias, Chamada, SaldosHistorico } from './types';
 import LoginView from './components/LoginView';
 import Sidebar from './components/Sidebar';
 import DashboardView from './components/DashboardView';
@@ -23,6 +23,7 @@ import FeriasView from './components/FeriasView';
 import ComissoesView from './components/ComissoesView';
 import ChamadaView from './components/ChamadaView';
 import UniversidadeView from './components/UniversidadeView';
+import SaldosReportView from './components/SaldosReportView';
 import CustomDialogContainer from './components/CustomDialogContainer';
 import { subscribeCollection, saveDocument, removeDocument } from './lib/firebase';
 
@@ -38,6 +39,7 @@ export default function App() {
   const [ferias, setFerias] = useState<Ferias[]>([]);
   const [dynamicSelos, setDynamicSelos] = useState<string[]>([]);
   const [chamadas, setChamadas] = useState<Chamada[]>([]);
+  const [saldosHistorico, setSaldosHistorico] = useState<SaldosHistorico[]>([]);
 
   // Responsive Sidebar collapsible states
   const [isCollapsed, setIsCollapsed] = useState<boolean>(true);
@@ -190,6 +192,13 @@ export default function App() {
       []
     );
 
+    const unsub8 = subscribeCollection<SaldosHistorico>(
+      'saldos_historico',
+      setSaldosHistorico,
+      'hnsr_saldos_historico_db',
+      []
+    );
+
     return () => {
       unsub1();
       unsub2();
@@ -198,6 +207,7 @@ export default function App() {
       unsub5();
       unsub6();
       unsub7();
+      unsub8();
     };
   }, []);
 
@@ -532,6 +542,14 @@ export default function App() {
           <UniversidadeView 
             colaboradores={colaboradores}
             ferias={ferias}
+          />
+        );
+      case 'saldos_report':
+        return (
+          <SaldosReportView 
+            colaboradores={colaboradores}
+            saldosHistorico={saldosHistorico}
+            usuarioLogado={usuarioLogado || undefined}
           />
         );
       case 'usuarios':

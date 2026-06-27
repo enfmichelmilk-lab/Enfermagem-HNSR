@@ -145,3 +145,15 @@ export interface CertificadoCurso {
   fileBase64?: string;
 }
 
+export interface SaldosHistorico {
+  id: string; // `${matricula}_${mes}`
+  matricula: string;
+  nome: string;
+  setor: string;
+  mes: string; // YYYY-MM
+  bancohoras: number;
+  folgaferiado: number;
+  folgaenf: number;
+  dataAtualizacao: string; // YYYY-MM-DD
+}
+

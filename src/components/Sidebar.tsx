@@ -7,7 +7,7 @@ import React from 'react';
 import { 
   Activity, Users, Stethoscope, CalendarCheck, UserCog, 
   LogOut, HeartHandshake, Palmtree, Award, ClipboardCheck, 
-  Smartphone, X, Pin, GraduationCap
+  Smartphone, X, Pin, GraduationCap, History
 } from 'lucide-react';
 import { Usuario } from '../types';
 import HapvidaLogo from './HapvidaLogo';
@@ -261,6 +261,25 @@ export default function Sidebar({
           >
             <Palmtree className={`w-4 h-4 shrink-0 ${activeView === 'ferias' ? 'text-white' : 'text-amber-500'}`} />
             {!isSidebarCollapsed && <span>Gestão de Férias</span>}
+          </button>
+        </li>
+
+        <li>
+          <button
+            onClick={() => onNavigate('saldos_report')}
+            title={isSidebarCollapsed ? 'Histórico de Saldos' : undefined}
+            className={`w-full flex items-center gap-3 transition-all duration-150 rounded-lg text-sm font-semibold cursor-pointer ${
+              isSidebarCollapsed 
+                ? 'justify-center p-2.5 h-10 w-10 shrink-0' 
+                : 'py-2.5 px-3.5 text-left'
+            } ${
+              activeView === 'saldos_report'
+                ? 'bg-sky-600 text-white shadow-md shadow-sky-600/10'
+                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+            }`}
+          >
+            <History className={`w-4 h-4 shrink-0 ${activeView === 'saldos_report' ? 'text-white' : 'text-sky-500'}`} />
+            {!isSidebarCollapsed && <span>Histórico de Saldos</span>}
           </button>
         </li>
 

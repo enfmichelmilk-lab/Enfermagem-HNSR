@@ -23,6 +23,7 @@ export const CID_NATIVO: Record<string, string> = {
 };
 
 export const SETORES_HOSPITALARES = [
+  "Gestão",
   "2º ANDAR",
   "3º ANDAR",
   "4º ANDAR",
@@ -131,7 +132,7 @@ export const mapSector = (sec: string): string => {
   if (upper.includes("UTI 8") || (upper.includes("UTI") && upper.includes("8º")) || (upper.includes("UTI") && upper.includes("8O"))) return "UTI 7º ANDAR";
   if (upper.includes("UTI 9") || (upper.includes("UTI") && upper.includes("9º")) || (upper.includes("UTI") && upper.includes("9O"))) return "UTI 9º ANDAR";
   
-  if (upper === "GESTAO" || upper === "GESTÃO") return "Gestão";
+  if (upper.includes("GESTAO") || upper.includes("GESTÃO")) return "Gestão";
   
   return SECTOR_MAPPING[trimmed] || trimmed;
 };

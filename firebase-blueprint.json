@@ -173,6 +173,23 @@
         "dataCriacao": { "type": "string" }
       },
       "required": ["id", "colaboradorMatricula", "colaboradorNome", "cursoId", "cursoNome", "dataConclusao", "dataCriacao"]
+    },
+    "SaldosHistorico": {
+      "title": "SaldosHistorico",
+      "description": "Snapshots of employee balances for monthly reporting",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "matricula": { "type": "string" },
+        "nome": { "type": "string" },
+        "setor": { "type": "string" },
+        "mes": { "type": "string" },
+        "bancohoras": { "type": "number" },
+        "folgaferiado": { "type": "number" },
+        "folgaenf": { "type": "number" },
+        "dataAtualizacao": { "type": "string" }
+      },
+      "required": ["id", "matricula", "nome", "setor", "mes", "bancohoras", "folgaferiado", "folgaenf", "dataAtualizacao"]
     }
   },
   "firestore": {
@@ -215,6 +232,10 @@
     "/universidade_certificados/{certificadoId}": {
       "schema": "CertificadoCurso",
       "description": "Individual training completion logs with details"
+    },
+    "/saldos_historico/{historicoId}": {
+      "schema": "SaldosHistorico",
+      "description": "Historical snapshots of colaboradores balances by month"
     }
   }
 }
