@@ -56,6 +56,64 @@ export default function ColaboradoresView({
   // View mode states
   const [isOpenViewModal, setIsOpenViewModal] = useState(false);
   const [selectedViewColab, setSelectedViewColab] = useState<Colaborador | null>(null);
+  
+  // View mode switcher: standard list or bulk quick update (BH, FF, FS)
+  const [viewMode, setViewMode] = useState<'lista' | 'atualizacao_rapida'>('lista');
+  const [editedColabs, setEditedColabs] = useState<Record<string, { bh: number; ff: number; fs: number }>>({});
+  const [bhInputStates, setBhInputStates] = useState<Record<string, string>>({});
+  const [bancoHorasText, setBancoHorasText] = useState('');
+
+  // Helper functions to format and parse decimal hours to HH:MM format
+  const formatDecimalToHHMM = (decimalHours: number): string => {
+    if (decimalHours === 0 || isNaN(decimalHours)) return '00:00';
+    const isNegative = decimalHours < 0;
+    const absHours = Math.abs(decimalHours);
+    const hours = Math.floor(absHours);
+    const minutes = Math.round((absHours - hours) * 60);
+    const sign = isNegative ? '-' : '+';
+    const formattedHours = String(hours).padStart(2, '0');
+    const formattedMinutes = String(minutes).padStart(2, '0');
+    return `${sign}${formattedHours}:${formattedMinutes}`;
+  };
+
+  const parseExcelNumber = (val: string): number => {
+    if (!val) return 0;
+    const cleaned = val.trim();
+    
+    // Check if it's in HH:MM format (e.g. "12:30", "-05:15", "+03:45", "12:00")
+    if (cleaned.includes(':')) {
+      const isNegative = cleaned.startsWith('-');
+      const partClean = cleaned.replace(/[+-]/g, '');
+      const parts = partClean.split(':');
+      if (parts.length >= 2) {
+        const hours = parseFloat(parts[0]) || 0;
+        const minutes = parseFloat(parts[1]) || 0;
+        const decimalHours = hours + (minutes / 60);
+        return isNegative ? -decimalHours : decimalHours;
+      }
+    }
+    
+    // Also support custom format with 'h' like "12h30"
+    if (cleaned.toLowerCase().includes('h')) {
+      const isNegative = cleaned.startsWith('-');
+      const partClean = cleaned.toLowerCase().replace(/[+-]/g, '');
+      const parts = partClean.split('h');
+      if (parts.length >= 2) {
+        const hours = parseFloat(parts[0]) || 0;
+        const minutesStr = parts[1].replace(/[^0-9]/g, '');
+        const minutes = parseFloat(minutesStr) || 0;
+        const decimalHours = hours + (minutes / 60);
+        return isNegative ? -decimalHours : decimalHours;
+      } else if (parts.length === 1) {
+        const hours = parseFloat(parts[0]) || 0;
+        return isNegative ? -hours : hours;
+      }
+    }
+
+    const withDot = cleaned.replace(',', '.');
+    const parsed = parseFloat(withDot);
+    return isNaN(parsed) ? 0 : parsed;
+  };
 
   // States for Corporate University tracking
   const [cursos, setCursos] = useState<Curso[]>([]);
@@ -87,6 +145,11 @@ export default function ColaboradoresView({
   const [importText, setImportText] = useState('');
   const [importError, setImportError] = useState('');
 
+  // Import states for BH, FF, FS
+  const [isOpenSaldosImportModal, setIsOpenSaldosImportModal] = useState(false);
+  const [saldosImportText, setSaldosImportText] = useState('');
+  const [saldosImportError, setSaldosImportError] = useState('');
+
   // Form states matching col 0 to 28
   const [nome, setNome] = useState('');
   const [matricula, setMatricula] = useState('');
@@ -117,7 +180,7 @@ export default function ColaboradoresView({
   // Local vacation request form states inside view details modal
   const [isRequestingFeriasLocal, setIsRequestingFeriasLocal] = useState(false);
   const [localFeriasStartDate, setLocalFeriasStartDate] = useState('');
-  const [localFeriasDuration, setLocalFeriasDuration] = useState<20 | 30>(30);
+  const [localFeriasDuration, setLocalFeriasDuration] = useState<10 | 15 | 20 | 30>(30);
   const [localSelosAdicionais, setLocalSelosAdicionais] = useState<string[]>([]);
   const [infoSubst, setInfoSubst] = useState('');
   
@@ -242,6 +305,171 @@ export default function ColaboradoresView({
 
   // Birthdays States and Helpers
   const [sentBirthdayAlerts, setSentBirthdayAlerts] = useState<any[] | null>(null);
+
+  // Quick Update (BH, FF, FS) Helper Functions
+  const handleQuickFieldChange = (matricula: string, field: 'bh' | 'ff' | 'fs', value: number) => {
+    setEditedColabs(prev => {
+      const existing = prev[matricula] || {
+        bh: colaboradores.find(c => c.matricula === matricula)?.bancohoras ?? 0,
+        ff: colaboradores.find(c => c.matricula === matricula)?.folgaferiado ?? 0,
+        fs: colaboradores.find(c => c.matricula === matricula)?.folgaenf ?? 0,
+      };
+      return {
+        ...prev,
+        [matricula]: {
+          ...existing,
+          [field]: value
+        }
+      };
+    });
+  };
+
+  const getQuickFieldValue = (c: Colaborador, field: 'bh' | 'ff' | 'fs') => {
+    if (editedColabs[c.matricula]) {
+      return editedColabs[c.matricula][field];
+    }
+    if (field === 'bh') return c.bancohoras;
+    if (field === 'ff') return c.folgaferiado;
+    return c.folgaenf;
+  };
+
+  const handleSaveQuickRow = (c: Colaborador) => {
+    const edits = editedColabs[c.matricula];
+    if (!edits) return;
+
+    const updatedColabs = colaboradores.map(item => {
+      if (item.matricula === c.matricula) {
+        return {
+          ...item,
+          bancohoras: edits.bh,
+          folgaferiado: edits.ff,
+          folgaenf: edits.fs,
+          historico: `${item.historico || ''}\n[${new Date().toISOString().split('T')[0]} - Atualização Rápida]: Saldos atualizados para BH: ${formatDecimalToHHMM(edits.bh)}, FF: ${edits.ff}, FS: ${edits.fs}.`
+        };
+      }
+      return item;
+    });
+
+    onUpdateColaboradores(updatedColabs);
+    
+    // Remove from edited state
+    setEditedColabs(prev => {
+      const copy = { ...prev };
+      delete copy[c.matricula];
+      return copy;
+    });
+    
+    customAlert(`Cadastro de ${c.nome} atualizado com sucesso!`);
+  };
+
+  const handleSaveAllQuick = () => {
+    const matriculasToUpdate = Object.keys(editedColabs);
+    if (matriculasToUpdate.length === 0) return;
+
+    const updatedColabs = colaboradores.map(item => {
+      const edits = editedColabs[item.matricula];
+      if (edits) {
+        return {
+          ...item,
+          bancohoras: edits.bh,
+          folgaferiado: edits.ff,
+          folgaenf: edits.fs,
+          historico: `${item.historico || ''}\n[${new Date().toISOString().split('T')[0]} - Atualização Rápida]: Saldos atualizados em lote para BH: ${formatDecimalToHHMM(edits.bh)}, FF: ${edits.ff}, FS: ${edits.fs}.`
+        };
+      }
+      return item;
+    });
+
+    onUpdateColaboradores(updatedColabs);
+    setEditedColabs({});
+    customAlert(`Sucesso! Os saldos de ${matriculasToUpdate.length} colaboradores foram atualizados.`);
+  };
+
+  const handleProcessSaldosImport = () => {
+    if (!saldosImportText.trim()) {
+      setSaldosImportError('Por favor, cole algum conteúdo.');
+      return;
+    }
+
+    try {
+      const lines = saldosImportText.trim().split('\n');
+      const updates: { matricula: string; nome: string; bh: number; ff: number; fs: number }[] = [];
+      let skippedHeader = false;
+
+      lines.forEach((line) => {
+        let parts = line.split('\t');
+        if (parts.length < 2) parts = line.split(';');
+        if (parts.length < 2) parts = line.split(',');
+
+        if (parts.length < 2) return;
+
+        const rawFirstCell = parts[0].toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        const rawSecondCell = parts[1]?.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") || "";
+        
+        // Skip header lines if they contain labels like "nome", "matricula", "bh" etc.
+        if (!skippedHeader && (
+          rawFirstCell.includes('nome') || 
+          rawSecondCell.includes('matricula') || 
+          rawSecondCell.includes('id') || 
+          rawFirstCell.includes('bh') ||
+          rawFirstCell.includes('matricula')
+        )) {
+          skippedHeader = true;
+          return;
+        }
+
+        const nome = parts[0]?.trim() || '';
+        const matricula = parts[1]?.trim() || '';
+        if (!matricula) return;
+
+        const bh = parseExcelNumber(parts[2]);
+        const ff = parseExcelNumber(parts[3]);
+        const fs = parseExcelNumber(parts[4]);
+
+        updates.push({ matricula, nome, bh, ff, fs });
+      });
+
+      if (updates.length === 0) {
+        setSaldosImportError('Nenhum dado válido de matrícula encontrado. Verifique se copiou as colunas corretas (Nome, Matrícula, BH, FF, FS).');
+        return;
+      }
+
+      const matMap = new Map<string, Colaborador>();
+      colaboradores.forEach(c => matMap.set(c.matricula, { ...c }));
+
+      let updatedCount = 0;
+      const notFoundMatriculas: string[] = [];
+
+      updates.forEach(u => {
+        const existing = matMap.get(u.matricula);
+        if (existing) {
+          matMap.set(u.matricula, {
+            ...existing,
+            bancohoras: u.bh,
+            folgaferiado: u.ff,
+            folgaenf: u.fs,
+            historico: `${existing.historico || ''}\n[${new Date().toISOString().split('T')[0]} - Importador de Saldos]: Saldos atualizados via importação do Excel para BH: ${u.bh}h, FF: ${u.ff}, FS: ${u.fs}.`,
+          });
+          updatedCount++;
+        } else {
+          notFoundMatriculas.push(u.matricula);
+        }
+      });
+
+      onUpdateColaboradores(Array.from(matMap.values()));
+      setIsOpenSaldosImportModal(false);
+      setSaldosImportText('');
+      setSaldosImportError('');
+
+      let alertMsg = `Sucesso! Foram atualizados os saldos de ${updatedCount} colaboradores.`;
+      if (notFoundMatriculas.length > 0) {
+        alertMsg += `\n\nAs seguintes ${notFoundMatriculas.length} matrículas não foram encontradas no cadastro e foram ignoradas: ${notFoundMatriculas.slice(0, 10).join(', ')}${notFoundMatriculas.length > 10 ? '...' : ''}`;
+      }
+      customAlert(alertMsg);
+    } catch (err: any) {
+      setSaldosImportError('Ocorreu um erro no processamento: ' + err.message);
+    }
+  };
 
   const getAniversariantesDaSemana = () => {
     // Current date in system: 2026-06-03 (Wednesday)
@@ -545,6 +773,7 @@ Atenciosamente,
       setEmail(colab.email);
       setWhatsapp(colab.whatsapp);
       setBancoHoras(colab.bancohoras);
+      setBancoHorasText(formatDecimalToHHMM(colab.bancohoras));
       setFolgaEnf(colab.folgaenf);
       setFolgaFeriado(colab.folgaferiado);
       setBrigada(colab.brigada);
@@ -591,6 +820,7 @@ Atenciosamente,
       setEmail('');
       setWhatsapp('');
       setBancoHoras(0);
+      setBancoHorasText('00:00');
       setFolgaEnf(0);
       setFolgaFeriado(0);
       setHabilitarAcesso(false);
@@ -698,7 +928,7 @@ Atenciosamente,
       gestorindireto: gestorIndireto,
       email: email.trim(),
       whatsapp: whatsapp.trim(),
-      bancohoras: parseFloat(bancoHoras as any) || 0,
+      bancohoras: parseExcelNumber(bancoHorasText),
       folgaenf: parseFloat(folgaEnf as any) || 0,
       folgaferiado: parseFloat(folgaFeriado as any) || 0,
       brigada: parseFloat(brigada as any) || 0,
@@ -861,14 +1091,35 @@ Atenciosamente,
           <p className="text-sm text-slate-500 font-medium">Controle de Horários, Prontuários, Gestores e Saldo de Banco de Horas</p>
         </div>
         <div className="flex gap-2.5 flex-wrap">
+          <button
+            onClick={() => setViewMode(viewMode === 'lista' ? 'atualizacao_rapida' : 'lista')}
+            className={`font-bold py-2.5 px-4 rounded-xl text-sm shadow-sm flex items-center gap-2 transition duration-150 cursor-pointer ${
+              viewMode === 'atualizacao_rapida'
+                ? 'bg-amber-500 hover:bg-amber-600 text-white'
+                : 'bg-white border border-slate-200 hover:bg-slate-50 text-slate-700'
+            }`}
+          >
+            <Clock className="w-4 h-4" />
+            <span>{viewMode === 'atualizacao_rapida' ? 'Ver Fichas Completas' : 'Atualização Rápida (BH, FF, FS)'}</span>
+          </button>
           {usuarioLogado?.email?.toLowerCase() === 'enfmichelmilk@gmail.com' && (
-            <button
-              onClick={() => setIsOpenImportModal(true)}
-              className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold py-2.5 px-4 rounded-xl text-sm shadow-sm flex items-center gap-2 transition duration-150 cursor-pointer"
-            >
-              <FileText className="w-4 h-4 text-slate-500" />
-              <span>Importar Lista (Excel)</span>
-            </button>
+            viewMode === 'atualizacao_rapida' ? (
+              <button
+                onClick={() => setIsOpenSaldosImportModal(true)}
+                className="bg-white border border-amber-200 hover:bg-amber-50 text-amber-700 font-bold py-2.5 px-4 rounded-xl text-sm shadow-sm flex items-center gap-2 transition duration-150 cursor-pointer"
+              >
+                <Upload className="w-4 h-4 text-amber-550" />
+                <span>Importar Saldos (Excel)</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => setIsOpenImportModal(true)}
+                className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold py-2.5 px-4 rounded-xl text-sm shadow-sm flex items-center gap-2 transition duration-150 cursor-pointer"
+              >
+                <FileText className="w-4 h-4 text-slate-500" />
+                <span>Importar Lista (Excel)</span>
+              </button>
+            )
           )}
           <button
             onClick={() => handleOpenModal(null)}
@@ -1055,166 +1306,304 @@ Atenciosamente,
         )}
       </div>
 
-      {/* Grid of employees representable as structured clinical profile cards */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        {filteredColaboradores.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-left text-xs">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-200 text-slate-400 font-extrabold uppercase tracking-wider">
-                  <th className="py-3 px-4">Matrícula</th>
-                  <th className="py-3 px-4">Nome Profissional (Selos)</th>
-                  <th className="py-3 px-4">Cargo / Core</th>
-                  <th className="py-3 px-4">Setor / Escala</th>
-                  <th className="py-3 px-4 text-center">Saldo BH</th>
-                  <th className="py-3 px-4 text-right">Ficha</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
-                {filteredColaboradores.map(c => {
-                  const hasEtica = c.selo_etica === 'Sim';
-                  const hasBrigada = c.selo_brigadista === 'Sim';
-                  const hasCipa = c.selo_cipa === 'Sim';
-                  const hasInss = c.inss_check === 'Sim';
+      {viewMode === 'atualizacao_rapida' ? (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden p-5 space-y-4">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-4 border-b border-slate-150">
+            <div>
+              <h3 className="text-sm font-extrabold text-slate-800 uppercase tracking-wide">
+                Módulo de Atualização de Cadastro (BH, FF, FS)
+              </h3>
+              <p className="text-[11px] text-slate-500 font-semibold leading-relaxed">
+                Altere os valores de Banco de Horas (BH), Folga Feriado (FF) e Folga de Escala (FS) diretamente na tabela.
+              </p>
+            </div>
+            
+            <div className="flex gap-2 flex-wrap items-center">
+              <button
+                onClick={() => setIsOpenSaldosImportModal(true)}
+                className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl text-xs shadow-md shadow-amber-600/15 transition duration-150 cursor-pointer flex items-center gap-1.5"
+              >
+                <Upload className="w-3.5 h-3.5" />
+                <span>Importar do Excel</span>
+              </button>
+              {Object.keys(editedColabs).length > 0 && (
+                <>
+                  <button
+                    onClick={() => {
+                      if (confirm("Deseja realmente descartar todas as alterações não salvas?")) {
+                        setEditedColabs({});
+                      }
+                    }}
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition duration-150 cursor-pointer border border-slate-250"
+                  >
+                    Descartar Alterações
+                  </button>
+                  <button
+                    onClick={handleSaveAllQuick}
+                    className="px-4 py-2 bg-emerald-650 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs shadow-md shadow-emerald-600/10 transition duration-150 cursor-pointer flex items-center gap-1.5"
+                  >
+                    <span>Salvar Todos ({Object.keys(editedColabs).length})</span>
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
 
-                  const colabAtestados = absenteismo.filter(a => a.matricula === c.matricula && a.tipo === 'Atestado');
-
-                  return (
-                    <tr key={c.matricula} className="hover:bg-slate-50/50 transition">
-                      <td className="py-3.5 px-4 font-mono font-bold text-slate-500">
-                        {c.matricula}
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <span className="font-extrabold text-sm text-slate-800 block leading-tight">{c.nome}</span>
-                            {c.datanascimento && (
-                              <span className="text-[10px] text-slate-400 font-semibold flex items-center gap-0.5" title="Data de Nascimento">
-                                🎂 {c.datanascimento.split('-').reverse().slice(0, 2).join('/')}
-                              </span>
-                            )}
+          {filteredColaboradores.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-left text-xs">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200 text-slate-400 font-extrabold uppercase tracking-wider">
+                    <th className="py-3 px-4">Nome Profissional</th>
+                    <th className="py-3 px-4">Matrícula</th>
+                    <th className="py-3 px-4 w-36">BH</th>
+                    <th className="py-3 px-4 w-36">FF</th>
+                    <th className="py-3 px-4 w-36">FS</th>
+                    <th className="py-3 px-4 text-right w-24">Ação</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                  {filteredColaboradores.map(c => {
+                    const hasEdits = !!editedColabs[c.matricula];
+                    return (
+                      <tr key={c.matricula} className={`transition ${hasEdits ? 'bg-amber-50/40 hover:bg-amber-50/60' : 'hover:bg-slate-50/50'}`}>
+                        <td className="py-3 px-4">
+                          <span className="font-extrabold text-sm text-slate-800 block leading-tight">{c.nome}</span>
+                          <span className="text-[10px] text-slate-400 font-semibold">{c.cargo} • {c.setor}</span>
+                        </td>
+                        <td className="py-3 px-4 font-mono font-bold text-slate-500">
+                          {c.matricula}
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-1.5">
+                            <input
+                              type="text"
+                              value={
+                                bhInputStates[c.matricula] !== undefined
+                                  ? bhInputStates[c.matricula]
+                                  : formatDecimalToHHMM(getQuickFieldValue(c, 'bh'))
+                              }
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setBhInputStates(prev => ({ ...prev, [c.matricula]: val }));
+                                const decimalVal = parseExcelNumber(val);
+                                handleQuickFieldChange(c.matricula, 'bh', decimalVal);
+                              }}
+                              onBlur={() => {
+                                setBhInputStates(prev => {
+                                  const copy = { ...prev };
+                                  delete copy[c.matricula];
+                                  return copy;
+                                });
+                              }}
+                              placeholder="00:00"
+                              className="w-24 p-1.5 border border-slate-300 rounded-lg focus:outline-none focus:border-sky-500 font-mono font-bold text-slate-800 text-xs bg-white text-center shadow-3xs"
+                            />
                           </div>
-                          
-                          {/* Visual Audit Stamps/Labels */}
-                          <div className="flex gap-1 flex-wrap pt-0.5">
-                            {hasEtica && (
-                              <span className="text-[9px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded font-extrabold uppercase border border-purple-200">Ética</span>
-                            )}
-                            {hasBrigada && (
-                              <span className="text-[9px] bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded font-extrabold uppercase border border-rose-200">Brigada</span>
-                            )}
-                            {hasCipa && (
-                              <span className="text-[9px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-extrabold uppercase border border-emerald-200">Cipa</span>
-                            )}
-                            {hasInss && (
-                              <span className="text-[9px] bg-red-600 text-white px-1.5 py-0.5 rounded font-extrabold uppercase animate-pulse">INSS Ativo</span>
-                            )}
-                            {c.datarecisao && (
-                              <span className="text-[9px] bg-amber-55 text-amber-800 px-1.5 py-0.5 rounded font-extrabold uppercase border border-amber-300">
-                                🚪 Desligamento: {c.datarecisao.split('-').reverse().join('/')}
-                              </span>
-                            )}
-                            {c.numreq && (
-                              <span className="text-[9px] bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded font-extrabold uppercase border border-slate-300">
-                                REQ ID: {c.numreq}
-                              </span>
-                            )}
-                            {c.infosubst && (
-                              <span className="text-[9px] bg-teal-100 text-teal-800 px-1.5 py-0.5 rounded font-extrabold uppercase border border-teal-200" title={`Reposição de Vaga: ${c.infosubst}`}>
-                                🔄 Reposição: {c.infosubst}
-                              </span>
-                            )}
-                            {c.inss_check === 'Sim' && c.inss_rep && (
-                              <span className="text-[9px] bg-rose-50 text-rose-805 px-1.5 py-0.5 rounded font-extrabold uppercase border border-rose-200" title={`Substituição INSS: ${c.inss_rep}`}>
-                                🔁 Substituto INSS: {c.inss_rep}
-                              </span>
-                            )}
-                            {c.selos_adicionais?.map(selo => (
-                              <span key={selo} className="text-[9px] bg-teal-50 text-teal-700 px-1.5 py-0.5 rounded font-extrabold uppercase border border-teal-200">{selo}</span>
-                            ))}
-                          </div>
-
-                          {/* Histórico de Atestados Lançados */}
-                          {colabAtestados.length > 0 ? (
-                            <div className="mt-1 pt-1 border-t border-slate-100 space-y-0.5">
-                              <span className="text-[9.5px] font-extrabold text-sky-700 block">
-                                📝 Atestados Lançados ({colabAtestados.length}):
-                              </span>
-                              <div className="flex flex-col gap-0.5 bg-sky-50/30 p-1 rounded border border-sky-100/50 max-h-20 overflow-y-auto">
-                                {colabAtestados.map(at => (
-                                  <span key={at.id} className="text-[9px] text-slate-600 block leading-tight">
-                                    • <strong className="text-slate-800 font-bold">CID {at.cid}</strong> ({at.duracao}) - Início: {at.inicio.split('-').reverse().join('/')}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
+                        </td>
+                        <td className="py-3 px-4">
+                          <input
+                            type="number"
+                            step="any"
+                            value={getQuickFieldValue(c, 'ff')}
+                            onChange={(e) => handleQuickFieldChange(c.matricula, 'ff', parseFloat(e.target.value) || 0)}
+                            className="w-24 p-1.5 border border-slate-300 rounded-lg focus:outline-none focus:border-sky-500 font-mono font-bold text-slate-800 text-xs bg-white text-center shadow-3xs"
+                          />
+                        </td>
+                        <td className="py-3 px-4">
+                          <input
+                            type="number"
+                            step="any"
+                            value={getQuickFieldValue(c, 'fs')}
+                            onChange={(e) => handleQuickFieldChange(c.matricula, 'fs', parseFloat(e.target.value) || 0)}
+                            className="w-24 p-1.5 border border-slate-300 rounded-lg focus:outline-none focus:border-sky-500 font-mono font-bold text-slate-800 text-xs bg-white text-center shadow-3xs"
+                          />
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          {hasEdits ? (
+                            <button
+                              onClick={() => handleSaveQuickRow(c)}
+                              className="px-3 py-1.5 bg-emerald-650 hover:bg-emerald-700 text-white font-extrabold rounded-lg text-[10px] uppercase shadow-sm transition"
+                            >
+                              Salvar
+                            </button>
                           ) : (
-                            <span className="text-[9px] text-slate-400 block pt-0.5 italic">Nenhum atestado lançado</span>
+                            <span className="text-[10px] text-slate-400 italic font-normal mr-2">Salvo</span>
                           )}
-                        </div>
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <div className="space-y-1">
-                          <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full border ${getCargoColorChip(c.cargo)}`}>
-                            {c.cargo}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="p-10 text-center text-slate-400 text-xs">
+              Nenhum colaborador corresponde aos filtros informados.
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          {filteredColaboradores.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-left text-xs">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200 text-slate-400 font-extrabold uppercase tracking-wider">
+                    <th className="py-3 px-4">Matrícula</th>
+                    <th className="py-3 px-4">Nome Profissional (Selos)</th>
+                    <th className="py-3 px-4">Cargo / Core</th>
+                    <th className="py-3 px-4">Setor / Escala</th>
+                    <th className="py-3 px-4 text-center">Saldo BH</th>
+                    <th className="py-3 px-4 text-right">Ficha</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                  {filteredColaboradores.map(c => {
+                    const hasEtica = c.selo_etica === 'Sim';
+                    const hasBrigada = c.selo_brigadista === 'Sim';
+                    const hasCipa = c.selo_cipa === 'Sim';
+                    const hasInss = c.inss_check === 'Sim';
+
+                    const colabAtestados = absenteismo.filter(a => a.matricula === c.matricula && a.tipo === 'Atestado');
+
+                    return (
+                      <tr key={c.matricula} className="hover:bg-slate-50/50 transition">
+                        <td className="py-3.5 px-4 font-mono font-bold text-slate-500">
+                          {c.matricula}
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-extrabold text-sm text-slate-800 block leading-tight">{c.nome}</span>
+                              {c.datanascimento && (
+                                <span className="text-[10px] text-slate-400 font-semibold flex items-center gap-0.5" title="Data de Nascimento">
+                                  🎂 {c.datanascimento.split('-').reverse().slice(0, 2).join('/')}
+                                </span>
+                              )}
+                            </div>
+                            
+                            {/* Visual Audit Stamps/Labels */}
+                            <div className="flex gap-1 flex-wrap pt-0.5">
+                              {hasEtica && (
+                                <span className="text-[9px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded font-extrabold uppercase border border-purple-200">Ética</span>
+                              )}
+                              {hasBrigada && (
+                                <span className="text-[9px] bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded font-extrabold uppercase border border-rose-200">Brigada</span>
+                              )}
+                              {hasCipa && (
+                                <span className="text-[9px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-extrabold uppercase border border-emerald-200">Cipa</span>
+                              )}
+                              {hasInss && (
+                                <span className="text-[9px] bg-red-600 text-white px-1.5 py-0.5 rounded font-extrabold uppercase animate-pulse">INSS Ativo</span>
+                              )}
+                              {c.datarecisao && (
+                                <span className="text-[9px] bg-amber-55 text-amber-800 px-1.5 py-0.5 rounded font-extrabold uppercase border border-amber-300">
+                                  🚪 Desligamento: {c.datarecisao.split('-').reverse().join('/')}
+                                </span>
+                              )}
+                              {c.numreq && (
+                                <span className="text-[9px] bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded font-extrabold uppercase border border-slate-300">
+                                  REQ ID: {c.numreq}
+                                </span>
+                              )}
+                              {c.infosubst && (
+                                <span className="text-[9px] bg-teal-100 text-teal-800 px-1.5 py-0.5 rounded font-extrabold uppercase border border-teal-200" title={`Reposição de Vaga: ${c.infosubst}`}>
+                                  🔄 Reposição: {c.infosubst}
+                                </span>
+                              )}
+                              {c.inss_check === 'Sim' && c.inss_rep && (
+                                <span className="text-[9px] bg-rose-50 text-rose-805 px-1.5 py-0.5 rounded font-extrabold uppercase border border-rose-200" title={`Substituição INSS: ${c.inss_rep}`}>
+                                  🔁 Substituto INSS: {c.inss_rep}
+                                </span>
+                              )}
+                              {c.selos_adicionais?.map(selo => (
+                                <span key={selo} className="text-[9px] bg-teal-50 text-teal-700 px-1.5 py-0.5 rounded font-extrabold uppercase border border-teal-200">{selo}</span>
+                              ))}
+                            </div>
+
+                            {/* Histórico de Atestados Lançados */}
+                            {colabAtestados.length > 0 ? (
+                              <div className="mt-1 pt-1 border-t border-slate-100 space-y-0.5">
+                                <span className="text-[9.5px] font-extrabold text-sky-700 block">
+                                  📝 Atestados Lançados ({colabAtestados.length}):
+                                </span>
+                                <div className="flex flex-col gap-0.5 bg-sky-50/30 p-1 rounded border border-sky-100/50 max-h-20 overflow-y-auto">
+                                  {colabAtestados.map(at => (
+                                    <span key={at.id} className="text-[9px] text-slate-600 block leading-tight">
+                                      • <strong className="text-slate-800 font-bold">CID {at.cid}</strong> ({at.duracao}) - Início: {at.inicio.split('-').reverse().join('/')}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="text-[9px] text-slate-400 block pt-0.5 italic">Nenhum atestado lançado</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <div className="space-y-1">
+                            <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full border ${getCargoColorChip(c.cargo)}`}>
+                              {c.cargo}
+                            </span>
+                            {c.coren && (
+                              <span className="block text-[10px] font-mono text-slate-400">COREN: {c.coren}</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <div className="space-y-0.5">
+                            <span className="text-xs font-bold text-slate-800 block truncate max-w-[150px]">{c.setor}</span>
+                            <span className="text-[10px] text-slate-400 font-semibold block">{c.equipe}</span>
+                          </div>
+                        </td>
+                        <td className="py-3.5 px-4 text-center">
+                          <span className={`font-mono text-xs font-extrabold px-1.5 py-0.5 rounded ${
+                            c.bancohoras >= 0 
+                              ? 'text-emerald-700 bg-emerald-50 border border-emerald-100' 
+                              : 'text-red-700 bg-red-50 border border-red-100'
+                          }`}>
+                            {formatDecimalToHHMM(c.bancohoras)}
                           </span>
-                          {c.coren && (
-                            <span className="block text-[10px] font-mono text-slate-400">COREN: {c.coren}</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <div className="space-y-0.5">
-                          <span className="text-xs font-bold text-slate-800 block truncate max-w-[150px]">{c.setor}</span>
-                          <span className="text-[10px] text-slate-400 font-semibold block">{c.equipe}</span>
-                        </div>
-                      </td>
-                      <td className="py-3.5 px-4 text-center">
-                        <span className={`font-mono text-xs font-extrabold px-1.5 py-0.5 rounded ${
-                          c.bancohoras >= 0 
-                            ? 'text-emerald-700 bg-emerald-50 border border-emerald-100' 
-                            : 'text-red-700 bg-red-50 border border-red-100'
-                        }`}>
-                          {c.bancohoras >= 0 ? `+${c.bancohoras}` : c.bancohoras}h
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-4 text-right">
-                        <div className="inline-flex gap-1.5">
-                          <button
-                            onClick={() => { setSelectedViewColab(c); setIsOpenViewModal(true); }}
-                            className="p-2 rounded-lg text-emerald-600 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-100 transition-all cursor-pointer"
-                            title="Visualizar Ficha"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleOpenModal(c)}
-                            className="p-2 rounded-lg text-sky-600 hover:text-sky-800 bg-sky-50 hover:bg-sky-100 border border-sky-100 transition-all cursor-pointer"
-                            title="Editar Ficha"
-                          >
-                            <Pencil className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteColaborador(c)}
-                            className="p-1 px-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-all"
-                            title="Deletar ficha"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="p-10 text-center text-slate-400 text-xs">
-            Nenhum colaborador corresponde aos filtros informados.
-          </div>
-        )}
-      </div>
+                        </td>
+                        <td className="py-3.5 px-4 text-right">
+                          <div className="inline-flex gap-1.5">
+                            <button
+                              onClick={() => { setSelectedViewColab(c); setIsOpenViewModal(true); }}
+                              className="p-2 rounded-lg text-emerald-600 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-100 transition-all cursor-pointer"
+                              title="Visualizar Ficha"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleOpenModal(c)}
+                              className="p-2 rounded-lg text-sky-600 hover:text-sky-800 bg-sky-50 hover:bg-sky-100 border border-sky-100 transition-all cursor-pointer"
+                              title="Editar Ficha"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteColaborador(c)}
+                              className="p-1 px-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-all"
+                              title="Deletar ficha"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="p-10 text-center text-slate-400 text-xs">
+              Nenhum colaborador corresponde aos filtros informados.
+            </div>
+          )}
+        </div>
+      )}
 
       {/* EXTREMELY DETAILED COMPILATION MODAL DIALOG - ALL 29 PROPERTIES REPRESENTABLE */}
       {isOpenModal && (
@@ -1470,13 +1859,13 @@ Atenciosamente,
 
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                   <div className="space-y-1">
-                    <label className="font-semibold text-slate-500">BH (Banco Horas)</label>
+                    <label className="font-semibold text-slate-500">BH (Banco Horas - HH:MM)</label>
                     <input
-                      type="number"
-                      step="any"
-                      value={bancoHoras}
-                      onChange={(e) => setBancoHoras(parseFloat(e.target.value) || 0)}
-                      className="w-full p-2 border border-slate-300 rounded-lg focus:outline-none focus:border-sky-500 font-mono font-bold"
+                      type="text"
+                      value={bancoHorasText}
+                      onChange={(e) => setBancoHorasText(e.target.value)}
+                      placeholder="00:00"
+                      className="w-full p-2 border border-slate-300 rounded-lg focus:outline-none focus:border-sky-500 font-mono font-bold text-center"
                     />
                   </div>
                   <div className="space-y-1">
@@ -1996,6 +2385,70 @@ Atenciosamente,
         </div>
       )}
 
+      {/* Modal de Importação de Saldos BH, FF, FS */}
+      {isOpenSaldosImportModal && (
+        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[85vh]">
+            <div className="bg-amber-500 text-white p-5 flex justify-between items-center">
+              <div className="flex items-center gap-2.5">
+                <Upload className="w-6 h-6" />
+                <div>
+                  <h3 className="font-extrabold text-base">Importar Saldos (BH, FF, FS) do Excel</h3>
+                  <p className="text-xs text-amber-100">Cole as colunas de saldos da sua planilha</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => { setIsOpenSaldosImportModal(false); setSaldosImportText(''); setSaldosImportError(''); }} 
+                className="hover:bg-amber-650 p-1.5 rounded-lg transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto space-y-4">
+              <div className="bg-amber-50 p-4 rounded-xl border border-amber-100 text-[11px] text-amber-805 space-y-1">
+                <p className="font-bold">Instruções:</p>
+                <p>1. No Excel, monte sua planilha e copie as colunas contendo as informações correspondentes.</p>
+                <p>2. Os dados de matrícula serão usados para localizar cada profissional já cadastrado e atualizar os saldos de forma rápida.</p>
+                <p className="font-semibold mt-2">Ordem Obrigatória das Colunas (Copie diretamente da tabela excel):</p>
+                <p className="font-mono bg-white/60 p-1.5 rounded border border-amber-200 text-[10px] overflow-x-auto whitespace-nowrap font-bold text-slate-800">
+                  Nome (Opcional) | Matrícula (Obrigatório) | BH (Banco de Horas) | FF (Folga Feriado) | FS (Folga Escala)
+                </p>
+                <p className="text-[10px] text-slate-500 pt-1">
+                  *Exemplo de linha: <code className="bg-slate-150 px-1 rounded font-mono">Maria Silva &lt;Tab&gt; 245100 &lt;Tab&gt; 12.5 &lt;Tab&gt; 2 &lt;Tab&gt; 3</code>
+                </p>
+              </div>
+
+              <textarea
+                value={saldosImportText}
+                onChange={(e) => setSaldosImportText(e.target.value)}
+                placeholder="Cole as colunas copiadas do Excel aqui..."
+                className="w-full h-64 p-3 border border-slate-200 rounded-xl font-mono text-xs focus:ring-2 focus:ring-amber-500 focus:outline-none resize-none bg-slate-50 focus:bg-white"
+              />
+
+              {saldosImportError && (
+                <p className="text-xs text-rose-600 font-bold">{saldosImportError}</p>
+              )}
+            </div>
+
+            <div className="bg-slate-50 p-4 border-t border-slate-200 flex justify-end gap-3">
+              <button
+                onClick={() => { setIsOpenSaldosImportModal(false); setSaldosImportText(''); setSaldosImportError(''); }}
+                className="px-4 py-2 border border-slate-300 text-slate-755 font-bold rounded-xl text-xs hover:bg-slate-100 transition"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleProcessSaldosImport}
+                className="px-5 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl text-xs shadow-md shadow-amber-500/10 transition"
+              >
+                Processar e Atualizar Saldos
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal de Detalhes de Visualização do Colaborador */}
       {isOpenViewModal && selectedViewColab && (
         <div className="fixed inset-0 bg-slate-950/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn font-sans">
@@ -2164,7 +2617,7 @@ Atenciosamente,
                     <div className="bg-sky-50 border border-sky-100/80 p-3 rounded-2xl">
                       <span className="text-[10px] text-slate-500 font-bold uppercase block text-sky-800">Banco Horas</span>
                       <span className={`text-sm font-extrabold mt-1 block ${selectedViewColab.bancohoras >= 0 ? 'text-emerald-700' : 'text-rose-750'}`}>
-                        {selectedViewColab.bancohoras >= 0 ? `+${selectedViewColab.bancohoras}` : selectedViewColab.bancohoras}h
+                        {formatDecimalToHHMM(selectedViewColab.bancohoras)}
                       </span>
                     </div>
                     <div className="bg-emerald-50 border border-emerald-100/80 p-3 rounded-2xl">
@@ -2430,11 +2883,13 @@ Atenciosamente,
                         <label className="font-bold text-slate-700 block">Duração:</label>
                         <select
                           value={localFeriasDuration}
-                          onChange={(e) => setLocalFeriasDuration(parseInt(e.target.value) as 20 | 30)}
+                          onChange={(e) => setLocalFeriasDuration(parseInt(e.target.value) as 10 | 15 | 20 | 30)}
                           className="w-full p-2.5 border border-slate-250 bg-white rounded-xl focus:outline-none focus:border-emerald-500 text-slate-800"
                         >
-                          <option value={30}>Férias Completas (30 dias)</option>
+                          <option value={10}>10 Dias</option>
+                          <option value={15}>15 Dias</option>
                           <option value={20}>Férias Parciais (20 dias)</option>
+                          <option value={30}>Férias Completas (30 dias)</option>
                         </select>
                       </div>
                     </div>

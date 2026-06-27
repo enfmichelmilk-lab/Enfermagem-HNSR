@@ -82,7 +82,7 @@ export interface Ferias {
   dataInicio: string; // YYYY-MM-DD
   dataFim: string; // YYYY-MM-DD
   dataRetorno: string; // YYYY-MM-DD
-  duracao: 20 | 30;
+  duracao: 10 | 15 | 20 | 30;
   status: 'Pendente' | 'Aprovado' | 'Recusado';
   solicitante: string;
   dataCriacao: string;

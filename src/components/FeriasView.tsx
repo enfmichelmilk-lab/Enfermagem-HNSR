@@ -36,13 +36,13 @@ export default function FeriasView({
   // New Vacation Form States
   const [selectedColabMatricula, setSelectedColabMatricula] = useState('');
   const [startDate, setStartDate] = useState('');
-  const [duration, setDuration] = useState<20 | 30>(30);
+  const [duration, setDuration] = useState<10 | 15 | 20 | 30>(30);
   const [homologateImmediately, setHomologateImmediately] = useState(true);
 
   // Edit Vacation States
   const [editingFerias, setEditingFerias] = useState<Ferias | null>(null);
   const [editStartDate, setEditStartDate] = useState('');
-  const [editDuration, setEditDuration] = useState<20 | 30>(30);
+  const [editDuration, setEditDuration] = useState<10 | 15 | 20 | 30>(30);
   const [editStatus, setEditStatus] = useState<'Pendente' | 'Aprovado' | 'Recusado'>('Pendente');
 
   // Check if current user is Nurse or higher
@@ -490,22 +490,33 @@ export default function FeriasView({
 
               </div>
 
-              {/* Duration selector: 20 or 30 days */}
+              {/* Duration selector: 10, 15, 20 or 30 days */}
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-650 block">Duração Programada:</label>
-                <div className="flex gap-4">
-                  <label className="flex items-center gap-2 cursor-pointer bg-slate-50 hover:bg-slate-100 border border-slate-200 px-4 py-2.5 rounded-xl flex-1 text-center font-bold text-xs select-none shadow-3xs">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <label className="flex items-center gap-2 cursor-pointer bg-slate-50 hover:bg-slate-100 border border-slate-200 px-3 py-2.5 rounded-xl text-center font-bold text-xs select-none shadow-3xs">
                     <input
                       type="radio"
                       name="duracao"
-                      checked={duration === 30}
-                      onChange={() => setDuration(30)}
+                      checked={duration === 10}
+                      onChange={() => setDuration(10)}
                       className="w-4 h-4 text-sky-600 focus:ring-sky-500 cursor-pointer"
                     />
-                    <span className="text-slate-800">Férias Completas (30 dias)</span>
+                    <span className="text-slate-800">10 Dias</span>
                   </label>
 
-                  <label className="flex items-center gap-2 cursor-pointer bg-slate-50 hover:bg-slate-100 border border-slate-200 px-4 py-2.5 rounded-xl flex-1 text-center font-bold text-xs select-none shadow-3xs">
+                  <label className="flex items-center gap-2 cursor-pointer bg-slate-50 hover:bg-slate-100 border border-slate-200 px-3 py-2.5 rounded-xl text-center font-bold text-xs select-none shadow-3xs">
+                    <input
+                      type="radio"
+                      name="duracao"
+                      checked={duration === 15}
+                      onChange={() => setDuration(15)}
+                      className="w-4 h-4 text-sky-600 focus:ring-sky-500 cursor-pointer"
+                    />
+                    <span className="text-slate-800">15 Dias</span>
+                  </label>
+
+                  <label className="flex items-center gap-2 cursor-pointer bg-slate-50 hover:bg-slate-100 border border-slate-200 px-3 py-2.5 rounded-xl text-center font-bold text-xs select-none shadow-3xs">
                     <input
                       type="radio"
                       name="duracao"
@@ -513,7 +524,18 @@ export default function FeriasView({
                       onChange={() => setDuration(20)}
                       className="w-4 h-4 text-sky-600 focus:ring-sky-500 cursor-pointer"
                     />
-                    <span className="text-slate-800">Férias Parciais (20 dias)</span>
+                    <span className="text-slate-800">20 Dias</span>
+                  </label>
+
+                  <label className="flex items-center gap-2 cursor-pointer bg-slate-50 hover:bg-slate-100 border border-slate-200 px-3 py-2.5 rounded-xl text-center font-bold text-xs select-none shadow-3xs">
+                    <input
+                      type="radio"
+                      name="duracao"
+                      checked={duration === 30}
+                      onChange={() => setDuration(30)}
+                      className="w-4 h-4 text-sky-600 focus:ring-sky-500 cursor-pointer"
+                    />
+                    <span className="text-slate-800">30 Dias</span>
                   </label>
                 </div>
               </div>
@@ -631,11 +653,13 @@ export default function FeriasView({
                 <label className="text-xs font-bold text-slate-700 block">Duração (Dias de Gozo):</label>
                 <select
                   value={editDuration}
-                  onChange={(e) => setEditDuration(parseInt(e.target.value) as 20 | 30)}
+                  onChange={(e) => setEditDuration(parseInt(e.target.value) as 10 | 15 | 20 | 30)}
                   className="w-full p-2.5 bg-white border border-slate-250 rounded-xl font-bold text-xs focus:outline-none focus:border-sky-500 text-slate-800"
                 >
-                  <option value={30}>30 Dias Completos</option>
+                  <option value={10}>10 Dias</option>
+                  <option value={15}>15 Dias</option>
                   <option value={20}>20 Dias Parciais</option>
+                  <option value={30}>30 Dias Completos</option>
                 </select>
               </div>
 
