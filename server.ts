@@ -59,6 +59,60 @@ async function startServer() {
     return geminiClient;
   };
 
+  // Helper function to call Gemini API with automatic retry and model fallback for high reliability
+  async function generateContentWithRetry(client: any, params: any, maxAttempts = 3, initialDelayMs = 2000) {
+    const originalModel = params.model;
+    const modelsToTry = [originalModel, "gemini-3.1-flash-lite"];
+    
+    for (let mIdx = 0; mIdx < modelsToTry.length; mIdx++) {
+      const currentModel = modelsToTry[mIdx];
+      params.model = currentModel;
+      let attempt = 0;
+      
+      while (attempt < maxAttempts) {
+        try {
+          attempt++;
+          console.log(`[Gemini API] Tentando modelo ${currentModel} (Tentativa ${attempt}/${maxAttempts})...`);
+          const result = await client.models.generateContent(params);
+          console.log(`[Gemini API] Sucesso com o modelo ${currentModel} na tentativa ${attempt}!`);
+          return result;
+        } catch (error: any) {
+          console.error(`[Gemini API Erro] Modelo: ${currentModel}, Tentativa: ${attempt} de ${maxAttempts}. Erro:`, error);
+          
+          const errorMsg = error?.message || String(error);
+          const isRateLimitOrOverload = 
+            error?.status === "UNAVAILABLE" || 
+            error?.statusCode === 503 ||
+            error?.status === "RESOURCE_EXHAUSTED" ||
+            error?.statusCode === 429 ||
+            errorMsg.includes("503") ||
+            errorMsg.includes("high demand") ||
+            errorMsg.includes("UNAVAILABLE") ||
+            errorMsg.includes("RESOURCE_EXHAUSTED") ||
+            errorMsg.includes("overloaded") ||
+            errorMsg.includes("temporarily unavailable");
+
+          if (isRateLimitOrOverload && attempt < maxAttempts) {
+            const delay = initialDelayMs * Math.pow(2, attempt - 1) * (0.8 + Math.random() * 0.4);
+            console.warn(`[Gemini API] Instabilidade detectada. Aguardando ${Math.round(delay)}ms antes da próxima tentativa...`);
+            await new Promise((resolve) => setTimeout(resolve, delay));
+            continue;
+          }
+          
+          // Se falhou todas as tentativas e há outro modelo disponível na lista, vamos para o fallback
+          if (mIdx < modelsToTry.length - 1) {
+            console.warn(`[Gemini API] Falha persistente com o modelo ${currentModel}. Alternando para o modelo de fallback...`);
+            break;
+          }
+          
+          // Se for o último modelo da lista, relançar o erro
+          throw error;
+        }
+      }
+    }
+    throw new Error("Falha ao processar requisição com todos os modelos disponíveis.");
+  }
+
   // Basic API Health Diagnostic Endpoint
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok", message: "Enfermagem HNSR server active." });
@@ -469,7 +523,7 @@ Gere apenas o vetor JSON válido, seguindo o esquema abaixo. Caso a data de iní
       const client = getGeminiClient();
       console.log(`[Folgas API] Tentando extração de folgas com gemini-3.5-flash para o mês ${month}/${year}...`);
 
-      const response = await client.models.generateContent({
+      const response = await generateContentWithRetry(client, {
         model: "gemini-3.5-flash",
         contents: [
           {
@@ -479,25 +533,52 @@ Gere apenas o vetor JSON válido, seguindo o esquema abaixo. Caso a data de iní
             },
           },
           {
-            text: `Examine esta escala de revezamento (pode ser uma imagem, foto ou PDF) para o mês ${month} de ${year}.
-Sua tarefa é identificar TODOS os enfermeiros/colaboradores e extrair as suas FOLGAS e AFASTAMENTOS.
+            text: `Você é um robô de Inteligência Artificial especializado na leitura de tabelas e escalas de revezamento de profissionais de saúde de hospitais.
+Sua missão é extrair com PRECISÃO GEOMÉTRICA ABSOLUTA todas as FOLGAS e AFASTAMENTOS desta escala de revezamento de enfermagem para o mês ${month} de ${year}.
 
-Mapeie os símbolos identificados em cada dia (1 a 31) para os tipos de folga padrão do sistema:
-- "F" (ou "Folga") -> "Folga"
-- "BH" (ou "Banco de Horas") -> "Banco de Horas"
-- "FF" (ou "Folga Feriado") -> "Folga Feriado"
-- "FE" (ou "Folga Enfermagem") -> "Folga Enfermagem"
-- "FÉRIAS" ou "FERIAS" -> "Férias" (se cobrir múltiplos dias consecutivos, gere um registro para cada dia individual)
+Atenção, o usuário relatou que você "está colocando as folgas nos dias errados". Isso ocorre porque você está ignorando o alinhamento das colunas e apenas lendo os símbolos sequencialmente.
+
+REGRA DE ALINHAMENTO GEOMÉTRICO (COMPULSÓRIA):
+1. A escala de revezamento possui um cabeçalho no topo de cada tabela com os números de 1 a 31 representando os dias do mês de forma horizontal.
+2. Cada profissional tem uma linha correspondente na tabela.
+3. Para descobrir a qual dia do mês um símbolo (Ex: "F", "BH", "FF", "FE", "AT", "FÉRIAS") pertence, você DEVE alinhar verticalmente esse símbolo com o número do cabeçalho de 1 a 31.
+4. Por exemplo, se a linha do profissional possui traços ou símbolos de trabalho (M, T, D, N, U7, U9, etc.) nos primeiros 12 dias, e na 13ª célula houver um "F", isso significa que a folga é EXATAMENTE no DIA 13 de ${month}. Se você colocar que o profissional folgou no dia 1, a escala inteira estará incorreta.
+5. Siga estas posições de colunas, contando rigorosamente cada célula após a coluna "Horário":
+   - 1ª célula de escala = Dia 01
+   - 2ª célula de escala = Dia 02
+   - ...
+   - 31ª célula de escala = Dia 31
+
+MAPEAMENTO DE SÍMBOLOS:
+- "F" -> "Folga" (Dia único)
+- "BH" -> "Banco de Horas" (Dia único)
+- "FF" -> "Folga Feriado" (Dia único)
+- "FE" -> "Folga Enfermagem" (Dia único)
+- "FÉRIAS" ou "FERIAS" ou "ERIA" (se estendendo por várias colunas de dias) -> "Férias". Por exemplo, se a palavra "FÉRIAS" ou "FERIAS" ou letras "F", "E", "R", "I", "A", "S" cobrirem do dia 1 ao dia 17, você deve criar um registro de folga tipo "Férias" para CADA UM dos dias do intervalo (dia 01, 02, 03, ..., 17).
 - "B" -> "Brigada de Incêndio"
 - "E" -> "Eleição"
-- "AT" -> "Atestado"
+- "AT" -> "Atestado". Se estiver repetido em várias células seguidas (como "AT", "AT", "AT", "AT"), crie um registro individual do tipo "Atestado" para cada um desses dias específicos.
 - "I" -> "Integração"
 
-Atenção:
-1. Ignore símbolos de turnos de trabalho (como "M", "T", "D", "N", "PS", "U7", "U9", "2|3", "4", "5", "6") que representam plantões de trabalho. Extraia APENAS as folgas e afastamentos descritos acima.
-2. Identifique corretamente o nome completo do colaborador e sua matrícula correspondente na linha.
-3. Para cada folga/afastamento identificado, determine a data exata formatada como "YYYY-MM-DD". O ano é ${year}, o mês é ${month} (formate com dois dígitos), e o dia é o número da coluna (1 a 31) onde o símbolo de folga foi encontrado.
-4. Retorne a lista estruturada no formato JSON especificado.`,
+SÍMBOLOS QUE REPRESENTAM TRABALHO E DEVERÃO SER IGNORADOS:
+- Turnos de trabalho: "M", "T", "D", "N", "PS", "U7", "U9", "U12", "6", "5", "4", "2|3", "13:00", "07:00", "19:00", "TRS", "TOTAL", "X" (no caso do INSS).
+- Células vazias ou preenchidas apenas com traços, pontos ou espaços.
+
+SAÍDA FORMATADA:
+Retorne estritamente um objeto JSON com a seguinte estrutura:
+{
+  "leaves": [
+    {
+      "matricula": "Número de matrícula encontrado na linha (se houver)",
+      "colaborador": "Nome completo e limpo do colaborador",
+      "data": "Data exata da folga no formato YYYY-MM-DD (Certifique-se de que o DD corresponde à coluna correta na grade!)",
+      "tipo": "O nome do tipo de folga mapeado (Ex: 'Folga', 'Banco de Horas', 'Folga Feriado', 'Folga Enfermagem', 'Férias', 'Brigada de Incêndio', 'Eleição', 'Atestado', 'Integração')",
+      "shorthand": "O símbolo original que foi encontrado na escala (Ex: 'F', 'BH', 'FF', 'FE', 'AT', 'FERIAS')"
+    }
+  ]
+}
+
+Tenha extrema cautela com o alinhamento espacial de cada coluna de 1 a 31!`,
           }
         ],
         config: {
@@ -526,7 +607,16 @@ Atenção:
       });
 
       const text = response.text || "{\"leaves\":[]}";
-      res.json(JSON.parse(text));
+      try {
+        const parsed = JSON.parse(text);
+        res.json(parsed);
+      } catch (parseError: any) {
+        console.error("Erro ao analisar JSON do Gemini:", parseError, "Resposta bruta:", text);
+        res.status(500).json({
+          error: "O Gemini gerou um formato de dados inválido.",
+          details: `JSON Parse Error: ${parseError.message}. Resposta bruta da IA: ${text.substring(0, 1000)}`
+        });
+      }
     } catch (error: any) {
       console.error("Erro na extração de folgas via Gemini:", error);
       res.status(500).json({

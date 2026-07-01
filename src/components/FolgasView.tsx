@@ -9,7 +9,7 @@ import {
   HelpCircle, UserCheck, Timer, FilePlus, Sparkles, 
   HelpCircle as Help, Filter, RefreshCw, ChevronLeft, 
   ChevronRight, Users, Plus, Info, Check, CornerDownRight,
-  Printer, Layers, TrendingUp, RefreshCcw, X, Upload
+  Printer, Layers, TrendingUp, RefreshCcw, X, Upload, Trash2
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend as RechartsLegend, ResponsiveContainer } from 'recharts';
 import { SolicitacaoFolga, Colaborador, Usuario, Absenteismo, Ferias, Chamada } from '../types';
@@ -215,6 +215,8 @@ export default function FolgasView({
   const [importApprovedByDefault, setImportApprovedByDefault] = useState(true);
   const [importDebitBalances, setImportDebitBalances] = useState(true);
   const [filterNoMatricula, setFilterNoMatricula] = useState(false);
+  const [extractionError, setExtractionError] = useState<string | null>(null);
+  const [extractionErrorDetails, setExtractionErrorDetails] = useState<string | null>(null);
 
   // Load initial remanejamentos from Firestore cloud and keep updated in real-time
   const [remanejamentos, setRemanejamentos] = useState<Record<string, string>>({});
@@ -496,6 +498,8 @@ export default function FolgasView({
     setIsExtracting(true);
     setExtractionProgress('Iniciando envio do arquivo para o servidor...');
     setExtractedLeaves([]);
+    setExtractionError(null);
+    setExtractionErrorDetails(null);
 
     try {
       const base64 = await new Promise<string>((resolve, reject) => {
@@ -520,7 +524,9 @@ export default function FolgasView({
 
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.error || 'Erro na comunicação com o servidor.');
+        const customErr = new Error(errData.error || 'Erro na comunicação com o servidor.');
+        (customErr as any).details = errData.details || '';
+        throw customErr;
       }
 
       const data = await response.json();
@@ -554,6 +560,10 @@ export default function FolgasView({
       setExtractionProgress('Concluído!');
     } catch (err: any) {
       console.error(err);
+      setExtractionError(err.message || String(err));
+      if (err.details) {
+        setExtractionErrorDetails(err.details);
+      }
       customAlert(`Falha ao importar escala: ${err.message || err}`);
       setExtractionProgress('');
     } finally {
@@ -628,6 +638,73 @@ export default function FolgasView({
     customAlert(`Sucesso! ${toImport.length} folgas foram importadas e registradas com sucesso para o mês de ${monthNames[currentMonth - 1]}.`);
     setIsImportModalOpen(false);
     setExtractedLeaves([]);
+  };
+
+  const handleAddManualLeaf = () => {
+    const formattedDay = "01";
+    const defaultDate = `${currentYear}-${currentMonth.toString().padStart(2, '0')}-${formattedDay}`;
+    const firstColab = colaboradores[0];
+    
+    const newLeaf = {
+      matricula: firstColab ? firstColab.matricula : "",
+      colaborador: firstColab ? firstColab.nome : "",
+      data: defaultDate,
+      tipo: "Folga",
+      shorthand: "F",
+      systemColab: firstColab || null,
+      selected: !!firstColab
+    };
+    
+    setExtractedLeaves(prev => [...prev, newLeaf]);
+  };
+
+  const handleUpdateLeafColab = (index: number, matricula: string) => {
+    const colab = colaboradores.find(c => c.matricula === matricula);
+    setExtractedLeaves(prev => prev.map((item, idx) => {
+      if (idx === index) {
+        return {
+          ...item,
+          matricula: colab ? colab.matricula : "",
+          colaborador: colab ? colab.nome : "",
+          systemColab: colab || null,
+          selected: !!colab
+        };
+      }
+      return item;
+    }));
+  };
+
+  const handleUpdateLeafDate = (index: number, dateStr: string) => {
+    setExtractedLeaves(prev => prev.map((item, idx) => {
+      if (idx === index) {
+        return { ...item, data: dateStr };
+      }
+      return item;
+    }));
+  };
+
+  const handleUpdateLeafType = (index: number, tipo: string) => {
+    const mapShorthand: Record<string, string> = {
+      "Folga": "F",
+      "Banco de Horas": "BH",
+      "Folga Feriado": "FF",
+      "Folga Enfermagem": "FE",
+      "Férias": "FÉRIAS",
+      "Brigada de Incêndio": "B",
+      "Eleição": "E",
+      "Atestado": "AT",
+      "Integração": "I"
+    };
+    setExtractedLeaves(prev => prev.map((item, idx) => {
+      if (idx === index) {
+        return { ...item, tipo, shorthand: mapShorthand[tipo] || "F" };
+      }
+      return item;
+    }));
+  };
+
+  const handleRemoveLeaf = (index: number) => {
+    setExtractedLeaves(prev => prev.filter((_, idx) => idx !== index));
   };
 
   const monthNames = [
@@ -2873,6 +2950,27 @@ export default function FolgasView({
                 </p>
               </div>
 
+              {/* Error State */}
+              {extractionError && (
+                <div className="bg-rose-50 border border-rose-200 p-4 rounded-2xl text-rose-950 space-y-2">
+                  <div className="flex items-start gap-2">
+                    <XCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-extrabold text-xs">Erro ao extrair folgas do documento</p>
+                      <p className="text-[11px] font-medium leading-relaxed mt-0.5">{extractionError}</p>
+                    </div>
+                  </div>
+                  {extractionErrorDetails && (
+                    <div className="bg-rose-100/40 p-3 rounded-xl border border-rose-200/50">
+                      <p className="font-black text-[10px] text-rose-800 uppercase tracking-wider mb-1">Detalhes do erro / Resposta do servidor:</p>
+                      <pre className="font-mono text-[9.5px] leading-relaxed overflow-x-auto whitespace-pre-wrap max-h-40 select-all p-2 bg-white/70 rounded-lg border border-rose-200/40">
+                        {extractionErrorDetails}
+                      </pre>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Upload Dropzone */}
               {extractedLeaves.length === 0 && !isExtracting && (
                 <div className="border-2 border-dashed border-slate-300 hover:border-sky-500 rounded-2xl p-8 text-center bg-slate-50 hover:bg-sky-50/20 transition-all cursor-pointer relative group">
@@ -2954,15 +3052,30 @@ export default function FolgasView({
                     </label>
                   </div>
 
+                  {/* Control to add new manually */}
+                  <div className="flex justify-between items-center bg-slate-50 p-3 rounded-2xl border border-slate-200">
+                    <div className="flex flex-col gap-0.5">
+                      <span className="font-extrabold text-slate-700 text-xs">Ajuste os dados extraídos acima</span>
+                      <span className="text-[10px] text-slate-400 font-medium">Você pode corrigir as datas, tipos de folga, vincular profissionais ou adicionar novos manualmente.</span>
+                    </div>
+                    <button
+                      onClick={handleAddManualLeaf}
+                      className="bg-sky-50 hover:bg-sky-100 text-sky-700 hover:text-sky-800 font-extrabold py-2 px-3.5 rounded-xl text-[11px] transition flex items-center gap-1.5 border border-sky-200 active:scale-95 shadow-xs cursor-pointer"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Adicionar Nova Folga
+                    </button>
+                  </div>
+
                   {/* Preview Table */}
-                  <div className="border border-slate-200 rounded-2xl overflow-hidden max-h-[300px] overflow-y-auto">
+                  <div className="border border-slate-200 rounded-2xl overflow-hidden max-h-[350px] overflow-y-auto">
                     <table className="w-full text-left text-slate-700 border-collapse">
                       <thead className="bg-slate-100 text-[10px] font-black uppercase text-slate-500 border-b border-slate-200 sticky top-0 z-10">
                         <tr>
                           <th className="p-3 w-10">
                             <input
                               type="checkbox"
-                              checked={extractedLeaves.every(item => !item.systemColab || item.selected)}
+                              checked={extractedLeaves.length > 0 && extractedLeaves.every(item => !item.systemColab || item.selected)}
                               onChange={(e) => {
                                 const checked = e.target.checked;
                                 setExtractedLeaves(prev => prev.map(item => ({
@@ -2970,14 +3083,14 @@ export default function FolgasView({
                                   selected: item.systemColab ? checked : false
                                 })));
                               }}
-                              className="w-4 h-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                              className="w-4 h-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500 cursor-pointer"
                             />
                           </th>
-                          <th className="p-3">Profissional (Escala)</th>
-                          <th className="p-3">No Sistema (Status)</th>
-                          <th className="p-3">Data</th>
-                          <th className="p-3">Tipo Map</th>
-                          <th className="p-3 w-12 text-center">Cód.</th>
+                          <th className="p-3">Lido na Escala</th>
+                          <th className="p-3">Vincular Profissional</th>
+                          <th className="p-3">Data da Folga</th>
+                          <th className="p-3">Tipo de Folga</th>
+                          <th className="p-3 w-12 text-center">Ações</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-150 font-medium">
@@ -2999,45 +3112,62 @@ export default function FolgasView({
                                       const checked = e.target.checked;
                                       setExtractedLeaves(prev => prev.map((it, idx) => idx === index ? { ...it, selected: checked } : it));
                                     }}
-                                    className="w-4 h-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500 disabled:opacity-50"
+                                    className="w-4 h-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500 disabled:opacity-50 cursor-pointer"
                                   />
                                 </td>
-                                <td className="p-3">
-                                  <div className="font-extrabold text-slate-800">{item.colaborador}</div>
-                                  <div className="text-[10px] text-slate-400 font-mono font-bold">Mat: {item.matricula || '---'}</div>
+                                <td className="p-3 max-w-[150px]">
+                                  <div className="font-extrabold text-slate-800 truncate" title={item.colaborador}>
+                                    {item.colaborador}
+                                  </div>
+                                  <div className="text-[9.5px] text-slate-400 font-mono font-bold">Lido: Mat {item.matricula || '---'}</div>
+                                </td>
+                                <td className="p-3 min-w-[180px]">
+                                  <select
+                                    value={item.matricula || ""}
+                                    onChange={(e) => handleUpdateLeafColab(index, e.target.value)}
+                                    className="w-full bg-white border border-slate-200 rounded-lg p-1.5 text-[11px] font-bold text-slate-700 outline-none focus:ring-1 focus:ring-sky-500 focus:border-sky-500"
+                                  >
+                                    <option value="">-- Escolher no Sistema --</option>
+                                    {colaboradores.map(c => (
+                                      <option key={c.matricula} value={c.matricula}>
+                                        {c.nome} ({c.cargo})
+                                      </option>
+                                    ))}
+                                  </select>
                                 </td>
                                 <td className="p-3">
-                                  {isMatched ? (
-                                    <div className="space-y-0.5">
-                                      <div className="font-bold text-slate-700 flex items-center gap-1">
-                                        <CheckCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                                        <span>{item.systemColab.nome}</span>
-                                      </div>
-                                      <div className="text-[9.5px] text-slate-450 font-bold">{item.systemColab.cargo} ({item.systemColab.setor})</div>
-                                    </div>
-                                  ) : (
-                                    <span className="inline-flex items-center gap-1 bg-rose-50 border border-rose-100 px-2 py-0.5 rounded-full text-rose-700 text-[9.5px] font-extrabold leading-none">
-                                      <XCircle className="w-3 h-3" />
-                                      Não Cadastrado
-                                    </span>
-                                  )}
+                                  <input
+                                    type="date"
+                                    value={item.data}
+                                    onChange={(e) => handleUpdateLeafDate(index, e.target.value)}
+                                    className="bg-white border border-slate-200 rounded-lg p-1.5 w-full text-[11px] font-mono font-bold outline-none focus:ring-1 focus:ring-sky-500 focus:border-sky-500"
+                                  />
                                 </td>
-                                <td className="p-3 font-mono font-extrabold text-slate-700">
-                                  {item.data.split('-').reverse().join('/')}
+                                <td className="p-3 min-w-[130px]">
+                                  <select
+                                    value={item.tipo}
+                                    onChange={(e) => handleUpdateLeafType(index, e.target.value)}
+                                    className="bg-white border border-slate-200 rounded-lg p-1.5 w-full text-[11px] font-bold outline-none focus:ring-1 focus:ring-sky-500 focus:border-sky-500"
+                                  >
+                                    <option value="Folga">Folga (F)</option>
+                                    <option value="Banco de Horas">Banco de Horas (BH)</option>
+                                    <option value="Folga Feriado">Folga Feriado (FF)</option>
+                                    <option value="Folga Enfermagem">Folga Enfermagem (FE)</option>
+                                    <option value="Férias">Férias (FER)</option>
+                                    <option value="Brigada de Incêndio">Brigada de Incêndio (B)</option>
+                                    <option value="Eleição">Eleição (E)</option>
+                                    <option value="Atestado">Atestado (AT)</option>
+                                    <option value="Integração">Integração (I)</option>
+                                  </select>
                                 </td>
-                                <td className="p-3">
-                                  <span className={`inline-block px-2 py-0.5 rounded-md text-[9.5px] font-black ${
-                                    item.tipo === 'Banco de Horas' ? 'bg-indigo-50 border border-indigo-150 text-indigo-700' :
-                                    item.tipo === 'Folga Enfermagem' ? 'bg-teal-50 border border-teal-150 text-teal-700' :
-                                    item.tipo === 'Folga Feriado' ? 'bg-amber-50 border border-amber-150 text-amber-700' :
-                                    item.tipo === 'Férias' ? 'bg-sky-50 border border-sky-150 text-sky-700' :
-                                    'bg-slate-50 border border-slate-150 text-slate-600'
-                                  }`}>
-                                    {item.tipo}
-                                  </span>
-                                </td>
-                                <td className="p-3 text-center font-mono font-black text-slate-500">
-                                  {item.shorthand}
+                                <td className="p-3 text-center">
+                                  <button
+                                    onClick={() => handleRemoveLeaf(index)}
+                                    className="p-1.5 hover:bg-rose-50 rounded-lg text-rose-500 hover:text-rose-700 transition cursor-pointer"
+                                    title="Remover esta folga"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
                                 </td>
                               </tr>
                             );
