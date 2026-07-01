@@ -549,6 +549,7 @@ export default function App() {
           <SaldosReportView 
             colaboradores={colaboradores}
             saldosHistorico={saldosHistorico}
+            solicitacoes={solicitacoes}
             usuarioLogado={usuarioLogado || undefined}
           />
         );

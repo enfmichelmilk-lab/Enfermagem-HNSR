@@ -9,12 +9,13 @@ import {
   CheckCircle, Save, X, Pencil, ArrowRightLeft, TrendingDown, TrendingUp, Info
 } from 'lucide-react';
 import { db, saveDocument, removeDocument } from '../lib/firebase';
-import { Colaborador, SaldosHistorico, Usuario } from '../types';
+import { Colaborador, SaldosHistorico, Usuario, SolicitacaoFolga } from '../types';
 import { customAlert, customConfirm } from '../utils/customDialog';
 
 interface SaldosReportViewProps {
   colaboradores: Colaborador[];
   saldosHistorico: SaldosHistorico[];
+  solicitacoes: SolicitacaoFolga[];
   usuarioLogado?: Usuario;
 }
 
@@ -85,7 +86,42 @@ const isEnfermeiro = (cargo: string): boolean => {
   return norm.includes('ENFERMEIR') || norm.includes('COORDENADOR') || norm.includes('SUPERVISOR') || norm.includes('GESTOR');
 };
 
-export default function SaldosReportView({ colaboradores, saldosHistorico, usuarioLogado }: SaldosReportViewProps) {
+// Calculates the balances at the end of a given month, correcting for future approved leave requests
+const calculateMonthBalance = (
+  colab: Colaborador,
+  month: string,
+  solSols: SolicitacaoFolga[]
+) => {
+  // Global current balances
+  let bancohoras = typeof colab.bancohoras === 'number' ? colab.bancohoras : 0;
+  let folgaferiado = typeof colab.folgaferiado === 'number' ? colab.folgaferiado : 0;
+  let folgaenf = typeof colab.folgaenf === 'number' ? colab.folgaenf : 0;
+
+  // Add back any approved folgas scheduled in months strictly AFTER the target month
+  const approvedFutureSols = (solSols || []).filter(s => 
+    s.matricula === colab.matricula && 
+    s.status === 'Aprovado' && 
+    s.data && s.data.slice(0, 7) > month
+  );
+
+  approvedFutureSols.forEach(s => {
+    if (s.tipo === 'Banco de Horas') {
+      bancohoras += 12;
+    } else if (s.tipo === 'Folga Feriado') {
+      folgaferiado += 1;
+    } else if (s.tipo === 'Folga Enfermagem') {
+      folgaenf += 1;
+    }
+  });
+
+  return {
+    bancohoras,
+    folgaferiado,
+    folgaenf
+  };
+};
+
+export default function SaldosReportView({ colaboradores, saldosHistorico, solicitacoes, usuarioLogado }: SaldosReportViewProps) {
   // Filters
   const [selectedMonth, setSelectedMonth] = useState<string>('2026-06');
   const [selectedUnidade, setSelectedUnidade] = useState<'PS' | 'Centro Cirúrgico' | 'UTI' | 'Unidade de Internação' | 'Gestão' | 'Geral'>('PS');
@@ -214,15 +250,16 @@ export default function SaldosReportView({ colaboradores, saldosHistorico, usuar
         const recordId = `${colab.matricula || ''}_${selectedMonth}`;
         if (!colab.matricula) continue;
 
+        const computed = calculateMonthBalance(colab, selectedMonth, solicitacoes);
         const recordData: SaldosHistorico = {
           id: recordId,
           matricula: colab.matricula,
           nome: colab.nome || '',
           setor: colab.setor || '',
           mes: selectedMonth,
-          bancohoras: typeof colab.bancohoras === 'number' ? colab.bancohoras : 0,
-          folgaferiado: typeof colab.folgaferiado === 'number' ? colab.folgaferiado : 0,
-          folgaenf: typeof colab.folgaenf === 'number' ? colab.folgaenf : 0,
+          bancohoras: computed.bancohoras,
+          folgaferiado: computed.folgaferiado,
+          folgaenf: computed.folgaenf,
           dataAtualizacao: timestamp
         };
 
@@ -422,16 +459,21 @@ export default function SaldosReportView({ colaboradores, saldosHistorico, usuar
     let count = 0;
 
     reportData.forEach(item => {
-      if (item.current) {
-        bhTotal += item.current.bancohoras;
-        ffTotal += item.current.folgaferiado;
-        fsTotal += item.current.folgaenf;
-        count++;
-      }
+      const activeColab = colaboradores.find(c => c.matricula === item.matricula);
+      const computedCurrent = activeColab ? calculateMonthBalance(activeColab, selectedMonth, solicitacoes) : null;
+
+      const bhCurrent = item.current ? item.current.bancohoras : (computedCurrent ? computedCurrent.bancohoras : 0);
+      const ffCurrent = item.current ? item.current.folgaferiado : (computedCurrent ? computedCurrent.folgaferiado : 0);
+      const fsCurrent = item.current ? item.current.folgaenf : (computedCurrent ? computedCurrent.folgaenf : 0);
+
+      bhTotal += bhCurrent;
+      ffTotal += ffCurrent;
+      fsTotal += fsCurrent;
+      count++;
     });
 
     return { bhTotal, ffTotal, fsTotal, count };
-  }, [reportData]);
+  }, [reportData, colaboradores, solicitacoes, selectedMonth]);
 
   return (
     <div className="space-y-6 font-sans">
@@ -645,19 +687,24 @@ export default function SaldosReportView({ colaboradores, saldosHistorico, usuar
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                           {list.map((item) => {
-                            const bhPrev = item.prev ? item.prev.bancohoras : 0;
-                            const bhCurrent = item.current ? item.current.bancohoras : 0;
-                            const bhDelta = item.current && item.prev ? (bhCurrent - bhPrev) : 0;
+                            const activeColab = colaboradores.find(c => c.matricula === item.matricula);
+                            const computedPrev = activeColab ? calculateMonthBalance(activeColab, prevMonth, solicitacoes) : null;
+                            const computedCurrent = activeColab ? calculateMonthBalance(activeColab, selectedMonth, solicitacoes) : null;
 
-                            const ffPrev = item.prev ? item.prev.folgaferiado : 0;
-                            const ffCurrent = item.current ? item.current.folgaferiado : 0;
-                            const ffDelta = item.current && item.prev ? (ffCurrent - ffPrev) : 0;
+                            const bhPrev = item.prev ? item.prev.bancohoras : (computedPrev ? computedPrev.bancohoras : 0);
+                            const bhCurrent = item.current ? item.current.bancohoras : (computedCurrent ? computedCurrent.bancohoras : 0);
+                            const bhDelta = bhCurrent - bhPrev;
 
-                            const fsPrev = item.prev ? item.prev.folgaenf : 0;
-                            const fsCurrent = item.current ? item.current.folgaenf : 0;
-                            const fsDelta = item.current && item.prev ? (fsCurrent - fsPrev) : 0;
+                            const ffPrev = item.prev ? item.prev.folgaferiado : (computedPrev ? computedPrev.folgaferiado : 0);
+                            const ffCurrent = item.current ? item.current.folgaferiado : (computedCurrent ? computedCurrent.folgaferiado : 0);
+                            const ffDelta = ffCurrent - ffPrev;
+
+                            const fsPrev = item.prev ? item.prev.folgaenf : (computedPrev ? computedPrev.folgaenf : 0);
+                            const fsCurrent = item.current ? item.current.folgaenf : (computedCurrent ? computedCurrent.folgaenf : 0);
+                            const fsDelta = fsCurrent - fsPrev;
 
                             const hasCurrentRecord = !!item.current;
+                            const hasPrevRecord = !!item.prev;
                             const isEnf = isEnfermeiro(item.cargo);
 
                             return (
@@ -693,83 +740,96 @@ export default function SaldosReportView({ colaboradores, saldosHistorico, usuar
 
                                 {/* BH Prev */}
                                 <td className="py-3 px-3 text-center border-l border-slate-100 bg-sky-50/5 text-[11px] font-mono text-slate-600">
-                                  {item.prev ? formatDecimalToHHMM(bhPrev) : <span className="text-slate-350">-</span>}
+                                  <span className={hasPrevRecord ? 'font-bold text-slate-800' : 'text-slate-450 italic font-normal'}>
+                                    {formatDecimalToHHMM(bhPrev)}
+                                  </span>
                                 </td>
 
                                 {/* BH Delta */}
                                 <td className="py-3 px-3 text-center bg-sky-50/10 text-[11px] font-mono font-bold">
-                                  {item.current && item.prev ? (
-                                    <span className={
-                                      bhDelta < 0 ? 'text-red-600 font-extrabold' : 
-                                      bhDelta > 0 ? 'text-emerald-600 font-extrabold' : 
-                                      'text-slate-400'
-                                    }>
-                                      {formatDeltaBH(bhDelta)}
-                                    </span>
-                                  ) : (
-                                    <span className="text-slate-350 font-normal">-</span>
-                                  )}
+                                  <span className={
+                                    bhDelta < 0 ? 'text-red-600 font-extrabold' : 
+                                    bhDelta > 0 ? 'text-emerald-600 font-extrabold' : 
+                                    'text-slate-400'
+                                  }>
+                                    {formatDeltaBH(bhDelta)}
+                                  </span>
                                 </td>
 
                                 {/* BH Current */}
                                 <td className="py-3 px-3 text-center bg-sky-50/5 text-[11px] font-mono font-extrabold">
-                                  {item.current ? (
-                                    <span className={bhCurrent >= 0 ? 'text-emerald-700' : 'text-red-700'}>
+                                  {hasCurrentRecord ? (
+                                    <span className={bhCurrent >= 0 ? 'text-emerald-700 font-extrabold' : 'text-red-700 font-extrabold'}>
                                       {formatDecimalToHHMM(bhCurrent)}
                                     </span>
                                   ) : (
-                                    <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded text-[9px] font-black uppercase">Pendente</span>
+                                    <div className="flex flex-col items-center gap-0.5">
+                                      <span className={`${bhCurrent >= 0 ? 'text-emerald-600/70' : 'text-red-600/70'} italic text-[10px] font-medium`}>
+                                        {formatDecimalToHHMM(bhCurrent)}
+                                      </span>
+                                      <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded text-[8px] font-black uppercase scale-90">Pendente</span>
+                                    </div>
                                   )}
                                 </td>
 
                                 {/* FF Prev */}
-                                <td className="py-3 px-3 text-center border-l border-slate-100 bg-emerald-50/5 font-semibold text-slate-600">
-                                  {item.prev ? ffPrev : <span className="text-slate-350">-</span>}
+                                <td className="py-3 px-3 text-center border-l border-slate-100 bg-emerald-50/5 font-semibold">
+                                  <span className={hasPrevRecord ? 'text-slate-800 font-bold' : 'text-slate-450 italic font-normal'}>
+                                    {ffPrev}
+                                  </span>
                                 </td>
 
                                 {/* FF Delta */}
                                 <td className="py-3 px-3 text-center bg-emerald-50/15 font-bold">
-                                  {item.current && item.prev ? (
-                                    <span className={
-                                      ffDelta < 0 ? 'text-red-600' : 
-                                      ffDelta > 0 ? 'text-emerald-600' : 
-                                      'text-slate-400'
-                                    }>
-                                      {ffDelta > 0 ? `+${ffDelta}` : ffDelta}
-                                    </span>
-                                  ) : (
-                                    <span className="text-slate-350 font-normal">-</span>
-                                  )}
+                                  <span className={
+                                    ffDelta < 0 ? 'text-red-600 font-extrabold' : 
+                                    ffDelta > 0 ? 'text-emerald-600 font-extrabold' : 
+                                    'text-slate-400'
+                                  }>
+                                    {ffDelta > 0 ? `+${ffDelta}` : ffDelta}
+                                  </span>
                                 </td>
 
                                 {/* FF Current */}
                                 <td className="py-3 px-3 text-center bg-emerald-50/5 font-extrabold text-emerald-800">
-                                  {item.current ? ffCurrent : <span className="text-slate-350 font-normal">-</span>}
+                                  {hasCurrentRecord ? (
+                                    <span className="text-emerald-850 font-black">{ffCurrent}</span>
+                                  ) : (
+                                    <div className="flex flex-col items-center gap-0.5">
+                                      <span className="text-emerald-600/70 italic text-[10px] font-medium">{ffCurrent}</span>
+                                      <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded text-[8px] font-black uppercase scale-90">Pendente</span>
+                                    </div>
+                                  )}
                                 </td>
 
                                 {/* FS Prev */}
-                                <td className="py-3 px-3 text-center border-l border-slate-100 bg-purple-50/5 font-semibold text-slate-600">
-                                  {item.prev ? fsPrev : <span className="text-slate-350">-</span>}
+                                <td className="py-3 px-3 text-center border-l border-slate-100 bg-purple-50/5 font-semibold">
+                                  <span className={hasPrevRecord ? 'text-slate-800 font-bold' : 'text-slate-450 italic font-normal'}>
+                                    {fsPrev}
+                                  </span>
                                 </td>
 
                                 {/* FS Delta */}
                                 <td className="py-3 px-3 text-center bg-purple-50/15 font-bold">
-                                  {item.current && item.prev ? (
-                                    <span className={
-                                      fsDelta < 0 ? 'text-red-600' : 
-                                      fsDelta > 0 ? 'text-emerald-600' : 
-                                      'text-slate-400'
-                                    }>
-                                      {fsDelta > 0 ? `+${fsDelta}` : fsDelta}
-                                    </span>
-                                  ) : (
-                                    <span className="text-slate-350 font-normal">-</span>
-                                  )}
+                                  <span className={
+                                    fsDelta < 0 ? 'text-red-600 font-extrabold' : 
+                                    fsDelta > 0 ? 'text-emerald-600 font-extrabold' : 
+                                    'text-slate-400'
+                                  }>
+                                    {fsDelta > 0 ? `+${fsDelta}` : fsDelta}
+                                  </span>
                                 </td>
 
                                 {/* FS Current */}
                                 <td className="py-3 px-3 text-center bg-purple-50/5 font-extrabold text-purple-800">
-                                  {item.current ? fsCurrent : <span className="text-slate-350 font-normal">-</span>}
+                                  {hasCurrentRecord ? (
+                                    <span className="text-purple-800 font-black">{fsCurrent}</span>
+                                  ) : (
+                                    <div className="flex flex-col items-center gap-0.5">
+                                      <span className="text-purple-600/70 italic text-[10px] font-medium">{fsCurrent}</span>
+                                      <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded text-[8px] font-black uppercase scale-90">Pendente</span>
+                                    </div>
+                                  )}
                                 </td>
 
                                 {/* Actions */}
@@ -799,15 +859,16 @@ export default function SaldosReportView({ colaboradores, saldosHistorico, usuar
                                           const activeColab = colaboradores.find(c => c.matricula === item.matricula);
                                           if (!activeColab) return;
                                           const recordId = `${activeColab.matricula || ''}_${selectedMonth}`;
+                                          const computed = calculateMonthBalance(activeColab, selectedMonth, solicitacoes);
                                           const recordData: SaldosHistorico = {
                                             id: recordId,
                                             matricula: activeColab.matricula,
                                             nome: activeColab.nome || '',
                                             setor: activeColab.setor || '',
                                             mes: selectedMonth,
-                                            bancohoras: typeof activeColab.bancohoras === 'number' ? activeColab.bancohoras : 0,
-                                            folgaferiado: typeof activeColab.folgaferiado === 'number' ? activeColab.folgaferiado : 0,
-                                            folgaenf: typeof activeColab.folgaenf === 'number' ? activeColab.folgaenf : 0,
+                                            bancohoras: computed.bancohoras,
+                                            folgaferiado: computed.folgaferiado,
+                                            folgaenf: computed.folgaenf,
                                             dataAtualizacao: new Date().toISOString().split('T')[0]
                                           };
                                           await saveDocument('saldos_historico', recordId, recordData);

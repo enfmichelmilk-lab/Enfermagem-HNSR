@@ -9,7 +9,7 @@ import {
   HelpCircle, UserCheck, Timer, FilePlus, Sparkles, 
   HelpCircle as Help, Filter, RefreshCw, ChevronLeft, 
   ChevronRight, Users, Plus, Info, Check, CornerDownRight,
-  Printer, Layers, TrendingUp, RefreshCcw, X
+  Printer, Layers, TrendingUp, RefreshCcw, X, Upload
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend as RechartsLegend, ResponsiveContainer } from 'recharts';
 import { SolicitacaoFolga, Colaborador, Usuario, Absenteismo, Ferias, Chamada } from '../types';
@@ -206,6 +206,15 @@ export default function FolgasView({
   const [compareEquipe1, setCompareEquipe1] = useState('Noturno B');
   const [selectedDay1, setSelectedDay1] = useState(1);
   const [compareRoleMode, setCompareRoleMode] = useState<'enfermeiros' | 'tecnicos_auxiliares'>('enfermeiros');
+
+  // AI-Powered Leaves Import States
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isExtracting, setIsExtracting] = useState(false);
+  const [extractionProgress, setExtractionProgress] = useState<string>('');
+  const [extractedLeaves, setExtractedLeaves] = useState<any[]>([]);
+  const [importApprovedByDefault, setImportApprovedByDefault] = useState(true);
+  const [importDebitBalances, setImportDebitBalances] = useState(true);
+  const [filterNoMatricula, setFilterNoMatricula] = useState(false);
 
   // Load initial remanejamentos from Firestore cloud and keep updated in real-time
   const [remanejamentos, setRemanejamentos] = useState<Record<string, string>>({});
@@ -478,6 +487,147 @@ export default function FolgasView({
     } else {
       setCurrentMonth(prev => prev + 1);
     }
+  };
+
+  const handleFileChangeAndExtract = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsExtracting(true);
+    setExtractionProgress('Iniciando envio do arquivo para o servidor...');
+    setExtractedLeaves([]);
+
+    try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = (err) => reject(err);
+        reader.readAsDataURL(file);
+      });
+
+      setExtractionProgress('Processando com Inteligência Artificial Gemini (este processo pode levar alguns segundos)...');
+
+      const response = await fetch('/api/folgas/extract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fileBase64: base64,
+          mimeType: file.type || 'application/pdf',
+          year: currentYear,
+          month: currentMonth
+        })
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || 'Erro na comunicação com o servidor.');
+      }
+
+      const data = await response.json();
+      const extracted = data.leaves || [];
+
+      if (extracted.length === 0) {
+        customAlert('Nenhuma folga foi encontrada no documento. Certifique-se de que o arquivo contém a escala de revezamento legível.');
+        setExtractionProgress('');
+        setIsExtracting(false);
+        return;
+      }
+
+      const mappedLeaves = extracted.map((item: any) => {
+        let matched = colaboradores.find(c => c.matricula === item.matricula);
+        if (!matched && item.colaborador) {
+          const cleanExtName = item.colaborador.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+          matched = colaboradores.find(c => {
+            const cleanName = c.nome.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+            return cleanName.includes(cleanExtName) || cleanExtName.includes(cleanName);
+          });
+        }
+
+        return {
+          ...item,
+          systemColab: matched || null,
+          selected: !!matched
+        };
+      });
+
+      setExtractedLeaves(mappedLeaves);
+      setExtractionProgress('Concluído!');
+    } catch (err: any) {
+      console.error(err);
+      customAlert(`Falha ao importar escala: ${err.message || err}`);
+      setExtractionProgress('');
+    } finally {
+      setIsExtracting(false);
+    }
+  };
+
+  const handleExecuteImport = async () => {
+    const toImport = extractedLeaves.filter(item => item.selected && item.systemColab);
+    if (toImport.length === 0) {
+      customAlert('Nenhuma folga válida e selecionada para importar.');
+      return;
+    }
+
+    const isConfirmed = await customConfirm(`Você tem certeza de que deseja importar ${toImport.length} folgas para o mês de ${monthNames[currentMonth - 1]}?`);
+    if (!isConfirmed) return;
+
+    let updatedColabsMap: Record<string, Colaborador> = {};
+    let newSolicitacoes: SolicitacaoFolga[] = [];
+
+    const statusDesejado = importApprovedByDefault ? 'Aprovado' : 'Pendente';
+
+    toImport.forEach(item => {
+      const colab = updatedColabsMap[item.matricula] || { ...item.systemColab };
+      
+      const newSol: SolicitacaoFolga = {
+        id: `F-IMP-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+        colaborador: colab.nome,
+        matricula: colab.matricula,
+        tipo: item.tipo,
+        data: item.data,
+        status: statusDesejado,
+        solicitante: usuarioLogado.nome || 'Importador de Escalas IA',
+        dataCriacao: new Date().toLocaleString('pt-BR').slice(0, 16)
+      };
+
+      newSolicitacoes.push(newSol);
+
+      if (statusDesejado === 'Aprovado' && importDebitBalances) {
+        const isBH = item.tipo === 'Banco de Horas';
+        const isFE = item.tipo === 'Folga Enfermagem';
+        const isFF = item.tipo === 'Folga Feriado';
+        const isB = item.tipo === 'Brigada de Incêndio' || item.tipo === 'Folga Brigada';
+        const isE = item.tipo === 'Eleição' || item.tipo === 'Folga Eleição';
+
+        if (isBH) {
+          colab.bancohoras = Math.max(0, colab.bancohoras - 12);
+        } else if (isFE) {
+          colab.folgaenf = Math.max(0, colab.folgaenf - 1);
+        } else if (isFF) {
+          colab.folgaferiado = Math.max(0, colab.folgaferiado - 1);
+        } else if (isB) {
+          colab.brigada = Math.max(0, colab.brigada - 1);
+        } else if (isE) {
+          colab.eleicao = Math.max(0, colab.eleicao - 1);
+        }
+
+        const log = `[${new Date().toLocaleString('pt-BR')} - ${usuarioLogado.nome}]: Folga importada e aprovada via IA (${item.tipo}) para o dia ${item.data.split('-').reverse().join('/')}.`;
+        colab.historico = log + (colab.historico ? "\n\n" + colab.historico : "");
+      }
+
+      updatedColabsMap[item.matricula] = colab;
+    });
+
+    if (Object.keys(updatedColabsMap).length > 0) {
+      const novosColabsList = colaboradores.map(c => updatedColabsMap[c.matricula] ? updatedColabsMap[c.matricula] : c);
+      onUpdateColaboradores(novosColabsList);
+    }
+
+    onUpdateSolicitacoes([...newSolicitacoes, ...solicitacoes]);
+
+    customAlert(`Sucesso! ${toImport.length} folgas foram importadas e registradas com sucesso para o mês de ${monthNames[currentMonth - 1]}.`);
+    setIsImportModalOpen(false);
+    setExtractedLeaves([]);
   };
 
   const monthNames = [
@@ -1396,14 +1546,25 @@ export default function FolgasView({
           </button>
         </div>
 
-        <button
-          onClick={() => setIsPrintPreviewOpen(true)}
-          className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-2 px-4 rounded-xl text-xs shadow-xs hover:shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer border border-emerald-500 shrink-0"
-          title="Exportar Escala de Plantão de Enfermagem em formato PDF otimizado"
-        >
-          <Printer className="w-3.5 h-3.5 shrink-0" />
-          <span>Exportar Escala (PDF)</span>
-        </button>
+        <div className="flex gap-2 items-center">
+          <button
+            onClick={() => setIsImportModalOpen(true)}
+            className="bg-sky-600 hover:bg-sky-700 text-white font-extrabold py-2 px-4 rounded-xl text-xs shadow-xs hover:shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer border border-sky-500 shrink-0"
+            title="Importar escala de folgas de enfermeiros de arquivo PDF ou Imagem via Inteligência Artificial"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-amber-300 shrink-0 animate-pulse" />
+            <span>Sincronizar Folgas (IA)</span>
+          </button>
+
+          <button
+            onClick={() => setIsPrintPreviewOpen(true)}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-2 px-4 rounded-xl text-xs shadow-xs hover:shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer border border-emerald-500 shrink-0"
+            title="Exportar Escala de Plantão de Enfermagem em formato PDF otimizado"
+          >
+            <Printer className="w-3.5 h-3.5 shrink-0" />
+            <span>Exportar Escala (PDF)</span>
+          </button>
+        </div>
       </div>
 
       {/* Roster Grid Operations Banner */}
@@ -2664,6 +2825,269 @@ export default function FolgasView({
               </div>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* Sincronizar Folgas via IA Modal */}
+      {isImportModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/65 backdrop-blur-xs transition-opacity animate-fadeIn">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-250 w-full max-w-3xl overflow-hidden flex flex-col max-h-[90vh]">
+            {/* Modal Header */}
+            <div className="bg-gradient-to-r from-sky-800 to-indigo-900 px-6 py-5 text-white flex justify-between items-center shrink-0">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-amber-300 animate-pulse" />
+                <div>
+                  <span className="bg-white/20 text-white font-extrabold text-[9px] uppercase tracking-widest px-2 py-0.5 rounded-full border border-white/25">
+                    Sincronizador Inteligente via IA
+                  </span>
+                  <h3 className="text-sm font-black mt-1 flex items-center gap-1.5 leading-none">
+                    Importar Escala de Revezamento
+                  </h3>
+                  <p className="text-[10px] text-sky-200 mt-1 font-bold">
+                    Período da Escala: <span className="text-amber-300 font-extrabold">{monthNames[currentMonth - 1]} / {currentYear}</span>
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => {
+                  setIsImportModalOpen(false);
+                  setExtractedLeaves([]);
+                }}
+                className="p-1 hover:bg-white/10 rounded-lg text-slate-205 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 space-y-5 overflow-y-auto custom-scrollbar text-xs flex-1">
+              {/* Informative Header card */}
+              <div className="bg-sky-50 border border-sky-150 p-4 rounded-2xl text-sky-900 space-y-1">
+                <p className="font-extrabold flex items-center gap-1.5 text-xs">
+                  <Info className="w-4 h-4 shrink-0" />
+                  Como funciona a importação?
+                </p>
+                <p className="text-[11px] leading-relaxed font-medium">
+                  Selecione o arquivo PDF ou Imagem contendo a escala de revezamento de enfermagem. A Inteligência Artificial (Gemini 3.5 Flash) lerá a escala, identificará os colaboradores pelo nome ou matrícula e extrairá as folgas lançadas (<span className="font-bold font-mono">F</span>, <span className="font-bold font-mono">BH</span>, <span className="font-bold font-mono">FF</span>, <span className="font-bold font-mono">FE</span>, <span className="font-bold font-mono">FÉRIAS</span>, etc.).
+                </p>
+              </div>
+
+              {/* Upload Dropzone */}
+              {extractedLeaves.length === 0 && !isExtracting && (
+                <div className="border-2 border-dashed border-slate-300 hover:border-sky-500 rounded-2xl p-8 text-center bg-slate-50 hover:bg-sky-50/20 transition-all cursor-pointer relative group">
+                  <input
+                    type="file"
+                    accept=".pdf,image/*"
+                    onChange={handleFileChangeAndExtract}
+                    className="absolute inset-0 opacity-0 cursor-pointer text-xs"
+                  />
+                  <div className="flex flex-col items-center justify-center space-y-3">
+                    <div className="p-4 bg-sky-100 rounded-full text-sky-600 group-hover:scale-110 transition-transform duration-250">
+                      <Upload className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <p className="font-black text-slate-700 text-xs">Arraste a Escala de {monthNames[currentMonth - 1]} ou Clique para Selecionar</p>
+                      <p className="text-[10px] text-slate-400 font-bold mt-1">Formatos suportados: PDF, PNG, JPG, JPEG (Até 10MB)</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Loading State */}
+              {isExtracting && (
+                <div className="flex flex-col items-center justify-center py-12 space-y-4">
+                  <div className="relative">
+                    <div className="w-12 h-12 border-4 border-sky-200 border-t-sky-600 rounded-full animate-spin"></div>
+                    <Sparkles className="w-5 h-5 text-amber-400 animate-pulse absolute inset-0 m-auto" />
+                  </div>
+                  <div className="text-center space-y-1">
+                    <p className="font-extrabold text-slate-700 text-xs">Processando documento...</p>
+                    <p className="text-[11px] text-slate-400 font-bold animate-pulse max-w-md">{extractionProgress}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Extracted Leaves List */}
+              {extractedLeaves.length > 0 && !isExtracting && (
+                <div className="space-y-4">
+                  {/* Setup & Filter Controls inside extraction result */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
+                    <label className="inline-flex items-center gap-2 cursor-pointer text-[11px] font-bold text-slate-700 select-none">
+                      <input 
+                        type="checkbox"
+                        checked={importApprovedByDefault}
+                        onChange={(e) => setImportApprovedByDefault(e.target.checked)}
+                        className="w-4 h-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                      />
+                      <div className="flex flex-col">
+                        <span>Lançar como Aprovado</span>
+                        <span className="text-[9px] text-slate-400 font-normal">Homologado automaticamente</span>
+                      </div>
+                    </label>
+
+                    <label className="inline-flex items-center gap-2 cursor-pointer text-[11px] font-bold text-slate-700 select-none">
+                      <input 
+                        type="checkbox"
+                        checked={importDebitBalances}
+                        onChange={(e) => setImportDebitBalances(e.target.checked)}
+                        className="w-4 h-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                        disabled={!importApprovedByDefault}
+                      />
+                      <div className="flex flex-col">
+                        <span>Debitar Saldos</span>
+                        <span className="text-[9px] text-slate-400 font-normal">Descontar de BH, FF, FE</span>
+                      </div>
+                    </label>
+
+                    <label className="inline-flex items-center gap-2 cursor-pointer text-[11px] font-bold text-slate-700 select-none">
+                      <input 
+                        type="checkbox"
+                        checked={filterNoMatricula}
+                        onChange={(e) => setFilterNoMatricula(e.target.checked)}
+                        className="w-4 h-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                      />
+                      <div className="flex flex-col">
+                        <span>Ocultar não cadastrados</span>
+                        <span className="text-[9px] text-slate-400 font-normal">Filtrar erros de correspondência</span>
+                      </div>
+                    </label>
+                  </div>
+
+                  {/* Preview Table */}
+                  <div className="border border-slate-200 rounded-2xl overflow-hidden max-h-[300px] overflow-y-auto">
+                    <table className="w-full text-left text-slate-700 border-collapse">
+                      <thead className="bg-slate-100 text-[10px] font-black uppercase text-slate-500 border-b border-slate-200 sticky top-0 z-10">
+                        <tr>
+                          <th className="p-3 w-10">
+                            <input
+                              type="checkbox"
+                              checked={extractedLeaves.every(item => !item.systemColab || item.selected)}
+                              onChange={(e) => {
+                                const checked = e.target.checked;
+                                setExtractedLeaves(prev => prev.map(item => ({
+                                  ...item,
+                                  selected: item.systemColab ? checked : false
+                                })));
+                              }}
+                              className="w-4 h-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                            />
+                          </th>
+                          <th className="p-3">Profissional (Escala)</th>
+                          <th className="p-3">No Sistema (Status)</th>
+                          <th className="p-3">Data</th>
+                          <th className="p-3">Tipo Map</th>
+                          <th className="p-3 w-12 text-center">Cód.</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-150 font-medium">
+                        {extractedLeaves
+                          .filter(item => !filterNoMatricula || item.systemColab)
+                          .map((item, index) => {
+                            const isMatched = !!item.systemColab;
+                            return (
+                              <tr 
+                                key={`ext-leaf-${index}`} 
+                                className={`text-[11px] hover:bg-slate-50/60 transition ${!isMatched ? 'bg-rose-50/20' : ''}`}
+                              >
+                                <td className="p-3 text-center">
+                                  <input
+                                    type="checkbox"
+                                    checked={item.selected}
+                                    disabled={!isMatched}
+                                    onChange={(e) => {
+                                      const checked = e.target.checked;
+                                      setExtractedLeaves(prev => prev.map((it, idx) => idx === index ? { ...it, selected: checked } : it));
+                                    }}
+                                    className="w-4 h-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500 disabled:opacity-50"
+                                  />
+                                </td>
+                                <td className="p-3">
+                                  <div className="font-extrabold text-slate-800">{item.colaborador}</div>
+                                  <div className="text-[10px] text-slate-400 font-mono font-bold">Mat: {item.matricula || '---'}</div>
+                                </td>
+                                <td className="p-3">
+                                  {isMatched ? (
+                                    <div className="space-y-0.5">
+                                      <div className="font-bold text-slate-700 flex items-center gap-1">
+                                        <CheckCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                        <span>{item.systemColab.nome}</span>
+                                      </div>
+                                      <div className="text-[9.5px] text-slate-450 font-bold">{item.systemColab.cargo} ({item.systemColab.setor})</div>
+                                    </div>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 bg-rose-50 border border-rose-100 px-2 py-0.5 rounded-full text-rose-700 text-[9.5px] font-extrabold leading-none">
+                                      <XCircle className="w-3 h-3" />
+                                      Não Cadastrado
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="p-3 font-mono font-extrabold text-slate-700">
+                                  {item.data.split('-').reverse().join('/')}
+                                </td>
+                                <td className="p-3">
+                                  <span className={`inline-block px-2 py-0.5 rounded-md text-[9.5px] font-black ${
+                                    item.tipo === 'Banco de Horas' ? 'bg-indigo-50 border border-indigo-150 text-indigo-700' :
+                                    item.tipo === 'Folga Enfermagem' ? 'bg-teal-50 border border-teal-150 text-teal-700' :
+                                    item.tipo === 'Folga Feriado' ? 'bg-amber-50 border border-amber-150 text-amber-700' :
+                                    item.tipo === 'Férias' ? 'bg-sky-50 border border-sky-150 text-sky-700' :
+                                    'bg-slate-50 border border-slate-150 text-slate-600'
+                                  }`}>
+                                    {item.tipo}
+                                  </span>
+                                </td>
+                                <td className="p-3 text-center font-mono font-black text-slate-500">
+                                  {item.shorthand}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="flex justify-between items-center text-[11px] text-slate-400 font-bold">
+                    <span>
+                      Total Encontrado: <strong className="text-slate-600">{extractedLeaves.length}</strong> | 
+                      Selecionado para Importação: <strong className="text-sky-600">{extractedLeaves.filter(i => i.selected).length}</strong>
+                    </span>
+                    <button
+                      onClick={() => setExtractedLeaves([])}
+                      className="text-rose-600 hover:text-rose-700 font-extrabold cursor-pointer"
+                    >
+                      Limpar Resultados / Tentar Outro Arquivo
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="bg-slate-50 px-6 py-4 border-t border-slate-200 flex justify-between items-center shrink-0">
+              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                Exclusivo para Escalas de Enfermagem
+              </span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    setIsImportModalOpen(false);
+                    setExtractedLeaves([]);
+                  }}
+                  className="bg-slate-200 hover:bg-slate-300 text-slate-700 font-extrabold py-2 px-4 rounded-xl text-xs cursor-pointer active:scale-95 transition-all shadow-xs"
+                >
+                  Cancelar
+                </button>
+                {extractedLeaves.length > 0 && (
+                  <button
+                    onClick={handleExecuteImport}
+                    className="bg-sky-600 hover:bg-sky-700 text-white font-extrabold py-2 px-5 rounded-xl text-xs cursor-pointer active:scale-95 transition-all shadow-xs flex items-center gap-1.5 border border-sky-500"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Importar {extractedLeaves.filter(i => i.selected).length} Folgas</span>
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}

@@ -453,6 +453,89 @@ Gere apenas o vetor JSON válido, seguindo o esquema abaixo. Caso a data de iní
     }
   });
 
+  // AI-Powered Leaves Extraction Endpoint (Extract from PDF or Image)
+  app.post("/api/folgas/extract", async (req, res) => {
+    try {
+      const { fileBase64, mimeType, year, month } = req.body;
+      if (!fileBase64 || !mimeType || !year || !month) {
+        return res.status(400).json({ error: "Parâmetros 'fileBase64', 'mimeType', 'year' e 'month' são obrigatórios." });
+      }
+
+      let cleanBase64 = fileBase64;
+      if (fileBase64.includes(";base64,")) {
+        cleanBase64 = fileBase64.split(";base64,").pop();
+      }
+
+      const client = getGeminiClient();
+      console.log(`[Folgas API] Tentando extração de folgas com gemini-3.5-flash para o mês ${month}/${year}...`);
+
+      const response = await client.models.generateContent({
+        model: "gemini-3.5-flash",
+        contents: [
+          {
+            inlineData: {
+              mimeType: mimeType,
+              data: cleanBase64,
+            },
+          },
+          {
+            text: `Examine esta escala de revezamento (pode ser uma imagem, foto ou PDF) para o mês ${month} de ${year}.
+Sua tarefa é identificar TODOS os enfermeiros/colaboradores e extrair as suas FOLGAS e AFASTAMENTOS.
+
+Mapeie os símbolos identificados em cada dia (1 a 31) para os tipos de folga padrão do sistema:
+- "F" (ou "Folga") -> "Folga"
+- "BH" (ou "Banco de Horas") -> "Banco de Horas"
+- "FF" (ou "Folga Feriado") -> "Folga Feriado"
+- "FE" (ou "Folga Enfermagem") -> "Folga Enfermagem"
+- "FÉRIAS" ou "FERIAS" -> "Férias" (se cobrir múltiplos dias consecutivos, gere um registro para cada dia individual)
+- "B" -> "Brigada de Incêndio"
+- "E" -> "Eleição"
+- "AT" -> "Atestado"
+- "I" -> "Integração"
+
+Atenção:
+1. Ignore símbolos de turnos de trabalho (como "M", "T", "D", "N", "PS", "U7", "U9", "2|3", "4", "5", "6") que representam plantões de trabalho. Extraia APENAS as folgas e afastamentos descritos acima.
+2. Identifique corretamente o nome completo do colaborador e sua matrícula correspondente na linha.
+3. Para cada folga/afastamento identificado, determine a data exata formatada como "YYYY-MM-DD". O ano é ${year}, o mês é ${month} (formate com dois dígitos), e o dia é o número da coluna (1 a 31) onde o símbolo de folga foi encontrado.
+4. Retorne a lista estruturada no formato JSON especificado.`,
+          }
+        ],
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              leaves: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    matricula: { type: Type.STRING, description: "Número de matrícula do colaborador." },
+                    colaborador: { type: Type.STRING, description: "Nome completo do colaborador." },
+                    data: { type: Type.STRING, description: "Data da folga no formato YYYY-MM-DD." },
+                    tipo: { type: Type.STRING, description: "Tipo de folga mapeado (Ex: 'Folga', 'Banco de Horas', 'Folga Feriado', 'Folga Enfermagem', 'Férias', 'Brigada de Incêndio', 'Eleição', 'Atestado', 'Integração')." },
+                    shorthand: { type: Type.STRING, description: "Símbolo original encontrado na célula (Ex: 'F', 'BH', 'FF', 'FE', 'FÉRIAS', 'B', 'E', 'AT', 'I')." }
+                  },
+                  required: ["matricula", "colaborador", "data", "tipo", "shorthand"]
+                }
+              }
+            },
+            required: ["leaves"]
+          }
+        }
+      });
+
+      const text = response.text || "{\"leaves\":[]}";
+      res.json(JSON.parse(text));
+    } catch (error: any) {
+      console.error("Erro na extração de folgas via Gemini:", error);
+      res.status(500).json({
+        error: "Erro ao analisar a escala de folgas via Inteligência Artificial.",
+        details: error.message || String(error)
+      });
+    }
+  });
+
   // Corporate University: AI-Powered Certificate File Analyzer
   app.post("/api/universidade/extract", async (req, res) => {
     try {
