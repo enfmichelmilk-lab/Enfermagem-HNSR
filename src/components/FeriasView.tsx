@@ -37,13 +37,17 @@ export default function FeriasView({
   // New Vacation Form States
   const [selectedColabMatricula, setSelectedColabMatricula] = useState('');
   const [startDate, setStartDate] = useState('');
-  const [duration, setDuration] = useState<10 | 15 | 20 | 30>(30);
+  const [duration, setDuration] = useState<number>(30);
+  const [isCustomDuration, setIsCustomDuration] = useState(false);
+  const [justification, setJustification] = useState('');
   const [homologateImmediately, setHomologateImmediately] = useState(true);
 
   // Edit Vacation States
   const [editingFerias, setEditingFerias] = useState<Ferias | null>(null);
   const [editStartDate, setEditStartDate] = useState('');
-  const [editDuration, setEditDuration] = useState<10 | 15 | 20 | 30>(30);
+  const [editDuration, setEditDuration] = useState<number>(30);
+  const [isEditCustomDuration, setIsEditCustomDuration] = useState(false);
+  const [editJustification, setEditJustification] = useState('');
   const [editStatus, setEditStatus] = useState<'Pendente' | 'Aprovado' | 'Recusado'>('Pendente');
 
   // Check if current user is Nurse or higher
@@ -79,6 +83,17 @@ export default function FeriasView({
     if (!startDate) {
       customAlert("Por favor, informe a data de início das férias.");
       return;
+    }
+
+    if (isCustomDuration) {
+      if (!duration || duration <= 0) {
+        customAlert("Por favor, digite uma quantidade de dias válida.");
+        return;
+      }
+      if (!justification.trim()) {
+        customAlert("Por favor, informe a justificativa para a quantidade customizada de dias de férias.");
+        return;
+      }
     }
 
     const selectedColab = colaboradores.find(c => c.matricula === selectedColabMatricula);
@@ -120,7 +135,8 @@ export default function FeriasView({
       duracao: duration,
       status: homologateImmediately || isAuthorizedAdmin() ? 'Aprovado' : 'Pendente',
       solicitante: usuarioLogado.nome,
-      dataCriacao: new Date().toLocaleDateString('pt-BR')
+      dataCriacao: new Date().toLocaleDateString('pt-BR'),
+      justificativa: isCustomDuration ? justification : undefined
     };
 
     const novasFeriasList = [...ferias, novaSolicitacao];
@@ -132,6 +148,8 @@ export default function FeriasView({
     setSelectedColabMatricula('');
     setStartDate('');
     setDuration(30);
+    setIsCustomDuration(false);
+    setJustification('');
     setActiveSubTab('lista');
   };
 
@@ -338,9 +356,16 @@ export default function FeriasView({
                             {f.dataRetorno.split('-').reverse().join('/')}
                           </td>
                           <td className="p-4 text-center">
-                            <span className="bg-amber-100 text-amber-900 border border-amber-200/50 px-2 py-0.5 rounded-full font-black text-[10px]">
-                              {f.duracao} dias
-                            </span>
+                            <div className="flex flex-col items-center">
+                              <span className="bg-amber-100 text-amber-900 border border-amber-200/50 px-2 py-0.5 rounded-full font-black text-[10px]">
+                                {f.duracao} dias
+                              </span>
+                              {f.justificativa && (
+                                <span className="text-[9px] text-slate-500 font-medium italic mt-1 block max-w-[150px] truncate" title={f.justificativa}>
+                                  Obs: {f.justificativa}
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="p-4">
                             <span className={`inline-flex items-center gap-1 text-[10px] font-bold border px-2 py-0.5 rounded-full ${
@@ -394,6 +419,9 @@ export default function FeriasView({
                                       setEditStartDate(f.dataInicio);
                                       setEditDuration(f.duracao);
                                       setEditStatus(f.status);
+                                      const isCustom = ![10, 15, 20, 30].includes(f.duracao);
+                                      setIsEditCustomDuration(isCustom);
+                                      setEditJustification(f.justificativa || '');
                                     }}
                                     className="p-1.5 hover:bg-sky-50 text-slate-400 hover:text-sky-600 rounded-xl transition cursor-pointer"
                                     title="Editar período de férias"
@@ -474,54 +502,110 @@ export default function FeriasView({
 
               </div>
 
-              {/* Duration selector: 10, 15, 20 or 30 days */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-650 block">Duração Programada:</label>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <label className="flex items-center gap-2 cursor-pointer bg-slate-50 hover:bg-slate-100 border border-slate-200 px-3 py-2.5 rounded-xl text-center font-bold text-xs select-none shadow-3xs">
-                    <input
-                      type="radio"
-                      name="duracao"
-                      checked={duration === 10}
-                      onChange={() => setDuration(10)}
-                      className="w-4 h-4 text-sky-600 focus:ring-sky-500 cursor-pointer"
-                    />
-                    <span className="text-slate-800">10 Dias</span>
-                  </label>
+              {/* Duration selector: 10, 15, 20 or 30 days or Custom */}
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-650 block">Duração Programada:</label>
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                    <label className={`flex items-center gap-2 cursor-pointer border px-3 py-2.5 rounded-xl text-center font-bold text-xs select-none shadow-3xs transition-all ${!isCustomDuration && duration === 10 ? 'bg-sky-50 border-sky-300 text-sky-800' : 'bg-slate-50 hover:bg-slate-100 border-slate-200'}`}>
+                      <input
+                        type="radio"
+                        name="duracao"
+                        checked={!isCustomDuration && duration === 10}
+                        onChange={() => {
+                          setIsCustomDuration(false);
+                          setDuration(10);
+                        }}
+                        className="w-4 h-4 text-sky-600 focus:ring-sky-500 cursor-pointer"
+                      />
+                      <span className="text-slate-800">10 Dias</span>
+                    </label>
 
-                  <label className="flex items-center gap-2 cursor-pointer bg-slate-50 hover:bg-slate-100 border border-slate-200 px-3 py-2.5 rounded-xl text-center font-bold text-xs select-none shadow-3xs">
-                    <input
-                      type="radio"
-                      name="duracao"
-                      checked={duration === 15}
-                      onChange={() => setDuration(15)}
-                      className="w-4 h-4 text-sky-600 focus:ring-sky-500 cursor-pointer"
-                    />
-                    <span className="text-slate-800">15 Dias</span>
-                  </label>
+                    <label className={`flex items-center gap-2 cursor-pointer border px-3 py-2.5 rounded-xl text-center font-bold text-xs select-none shadow-3xs transition-all ${!isCustomDuration && duration === 15 ? 'bg-sky-50 border-sky-300 text-sky-800' : 'bg-slate-50 hover:bg-slate-100 border-slate-200'}`}>
+                      <input
+                        type="radio"
+                        name="duracao"
+                        checked={!isCustomDuration && duration === 15}
+                        onChange={() => {
+                          setIsCustomDuration(false);
+                          setDuration(15);
+                        }}
+                        className="w-4 h-4 text-sky-600 focus:ring-sky-500 cursor-pointer"
+                      />
+                      <span className="text-slate-800">15 Dias</span>
+                    </label>
 
-                  <label className="flex items-center gap-2 cursor-pointer bg-slate-50 hover:bg-slate-100 border border-slate-200 px-3 py-2.5 rounded-xl text-center font-bold text-xs select-none shadow-3xs">
-                    <input
-                      type="radio"
-                      name="duracao"
-                      checked={duration === 20}
-                      onChange={() => setDuration(20)}
-                      className="w-4 h-4 text-sky-600 focus:ring-sky-500 cursor-pointer"
-                    />
-                    <span className="text-slate-800">20 Dias</span>
-                  </label>
+                    <label className={`flex items-center gap-2 cursor-pointer border px-3 py-2.5 rounded-xl text-center font-bold text-xs select-none shadow-3xs transition-all ${!isCustomDuration && duration === 20 ? 'bg-sky-50 border-sky-300 text-sky-800' : 'bg-slate-50 hover:bg-slate-100 border-slate-200'}`}>
+                      <input
+                        type="radio"
+                        name="duracao"
+                        checked={!isCustomDuration && duration === 20}
+                        onChange={() => {
+                          setIsCustomDuration(false);
+                          setDuration(20);
+                        }}
+                        className="w-4 h-4 text-sky-600 focus:ring-sky-500 cursor-pointer"
+                      />
+                      <span className="text-slate-800">20 Dias</span>
+                    </label>
 
-                  <label className="flex items-center gap-2 cursor-pointer bg-slate-50 hover:bg-slate-100 border border-slate-200 px-3 py-2.5 rounded-xl text-center font-bold text-xs select-none shadow-3xs">
-                    <input
-                      type="radio"
-                      name="duracao"
-                      checked={duration === 30}
-                      onChange={() => setDuration(30)}
-                      className="w-4 h-4 text-sky-600 focus:ring-sky-500 cursor-pointer"
-                    />
-                    <span className="text-slate-800">30 Dias</span>
-                  </label>
+                    <label className={`flex items-center gap-2 cursor-pointer border px-3 py-2.5 rounded-xl text-center font-bold text-xs select-none shadow-3xs transition-all ${!isCustomDuration && duration === 30 ? 'bg-sky-50 border-sky-300 text-sky-800' : 'bg-slate-50 hover:bg-slate-100 border-slate-200'}`}>
+                      <input
+                        type="radio"
+                        name="duracao"
+                        checked={!isCustomDuration && duration === 30}
+                        onChange={() => {
+                          setIsCustomDuration(false);
+                          setDuration(30);
+                        }}
+                        className="w-4 h-4 text-sky-600 focus:ring-sky-500 cursor-pointer"
+                      />
+                      <span className="text-slate-800">30 Dias</span>
+                    </label>
+
+                    <label className={`flex items-center gap-2 cursor-pointer border px-3 py-2.5 rounded-xl text-center font-bold text-xs select-none shadow-3xs transition-all ${isCustomDuration ? 'bg-sky-50 border-sky-300 text-sky-800' : 'bg-slate-50 hover:bg-slate-100 border-slate-200'}`}>
+                      <input
+                        type="radio"
+                        name="duracao"
+                        checked={isCustomDuration}
+                        onChange={() => {
+                          setIsCustomDuration(true);
+                          setDuration(30);
+                        }}
+                        className="w-4 h-4 text-sky-600 focus:ring-sky-500 cursor-pointer"
+                      />
+                      <span className="text-slate-800">Outros</span>
+                    </label>
+                  </div>
                 </div>
+
+                {isCustomDuration && (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-sky-50/50 border border-sky-100 rounded-2xl animate-fadeIn font-sans">
+                    <div className="space-y-1">
+                      <label className="text-xs font-extrabold text-slate-700 block">Digitar Dias de Gozo:</label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="365"
+                        value={duration}
+                        onChange={(e) => setDuration(Math.max(1, parseInt(e.target.value) || 0))}
+                        className="w-full p-2.5 bg-white border border-slate-250 rounded-xl font-bold text-xs focus:outline-none focus:border-sky-500 text-slate-800"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1 md:col-span-2">
+                      <label className="text-xs font-extrabold text-slate-700 block">Justificativa:</label>
+                      <input
+                        type="text"
+                        value={justification}
+                        onChange={(e) => setJustification(e.target.value)}
+                        placeholder="Ex: Liberação de 24 dias devido a faltas no período"
+                        className="w-full p-2.5 bg-white border border-slate-250 rounded-xl font-medium text-xs focus:outline-none focus:border-sky-500 text-slate-800"
+                        required
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Fast Inline homologation toggle */}
@@ -636,16 +720,54 @@ export default function FeriasView({
               <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-700 block">Duração (Dias de Gozo):</label>
                 <select
-                  value={editDuration}
-                  onChange={(e) => setEditDuration(parseInt(e.target.value) as 10 | 15 | 20 | 30)}
+                  value={isEditCustomDuration ? "custom" : editDuration}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === "custom") {
+                      setIsEditCustomDuration(true);
+                      setEditDuration(30);
+                    } else {
+                      setIsEditCustomDuration(false);
+                      setEditDuration(parseInt(val));
+                    }
+                  }}
                   className="w-full p-2.5 bg-white border border-slate-250 rounded-xl font-bold text-xs focus:outline-none focus:border-sky-500 text-slate-800"
                 >
                   <option value={10}>10 Dias</option>
                   <option value={15}>15 Dias</option>
                   <option value={20}>20 Dias Parciais</option>
                   <option value={30}>30 Dias Completos</option>
+                  <option value="custom">Outros (Customizado)</option>
                 </select>
               </div>
+
+              {isEditCustomDuration && (
+                <div className="grid grid-cols-1 gap-3 p-3.5 bg-sky-50/50 border border-sky-100 rounded-2xl animate-fadeIn font-sans">
+                  <div className="space-y-1">
+                    <label className="text-xs font-extrabold text-slate-700 block">Digitar Dias de Gozo:</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="365"
+                      value={editDuration}
+                      onChange={(e) => setEditDuration(Math.max(1, parseInt(e.target.value) || 0))}
+                      className="w-full p-2 bg-white border border-slate-250 rounded-xl font-bold text-xs focus:outline-none focus:border-sky-500 text-slate-800"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-extrabold text-slate-700 block">Justificativa:</label>
+                    <input
+                      type="text"
+                      value={editJustification}
+                      onChange={(e) => setEditJustification(e.target.value)}
+                      placeholder="Ex: Reduzido de 30 para 24 devido a faltas"
+                      className="w-full p-2 bg-white border border-slate-250 rounded-xl font-medium text-xs focus:outline-none focus:border-sky-500 text-slate-800"
+                      required
+                    />
+                  </div>
+                </div>
+              )}
 
               {isAuthorizedAdmin() && (
                 <div className="space-y-1">
@@ -672,6 +794,17 @@ export default function FeriasView({
                     return;
                   }
 
+                  if (isEditCustomDuration) {
+                    if (!editDuration || editDuration <= 0) {
+                      customAlert("Por favor, digite uma quantidade de dias válida.");
+                      return;
+                    }
+                    if (!editJustification.trim()) {
+                      customAlert("Por favor, informe a justificativa.");
+                      return;
+                    }
+                  }
+
                   // Recalculate end and return dates
                   const start = new Date(editStartDate + 'T00:00:00');
                   const end = new Date(start);
@@ -691,7 +824,8 @@ export default function FeriasView({
                         dataFim: dataFim,
                         dataRetorno: dataRetorno,
                         duracao: editDuration,
-                        status: editStatus
+                        status: editStatus,
+                        justificativa: isEditCustomDuration ? editJustification : undefined
                       };
                     }
                     return f;

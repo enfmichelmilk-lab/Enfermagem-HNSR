@@ -83,10 +83,11 @@ export interface Ferias {
   dataInicio: string; // YYYY-MM-DD
   dataFim: string; // YYYY-MM-DD
   dataRetorno: string; // YYYY-MM-DD
-  duracao: 10 | 15 | 20 | 30;
+  duracao: number;
   status: 'Pendente' | 'Aprovado' | 'Recusado';
   solicitante: string;
   dataCriacao: string;
+  justificativa?: string;
 }
 
 export interface ChamadaSetorMetric {

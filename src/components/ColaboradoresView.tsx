@@ -55,6 +55,8 @@ export default function ColaboradoresView({
   const [selectedEquipe, setSelectedEquipe] = useState('');
   const [selectedSetor, setSelectedSetor] = useState('');
   const [mostrarDesligados, setMostrarDesligados] = useState(false);
+  const [selectedFilterGestorDireto, setSelectedFilterGestorDireto] = useState('');
+  const [selectedFilterGestorIndireto, setSelectedFilterGestorIndireto] = useState('');
 
   // Dialog controllers
   const [isOpenModal, setIsOpenModal] = useState(false);
@@ -708,6 +710,28 @@ Atenciosamente,
     }
   };
 
+  // Unique Direct Managers list for filtering
+  const uniqueDirectManagers = useMemo(() => {
+    const managers = new Set<string>();
+    colaboradores.forEach(c => {
+      if (c.gestordireto && c.gestordireto.trim()) {
+        managers.add(c.gestordireto.trim());
+      }
+    });
+    return Array.from(managers).sort((a, b) => a.localeCompare(b));
+  }, [colaboradores]);
+
+  // Unique Indirect Managers list for filtering
+  const uniqueIndirectManagers = useMemo(() => {
+    const managers = new Set<string>();
+    colaboradores.forEach(c => {
+      if (c.gestorindireto && c.gestorindireto.trim()) {
+        managers.add(c.gestorindireto.trim());
+      }
+    });
+    return Array.from(managers).sort((a, b) => a.localeCompare(b));
+  }, [colaboradores]);
+
   // Filter lists dynamically
   const filteredColaboradores = useMemo(() => {
     return colaboradores.filter(c => {
@@ -720,9 +744,12 @@ Atenciosamente,
       
       const matchManager = isUserSubordinate(c, usuarioLogado, colaboradores);
       
-      return matchSearch && matchEquipe && matchSetor && matchManager && matchDesligado;
+      const matchGestorDireto = selectedFilterGestorDireto === '' || c.gestordireto === selectedFilterGestorDireto;
+      const matchGestorIndireto = selectedFilterGestorIndireto === '' || c.gestorindireto === selectedFilterGestorIndireto;
+      
+      return matchSearch && matchEquipe && matchSetor && matchManager && matchDesligado && matchGestorDireto && matchGestorIndireto;
     }).sort((a, b) => a.nome.localeCompare(b.nome));
-  }, [colaboradores, searchTerm, selectedEquipe, selectedSetor, mostrarDesligados, usuarioLogado]);
+  }, [colaboradores, searchTerm, selectedEquipe, selectedSetor, mostrarDesligados, selectedFilterGestorDireto, selectedFilterGestorIndireto, usuarioLogado]);
 
   // Gestor lists builders (direct translation of Gas rules)
   // For Aux/Tec, direct managers are Enfermeiros
@@ -1268,71 +1295,112 @@ Atenciosamente,
       })()}
 
       {/* Structured Functional Filter & Search Bar */}
-      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col lg:flex-row gap-4 items-end">
-        <div className="w-full lg:flex-1 space-y-1">
-          <label className="text-xs font-bold text-slate-500 block">Busca Individual</label>
-          <div className="relative">
-            <span className="absolute left-3 top-3 text-slate-400">
-              <Search className="w-4 h-4" />
-            </span>
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Filtrar por Nome Profissional ou Matrícula..."
-              className="w-full py-2 pl-9 pr-4 bg-slate-50 border border-slate-200 rounded-xl text-sm placeholder-slate-400 text-slate-700 focus:outline-none focus:bg-white focus:border-sky-500 focus:ring-1 focus:ring-sky-500 transition-all font-medium"
-            />
+      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full">
+          {/* Row 1, Col 1: Busca */}
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-slate-500 block">Busca Individual</label>
+            <div className="relative">
+              <span className="absolute left-3 top-2.5 text-slate-400">
+                <Search className="w-4 h-4" />
+              </span>
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Filtrar por Nome Profissional ou Matrícula..."
+                className="w-full h-10 py-2 pl-9 pr-4 bg-slate-50 border border-slate-200 rounded-xl text-sm placeholder-slate-400 text-slate-700 focus:outline-none focus:bg-white focus:border-sky-500 focus:ring-1 focus:ring-sky-500 transition-all font-medium"
+              />
+            </div>
+          </div>
+
+          {/* Row 1, Col 2: Setor Hospitalar */}
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-slate-500 block">Setor Hospitalar</label>
+            <select
+              value={selectedSetor}
+              onChange={(e) => setSelectedSetor(e.target.value)}
+              className="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 focus:outline-none focus:bg-white focus:border-sky-500 transition-all font-semibold"
+            >
+              <option value="">Todos os Setores</option>
+              {SETORES_HOSPITALARES.map(st => (
+                <option key={st} value={st}>{st}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Row 1, Col 3: Gestor Direto */}
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-slate-500 block">Gestor Direto</label>
+            <select
+              value={selectedFilterGestorDireto}
+              onChange={(e) => setSelectedFilterGestorDireto(e.target.value)}
+              className="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 focus:outline-none focus:bg-white focus:border-sky-500 transition-all font-semibold"
+            >
+              <option value="">Todos os Gestores Diretos</option>
+              {uniqueDirectManagers.map(mgr => (
+                <option key={mgr} value={mgr}>{mgr}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Row 2, Col 1: Mostrar Desligados */}
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-slate-500 block">Status de Atividade</label>
+            <div className="flex items-center gap-2 h-10 px-3 bg-slate-50 border border-slate-200 rounded-xl select-none">
+              <input
+                type="checkbox"
+                id="checkbox-mostrar-desligados-main"
+                checked={mostrarDesligados}
+                onChange={(e) => setMostrarDesligados(e.target.checked)}
+                className="w-4 h-4 text-sky-600 border-slate-300 rounded focus:ring-sky-500 cursor-pointer"
+              />
+              <label htmlFor="checkbox-mostrar-desligados-main" className="text-xs font-bold text-slate-700 cursor-pointer whitespace-nowrap">
+                Mostrar Desligados
+              </label>
+            </div>
+          </div>
+
+          {/* Row 2, Col 2: Turno / Escala */}
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-slate-500 block">Turno / Escala</label>
+            <select
+              value={selectedEquipe}
+              onChange={(e) => setSelectedEquipe(e.target.value)}
+              className="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 focus:outline-none focus:bg-white focus:border-sky-500 transition-all font-semibold"
+            >
+              <option value="">Todos os Turnos</option>
+              {EQUIPES_ESCALA.map(eq => (
+                <option key={eq} value={eq}>{eq}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Row 2, Col 3: Gestor Indireto */}
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-slate-500 block">Gestor Indireto</label>
+            <select
+              value={selectedFilterGestorIndireto}
+              onChange={(e) => setSelectedFilterGestorIndireto(e.target.value)}
+              className="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 focus:outline-none focus:bg-white focus:border-sky-500 transition-all font-semibold"
+            >
+              <option value="">Todos os Gestores Indiretos</option>
+              {uniqueIndirectManagers.map(mgr => (
+                <option key={mgr} value={mgr}>{mgr}</option>
+              ))}
+            </select>
           </div>
         </div>
 
-        <div className="w-full sm:w-1/2 lg:w-56 space-y-1">
-          <label className="text-xs font-bold text-slate-500 block">Turno / Escala</label>
-          <select
-            value={selectedEquipe}
-            onChange={(e) => setSelectedEquipe(e.target.value)}
-            className="w-full py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 focus:outline-none focus:bg-white focus:border-sky-500 transition-all font-semibold"
-          >
-            <option value="">Todos os Turnos</option>
-            {EQUIPES_ESCALA.map(eq => (
-              <option key={eq} value={eq}>{eq}</option>
-            ))}
-          </select>
-        </div>
-
-        <div className="w-full sm:w-1/2 lg:w-64 space-y-1">
-          <label className="text-xs font-bold text-slate-500 block">Setor Hospitalar</label>
-          <select
-            value={selectedSetor}
-            onChange={(e) => setSelectedSetor(e.target.value)}
-            className="w-full py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 focus:outline-none focus:bg-white focus:border-sky-500 transition-all font-semibold"
-          >
-            <option value="">Todos os Setores</option>
-            {SETORES_HOSPITALARES.map(st => (
-              <option key={st} value={st}>{st}</option>
-            ))}
-          </select>
-        </div>
-
-        <div className="flex items-center gap-2 pb-2.5 h-10 select-none">
-          <input
-            type="checkbox"
-            id="checkbox-mostrar-desligados-main"
-            checked={mostrarDesligados}
-            onChange={(e) => setMostrarDesligados(e.target.checked)}
-            className="w-4 h-4 text-sky-600 border-slate-300 rounded focus:ring-sky-500 cursor-pointer"
-          />
-          <label htmlFor="checkbox-mostrar-desligados-main" className="text-xs font-bold text-slate-700 cursor-pointer whitespace-nowrap">
-            Mostrar Desligados
-          </label>
-        </div>
-
-        {(searchTerm !== '' || selectedEquipe !== '' || selectedSetor !== '' || mostrarDesligados) && (
-          <button
-            onClick={() => { setSearchTerm(''); setSelectedEquipe(''); setSelectedSetor(''); setMostrarDesligados(false); }}
-            className="w-full sm:w-auto px-4 py-2 text-xs font-bold text-slate-500 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-xl border border-slate-200 transition"
-          >
-            Limpar Filtros
-          </button>
+        {(searchTerm !== '' || selectedEquipe !== '' || selectedSetor !== '' || selectedFilterGestorDireto !== '' || selectedFilterGestorIndireto !== '' || mostrarDesligados) && (
+          <div className="flex justify-end pt-2 border-t border-slate-100">
+            <button
+              onClick={() => { setSearchTerm(''); setSelectedEquipe(''); setSelectedSetor(''); setSelectedFilterGestorDireto(''); setSelectedFilterGestorIndireto(''); setMostrarDesligados(false); }}
+              className="w-full sm:w-auto px-4 py-2 text-xs font-bold text-slate-500 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-xl border border-slate-200 transition cursor-pointer"
+            >
+              Limpar Filtros
+            </button>
+          </div>
         )}
       </div>
 
