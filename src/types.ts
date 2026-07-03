@@ -17,6 +17,7 @@ export interface Colaborador {
   nome: string;
   matricula: string;
   coren: string;
+  validade_carteira?: string; // YYYY-MM-DD
   cargo: string;
   equipe: string;
   horario: string;

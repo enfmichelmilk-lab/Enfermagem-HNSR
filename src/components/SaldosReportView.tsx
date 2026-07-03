@@ -11,6 +11,7 @@ import {
 import { db, saveDocument, removeDocument } from '../lib/firebase';
 import { Colaborador, SaldosHistorico, Usuario, SolicitacaoFolga } from '../types';
 import { customAlert, customConfirm } from '../utils/customDialog';
+import { isUserSubordinate } from '../utils/userFilters';
 
 interface SaldosReportViewProps {
   colaboradores: Colaborador[];
@@ -128,6 +129,22 @@ export default function SaldosReportView({ colaboradores, saldosHistorico, solic
   const [searchTerm, setSearchTerm] = useState<string>('');
 
   const [loading, setLoading] = useState<boolean>(false);
+
+  const isEnfermeiroProfile = useMemo(() => {
+    const perfil = usuarioLogado?.perfil ? usuarioLogado.perfil.toLowerCase() : "";
+    return perfil === "enfermeiro(a)" || perfil === "enfermeiro" || perfil === "enfermeira";
+  }, [usuarioLogado]);
+
+  const allowedMatriculas = useMemo(() => {
+    if (!isEnfermeiroProfile) return null;
+    const allowed = new Set<string>();
+    colaboradores.forEach(c => {
+      if (isUserSubordinate(c, usuarioLogado, colaboradores)) {
+        allowed.add(c.matricula);
+      }
+    });
+    return allowed;
+  }, [isEnfermeiroProfile, colaboradores, usuarioLogado]);
 
   const handleManualReload = () => {
     setLoading(true);
@@ -391,7 +408,11 @@ export default function SaldosReportView({ colaboradores, saldosHistorico, solic
         }
       });
 
-    const list = Array.from(matriculasMap.values());
+    let list = Array.from(matriculasMap.values());
+
+    if (allowedMatriculas) {
+      list = list.filter(item => allowedMatriculas.has(item.matricula));
+    }
 
     // Filter by search term
     if (searchTerm.trim() !== '') {
@@ -403,7 +424,7 @@ export default function SaldosReportView({ colaboradores, saldosHistorico, solic
     }
 
     return list;
-  }, [historicoCurrent, historicoPrev, colaboradores, selectedUnidade, searchTerm]);
+  }, [historicoCurrent, historicoPrev, colaboradores, selectedUnidade, searchTerm, allowedMatriculas]);
 
   // Grouped data: Turno -> Sector -> Sorted Colaboradores
   const groupedReportData = useMemo(() => {
@@ -540,15 +561,17 @@ export default function SaldosReportView({ colaboradores, saldosHistorico, solic
           </div>
 
           {/* Action to collect balances */}
-          <button
-            id="saldos-collect-btn"
-            onClick={handleCollectSnapshots}
-            disabled={loading}
-            className="px-5 py-2.5 bg-sky-500 hover:bg-sky-600 text-white font-extrabold text-sm rounded-xl transition-all shadow-md shadow-sky-500/10 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 whitespace-nowrap"
-          >
-            <Save className="w-4 h-4" />
-            <span>Coletar e Salvar Saldos</span>
-          </button>
+          {!isEnfermeiroProfile && (
+            <button
+              id="saldos-collect-btn"
+              onClick={handleCollectSnapshots}
+              disabled={loading}
+              className="px-5 py-2.5 bg-sky-500 hover:bg-sky-600 text-white font-extrabold text-sm rounded-xl transition-all shadow-md shadow-sky-500/10 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 whitespace-nowrap"
+            >
+              <Save className="w-4 h-4" />
+              <span>Coletar e Salvar Saldos</span>
+            </button>
+          )}
         </div>
 
         {/* Info card */}
@@ -834,7 +857,9 @@ export default function SaldosReportView({ colaboradores, saldosHistorico, solic
 
                                 {/* Actions */}
                                 <td className="py-3 px-3 text-center border-l border-slate-100">
-                                  {item.current ? (
+                                  {isEnfermeiroProfile ? (
+                                    <span className="text-[10px] text-slate-400 font-semibold bg-slate-50 px-2 py-1 rounded border">SOMENTE LEITURA</span>
+                                  ) : item.current ? (
                                     <div className="flex items-center justify-center gap-1">
                                       <button
                                         onClick={() => handleStartEdit(item.current!)}

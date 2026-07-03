@@ -39,17 +39,34 @@ import {
   CheckSquare,
   Square
 } from 'lucide-react';
-import { Curso, CertificadoCurso, Colaborador, CourseTarget, Ferias } from '../types';
+import { Curso, CertificadoCurso, Colaborador, CourseTarget, Ferias, Usuario } from '../types';
 import { subscribeCollection, saveDocument, removeDocument } from '../lib/firebase';
 import { CARGOS_ENFERMAGEM, SETORES_HOSPITALARES, EQUIPES_ESCALA, CURSOS_INICIAIS } from '../data/mockData';
 import { customAlert, customConfirm } from '../utils/customDialog';
+import { isUserSubordinate } from '../utils/userFilters';
 
 interface UniversidadeViewProps {
   colaboradores: Colaborador[];
   ferias?: Ferias[];
+  usuarioLogado?: Usuario;
 }
 
-export default function UniversidadeView({ colaboradores, ferias = [] }: UniversidadeViewProps) {
+export default function UniversidadeView({ colaboradores, ferias = [], usuarioLogado }: UniversidadeViewProps) {
+  const isEnfermeiroProfile = React.useMemo(() => {
+    const perfil = usuarioLogado?.perfil ? usuarioLogado.perfil.toLowerCase() : "";
+    return perfil === "enfermeiro(a)" || perfil === "enfermeiro" || perfil === "enfermeira";
+  }, [usuarioLogado]);
+
+  const allowedMatriculas = React.useMemo(() => {
+    if (!isEnfermeiroProfile) return null;
+    const allowed = new Set<string>();
+    colaboradores.forEach(c => {
+      if (isUserSubordinate(c, usuarioLogado, colaboradores)) {
+        allowed.add(c.matricula);
+      }
+    });
+    return allowed;
+  }, [isEnfermeiroProfile, colaboradores, usuarioLogado]);
   const [cursos, setCursos] = useState<Curso[]>([]);
   const [certificados, setCertificados] = useState<CertificadoCurso[]>([]);
   
@@ -850,7 +867,11 @@ export default function UniversidadeView({ colaboradores, ferias = [] }: Univers
   // ==========================================
 
   // Filter collaborateurs who are active in the system
-  const activeColaboradores = colaboradores.filter(c => !c.datarecisao);
+  const activeColaboradores = colaboradores.filter(c => {
+    if (c.datarecisao) return false;
+    if (allowedMatriculas && !allowedMatriculas.has(c.matricula)) return false;
+    return true;
+  });
 
   // Computes progress for a single collaborator
   const getColaboradorProgress = (colab: Colaborador): { pct: number; completedCount: number; requiredCount: number } => {
@@ -1028,11 +1049,14 @@ export default function UniversidadeView({ colaboradores, ferias = [] }: Univers
     (c.descricao && c.descricao.toLowerCase().includes(courseSearch.toLowerCase()))
   );
 
-  const filteredCertificados = certificados.filter(cert => 
-    cert.colaboradorNome.toLowerCase().includes(certSearch.toLowerCase()) ||
-    cert.cursoNome.toLowerCase().includes(certSearch.toLowerCase()) ||
-    cert.colaboradorMatricula.includes(certSearch)
-  );
+  const filteredCertificados = certificados.filter(cert => {
+    if (allowedMatriculas && !allowedMatriculas.has(cert.colaboradorMatricula)) {
+      return false;
+    }
+    return cert.colaboradorNome.toLowerCase().includes(certSearch.toLowerCase()) ||
+      cert.cursoNome.toLowerCase().includes(certSearch.toLowerCase()) ||
+      cert.colaboradorMatricula.includes(certSearch);
+  });
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto p-1 text-slate-800">
@@ -1050,23 +1074,25 @@ export default function UniversidadeView({ colaboradores, ferias = [] }: Univers
         </div>
 
         {/* Botoes Laterais */}
-        <div className="flex flex-wrap gap-2.5">
-          <button
-            onClick={() => { setActiveTab('cursos'); setIsAddingCourse(true); }}
-            className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-extrabold rounded-xl text-xs flex items-center gap-1.5 shadow-sm transition border border-slate-950 cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Inserir Novo Curso</span>
-          </button>
-          
-          <button
-            onClick={() => setActiveTab('certificados')}
-            className="px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white font-extrabold rounded-xl text-xs flex items-center gap-1.5 shadow-md shadow-sky-600/10 transition border border-sky-500 cursor-pointer"
-          >
-            <Upload className="w-4 h-4" />
-            <span>Importação de Certificados</span>
-          </button>
-        </div>
+        {!isEnfermeiroProfile && (
+          <div className="flex flex-wrap gap-2.5">
+            <button
+              onClick={() => { setActiveTab('cursos'); setIsAddingCourse(true); }}
+              className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-extrabold rounded-xl text-xs flex items-center gap-1.5 shadow-sm transition border border-slate-950 cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Inserir Novo Curso</span>
+            </button>
+            
+            <button
+              onClick={() => setActiveTab('certificados')}
+              className="px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white font-extrabold rounded-xl text-xs flex items-center gap-1.5 shadow-md shadow-sky-600/10 transition border border-sky-500 cursor-pointer"
+            >
+              <Upload className="w-4 h-4" />
+              <span>Importação de Certificados</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Tabs */}
@@ -1468,44 +1494,46 @@ export default function UniversidadeView({ colaboradores, ferias = [] }: Univers
                   />
                 </div>
 
-                <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
-                  <button
-                    onClick={() => {
-                      if (isAddingCourse && editingCourseId) {
-                        // Reset editing mode and set to create mode
-                        setEditingCourseId(null);
-                        setNewCourseNome('');
-                        setNewCourseDesc('');
-                        const initial: typeof newCourseTargets = {};
-                        CARGOS_ENFERMAGEM.forEach(c => {
-                          initial[c] = { selected: false, obrigatorio: false };
-                        });
-                        setNewCourseTargets(initial);
-                      } else {
-                        setIsAddingCourse(prev => !prev);
-                      }
-                    }}
-                    className="px-4 py-2 bg-slate-900 text-white hover:bg-slate-800 font-extrabold rounded-xl text-xs flex items-center justify-center gap-1.5 transition cursor-pointer"
-                  >
-                    {isAddingCourse ? (
-                      <span>{editingCourseId ? 'Cadastrar Novo Curso' : 'Fechar Formulário'}</span>
-                    ) : (
-                      <>
-                        <Plus className="w-4 h-4" />
-                        <span>Cadastrar Novo Curso</span>
-                      </>
-                    )}
-                  </button>
+                {!isEnfermeiroProfile && (
+                  <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
+                    <button
+                      onClick={() => {
+                        if (isAddingCourse && editingCourseId) {
+                          // Reset editing mode and set to create mode
+                          setEditingCourseId(null);
+                          setNewCourseNome('');
+                          setNewCourseDesc('');
+                          const initial: typeof newCourseTargets = {};
+                          CARGOS_ENFERMAGEM.forEach(c => {
+                            initial[c] = { selected: false, obrigatorio: false };
+                          });
+                          setNewCourseTargets(initial);
+                        } else {
+                          setIsAddingCourse(prev => !prev);
+                        }
+                      }}
+                      className="px-4 py-2 bg-slate-900 text-white hover:bg-slate-800 font-extrabold rounded-xl text-xs flex items-center justify-center gap-1.5 transition cursor-pointer"
+                    >
+                      {isAddingCourse ? (
+                        <span>{editingCourseId ? 'Cadastrar Novo Curso' : 'Fechar Formulário'}</span>
+                      ) : (
+                        <>
+                          <Plus className="w-4 h-4" />
+                          <span>Cadastrar Novo Curso</span>
+                        </>
+                      )}
+                    </button>
 
-                  <button
-                    onClick={handleResetCoursesDatabase}
-                    className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-extrabold rounded-xl text-xs flex items-center justify-center gap-1.5 transition cursor-pointer shadow-md shadow-rose-650/10"
-                    title="Limpar e Corrigir Banco de Cursos"
-                  >
-                    <RefreshCw className="w-4 h-4 animate-spin-hover" />
-                    <span>Limpar e Corrigir Banco</span>
-                  </button>
-                </div>
+                    <button
+                      onClick={handleResetCoursesDatabase}
+                      className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-extrabold rounded-xl text-xs flex items-center justify-center gap-1.5 transition cursor-pointer shadow-md shadow-rose-650/10"
+                      title="Limpar e Corrigir Banco de Cursos"
+                    >
+                      <RefreshCw className="w-4 h-4 animate-spin-hover" />
+                      <span>Limpar e Corrigir Banco</span>
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* COURSE CADASTRO FORM */}
@@ -1700,24 +1728,26 @@ export default function UniversidadeView({ colaboradores, ferias = [] }: Univers
                           <div className="bg-sky-50 text-sky-600 p-2.5 rounded-xl border border-sky-100">
                             <BookOpen className="w-5 h-5" />
                           </div>
-                          <div className="flex items-center gap-1">
-                            <button
-                              type="button"
-                              onClick={() => handleEditCourse(curso)}
-                              className="text-slate-400 hover:text-sky-600 p-1 rounded-lg hover:bg-sky-50 transition cursor-pointer"
-                              title="Editar Curso"
-                            >
-                              <Pencil className="w-4 h-4" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteCourse(curso.id)}
-                              className="text-slate-400 hover:text-rose-600 p-1 rounded-lg hover:bg-rose-50 transition cursor-pointer"
-                              title="Remover Curso"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
+                          {!isEnfermeiroProfile && (
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => handleEditCourse(curso)}
+                                className="text-slate-400 hover:text-sky-600 p-1 rounded-lg hover:bg-sky-50 transition cursor-pointer"
+                                title="Editar Curso"
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteCourse(curso.id)}
+                                className="text-slate-400 hover:text-rose-600 p-1 rounded-lg hover:bg-rose-50 transition cursor-pointer"
+                                title="Remover Curso"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          )}
                         </div>
 
                         <div>
@@ -1775,34 +1805,36 @@ export default function UniversidadeView({ colaboradores, ferias = [] }: Univers
             >
               
               {/* SUB-TAB SELECTOR TO TOGGLE BETWEEN IA AND MANUAL */}
-              <div className="flex border border-slate-200/80 rounded-2xl bg-slate-50 p-1 w-full sm:max-w-md">
-                <button
-                  type="button"
-                  onClick={() => setCertMode('ia')}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-black transition cursor-pointer text-center ${
-                    certMode === 'ia'
-                      ? 'bg-white text-slate-900 shadow-xs border border-slate-200/40'
-                      : 'text-slate-550 hover:text-slate-800'
-                  }`}
-                >
-                  <Sparkles className="w-4 h-4 text-sky-500" />
-                  <span>Homologação Inteligente (IA)</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCertMode('manual')}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-black transition cursor-pointer text-center ${
-                    certMode === 'manual'
-                      ? 'bg-white text-slate-900 shadow-xs border border-slate-200/40'
-                      : 'text-slate-550 hover:text-slate-800'
-                  }`}
-                >
-                  <FileSignature className="w-4 h-4 text-emerald-500" />
-                  <span>Carregamento Manual (Sem IA)</span>
-                </button>
-              </div>
+              {!isEnfermeiroProfile && (
+                <div className="flex border border-slate-200/80 rounded-2xl bg-slate-50 p-1 w-full sm:max-w-md">
+                  <button
+                    type="button"
+                    onClick={() => setCertMode('ia')}
+                    className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-black transition cursor-pointer text-center ${
+                      certMode === 'ia'
+                        ? 'bg-white text-slate-900 shadow-xs border border-slate-200/40'
+                        : 'text-slate-550 hover:text-slate-800'
+                    }`}
+                  >
+                    <Sparkles className="w-4 h-4 text-sky-500" />
+                    <span>Homologação Inteligente (IA)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCertMode('manual')}
+                    className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-black transition cursor-pointer text-center ${
+                      certMode === 'manual'
+                        ? 'bg-white text-slate-900 shadow-xs border border-slate-200/40'
+                        : 'text-slate-550 hover:text-slate-800'
+                    }`}
+                  >
+                    <FileSignature className="w-4 h-4 text-emerald-500" />
+                    <span>Carregamento Manual (Sem IA)</span>
+                  </button>
+                </div>
+              )}
 
-              {certMode === 'ia' ? (
+              {!isEnfermeiroProfile && (certMode === 'ia' ? (
                 <>
                   {/* AREA DE IMPORTADORES INTERATIVOS (DOIS MODOS: MULTI-ARQUIVOS OU LISTA EM TEXTO) */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -2483,7 +2515,7 @@ export default function UniversidadeView({ colaboradores, ferias = [] }: Univers
                     </div>
                   </div>
                 </div>
-              )}
+              ))}
 
               {/* HOMOLOGATIONS ARCHIVE / REGISTERED CERTIFICATES */}
               <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-xs">
@@ -2536,12 +2568,16 @@ export default function UniversidadeView({ colaboradores, ferias = [] }: Univers
                               <span className="text-[10px] text-slate-400 italic">{cert.origem}</span>
                             </td>
                             <td className="p-3.5 text-right pr-6">
-                              <button
-                                onClick={() => handleDeleteCert(cert.id)}
-                                className="text-slate-400 hover:text-rose-600 p-1 rounded hover:bg-slate-100 transition cursor-pointer"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
+                              {isEnfermeiroProfile ? (
+                                <span className="text-[9px] bg-slate-100 text-slate-500 font-black px-2 py-0.5 rounded-full uppercase tracking-wider border border-slate-200">SOMENTE LEITURA</span>
+                              ) : (
+                                <button
+                                  onClick={() => handleDeleteCert(cert.id)}
+                                  className="text-slate-400 hover:text-rose-600 p-1 rounded hover:bg-slate-100 transition cursor-pointer"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              )}
                             </td>
                           </tr>
                         ))

@@ -12,6 +12,7 @@ import {
 import { Ferias, Colaborador, Usuario } from '../types';
 import SearchableColaboradorSelect from './SearchableColaboradorSelect';
 import { customAlert, customConfirm } from '../utils/customDialog';
+import { isUserSubordinate } from '../utils/userFilters';
 
 interface FeriasViewProps {
   ferias: Ferias[];
@@ -52,31 +53,20 @@ export default function FeriasView({
     return authList.some(role => perfil.includes(role));
   };
 
+  const isEnfermeiro = useMemo(() => {
+    const perfil = usuarioLogado?.perfil ? usuarioLogado.perfil.toLowerCase() : "";
+    return perfil === "enfermeiro(a)" || perfil === "enfermeiro" || perfil === "enfermeira";
+  }, [usuarioLogado]);
+
   // Filter eligible employees based on logged-in user
   const eligibleColaboradores = useMemo(() => {
-    const perfil = usuarioLogado.perfil ? usuarioLogado.perfil.toLowerCase() : "";
-    const isEnfermeiro = perfil === "enfermeiro(a)" || perfil === "enfermeiro" || perfil === "enfermeira";
-    
     if (isEnfermeiro) {
-      const uNome = usuarioLogado.nome ? usuarioLogado.nome.trim().toLowerCase() : "";
-      const uEmail = usuarioLogado.email ? usuarioLogado.email.trim().toLowerCase() : "";
-      
-      return colaboradores.filter(c => {
-        const colabGestorDireto = c.gestordireto ? c.gestordireto.trim().toLowerCase() : "";
-        const colabGestorIndireto = c.gestorindireto ? c.gestorindireto.trim().toLowerCase() : "";
-        const colabEmail = c.email ? c.email.trim().toLowerCase() : "";
-        const colabNome = c.nome ? c.nome.trim().toLowerCase() : "";
-        
-        return colabGestorDireto === uNome || 
-               colabGestorIndireto === uNome || 
-               colabEmail === uEmail || 
-               colabNome === uNome;
-      });
+      return colaboradores.filter(c => isUserSubordinate(c, usuarioLogado, colaboradores));
     }
     
     // Otherwise return all active employees
     return colaboradores;
-  }, [colaboradores, usuarioLogado]);
+  }, [colaboradores, usuarioLogado, isEnfermeiro]);
 
   // Handle Form Submission
   const handleSubmitSolicitation = (e: React.FormEvent) => {
@@ -190,23 +180,9 @@ export default function FeriasView({
       const matchSetor = selectedSetor === 'Todos' || (colab && colab.setor === selectedSetor);
       
       let matchManager = true;
-      const perfil = usuarioLogado.perfil ? usuarioLogado.perfil.toLowerCase() : "";
-      const isEnfermeiro = perfil === "enfermeiro(a)" || perfil === "enfermeiro" || perfil === "enfermeira";
       if (isEnfermeiro) {
-        const uNome = usuarioLogado.nome ? usuarioLogado.nome.trim().toLowerCase() : "";
-        const uEmail = usuarioLogado.email ? usuarioLogado.email.trim().toLowerCase() : "";
-        
         if (colab) {
-          const colabGestorDireto = colab.gestordireto ? colab.gestordireto.trim().toLowerCase() : "";
-          const colabGestorIndireto = colab.gestorindireto ? colab.gestorindireto.trim().toLowerCase() : "";
-          const colabEmail = colab.email ? colab.email.trim().toLowerCase() : "";
-          const colabNome = colab.nome ? colab.nome.trim().toLowerCase() : "";
-          
-          matchManager = 
-            colabGestorDireto === uNome || 
-            colabGestorIndireto === uNome || 
-            colabEmail === uEmail ||
-            colabNome === uNome;
+          matchManager = isUserSubordinate(colab, usuarioLogado, colaboradores);
         } else {
           matchManager = false;
         }
@@ -214,7 +190,7 @@ export default function FeriasView({
       
       return matchSearch && matchSetor && matchManager;
     }).sort((a, b) => b.dataInicio.localeCompare(a.dataInicio));
-  }, [ferias, colaboradores, searchTerm, selectedSetor, usuarioLogado]);
+  }, [ferias, colaboradores, searchTerm, selectedSetor, usuarioLogado, isEnfermeiro]);
 
   // Calculate real time Preview in Form
   const previewDates = useMemo(() => {
@@ -266,17 +242,19 @@ export default function FeriasView({
           >
             Quadro de Férias
           </button>
-          <button
-            onClick={() => setActiveSubTab('solicitar')}
-            className={`py-2 px-4 rounded-xl font-extrabold text-xs transition border cursor-pointer flex items-center gap-1.5 ${
-              activeSubTab === 'solicitar'
-                ? 'bg-amber-500 text-white border-amber-400 shadow-md shadow-amber-500/10'
-                : 'bg-transparent text-white border-white/20 hover:bg-white/5'
-            }`}
-          >
-            <PlusCircle className="w-4 h-4" />
-            <span>Solicitar Novas Férias</span>
-          </button>
+          {!isEnfermeiro && (
+            <button
+              onClick={() => setActiveSubTab('solicitar')}
+              className={`py-2 px-4 rounded-xl font-extrabold text-xs transition border cursor-pointer flex items-center gap-1.5 ${
+                activeSubTab === 'solicitar'
+                  ? 'bg-amber-500 text-white border-amber-400 shadow-md shadow-amber-500/10'
+                  : 'bg-transparent text-white border-white/20 hover:bg-white/5'
+              }`}
+            >
+              <PlusCircle className="w-4 h-4" />
+              <span>Solicitar Novas Férias</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -384,48 +362,54 @@ export default function FeriasView({
                           </td>
                           <td className="p-4 text-right">
                             <div className="flex items-center justify-end gap-1">
-                              {f.status === 'Pendente' && !isAuthorizedAdmin() && (
-                                <span className="text-[10px] text-slate-400 font-medium italic block mr-2">Sob Análise</span>
-                              )}
-                              {f.status === 'Pendente' && isAuthorizedAdmin() && (
+                              {isEnfermeiro ? (
+                                <span className="text-[10px] text-slate-400 font-semibold bg-slate-50 px-2 py-1 rounded border">SOMENTE LEITURA</span>
+                              ) : (
                                 <>
+                                  {f.status === 'Pendente' && !isAuthorizedAdmin() && (
+                                    <span className="text-[10px] text-slate-400 font-medium italic block mr-2">Sob Análise</span>
+                                  )}
+                                  {f.status === 'Pendente' && isAuthorizedAdmin() && (
+                                    <>
+                                      <button
+                                        onClick={() => handleApproveFerias(f.id)}
+                                        className="p-1 px-2.5 bg-emerald-100 flex items-center justify-center text-emerald-700 text-[10px] border border-emerald-250 font-extrabold hover:bg-emerald-200 rounded-lg transition"
+                                        title="Aprovar e homologar a escala"
+                                      >
+                                        Aprovar
+                                      </button>
+                                      <button
+                                        onClick={() => handleRejectFerias(f.id)}
+                                        className="p-1 px-2 bg-slate-100 text-slate-600 text-[10px] hover:bg-rose-50 hover:text-rose-600 rounded-lg transition font-extrabold"
+                                        title="Recusar solicitação"
+                                      >
+                                        Recusar
+                                      </button>
+                                    </>
+                                  )}
+
                                   <button
-                                    onClick={() => handleApproveFerias(f.id)}
-                                    className="p-1 px-2.5 bg-emerald-100 flex items-center justify-center text-emerald-700 text-[10px] border border-emerald-250 font-extrabold hover:bg-emerald-200 rounded-lg transition"
-                                    title="Aprovar e homologar a escala"
+                                    onClick={() => {
+                                      setEditingFerias(f);
+                                      setEditStartDate(f.dataInicio);
+                                      setEditDuration(f.duracao);
+                                      setEditStatus(f.status);
+                                    }}
+                                    className="p-1.5 hover:bg-sky-50 text-slate-400 hover:text-sky-600 rounded-xl transition cursor-pointer"
+                                    title="Editar período de férias"
                                   >
-                                    Aprovar
+                                    <Pencil className="w-4 h-4" />
                                   </button>
+
                                   <button
-                                    onClick={() => handleRejectFerias(f.id)}
-                                    className="p-1 px-2 bg-slate-100 text-slate-600 text-[10px] hover:bg-rose-50 hover:text-rose-600 rounded-lg transition font-extrabold"
-                                    title="Recusar solicitação"
+                                    onClick={() => handleDeleteFerias(f.id)}
+                                    className="p-1.5 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-xl transition cursor-pointer"
+                                    title="Excluir de forma lógica"
                                   >
-                                    Recusar
+                                    <Trash2 className="w-4 h-4" />
                                   </button>
                                 </>
                               )}
-
-                              <button
-                                onClick={() => {
-                                  setEditingFerias(f);
-                                  setEditStartDate(f.dataInicio);
-                                  setEditDuration(f.duracao);
-                                  setEditStatus(f.status);
-                                }}
-                                className="p-1.5 hover:bg-sky-50 text-slate-400 hover:text-sky-600 rounded-xl transition cursor-pointer"
-                                title="Editar período de férias"
-                              >
-                                <Pencil className="w-4 h-4" />
-                              </button>
-
-                              <button
-                                onClick={() => handleDeleteFerias(f.id)}
-                                className="p-1.5 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-xl transition cursor-pointer"
-                                title="Excluir de forma lógica"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
                             </div>
                           </td>
                         </tr>

@@ -14,6 +14,7 @@ import { Absenteismo, Colaborador, Usuario } from '../types';
 import SearchableColaboradorSelect from './SearchableColaboradorSelect';
 import { CID_NATIVO, SETORES_HOSPITALARES, EQUIPES_ESCALA } from '../data/mockData';
 import { customAlert, customConfirm } from '../utils/customDialog';
+import { isUserSubordinate } from '../utils/userFilters';
 
 export interface DraftCertificado {
   id: string;
@@ -45,6 +46,26 @@ export default function AbsenteismoView({
   onUpdateAbsenteismo,
   usuarioLogado
 }: AbsenteismoViewProps) {
+  const isEnfermeiro = useMemo(() => {
+    const p = usuarioLogado?.perfil ? usuarioLogado.perfil.toLowerCase() : "";
+    return p === "enfermeiro(a)" || p === "enfermeiro" || p === "enfermeira";
+  }, [usuarioLogado]);
+
+  const allowedMatriculas = useMemo(() => {
+    if (!usuarioLogado) return null;
+    const p = usuarioLogado.perfil ? usuarioLogado.perfil.toLowerCase() : "";
+    const isEnf = p === "enfermeiro(a)" || p === "enfermeiro" || p === "enfermeira";
+    if (!isEnf) return null;
+
+    const set = new Set<string>();
+    colaboradores.forEach(c => {
+      if (isUserSubordinate(c, usuarioLogado, colaboradores)) {
+        set.add(c.matricula);
+      }
+    });
+    return set;
+  }, [colaboradores, usuarioLogado]);
+
   // Search query inputs
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedMeses, setSelectedMeses] = useState<string[]>([]);
@@ -343,9 +364,11 @@ export default function AbsenteismoView({
         }
       }
 
-      return matchSearch && matchTurno && matchSetor && matchMonth;
+      const matchAllowed = allowedMatriculas === null || allowedMatriculas.has(item.matricula);
+
+      return matchSearch && matchTurno && matchSetor && matchMonth && matchAllowed;
     });
-  }, [absenteismo, searchTerm, selectedTurnos, selectedSetores, selectedMeses]);
+  }, [absenteismo, searchTerm, selectedTurnos, selectedSetores, selectedMeses, allowedMatriculas]);
 
   // 5. Reactive Analytical KPI counts on filtered states!
   const totalRegistros = filteredAbsenteismo.length;
@@ -883,40 +906,44 @@ export default function AbsenteismoView({
               <span>Importar Lista (Excel)</span>
             </button>
           )}
-          <button
-            onClick={() => {
-              setModalMode('create');
-              setEditingId('');
-              setColaboradorNome('');
-              setMatricula('');
-              setCid('');
-              setPatologia('');
-              setInicio('');
-              setTipo('Atestado');
-              setExtractError('');
-              setExtractSuccess(null);
-              setIsExtracting(false);
-              setIsOpenModal(true);
-              if (colaboradores.length > 0) handleNomeSelectChange(colaboradores[0].nome);
-            }}
-            className="bg-sky-600 hover:bg-sky-700 text-white font-bold py-2.5 px-4.5 rounded-xl text-sm shadow-md shadow-sky-600/10 flex items-center gap-2 transition duration-150 cursor-pointer"
-          >
-            <PlusCircle className="w-4 h-4" />
-            <span>Lançar Afastamento</span>
-          </button>
-          
-          <button
-            onClick={() => {
-              setBatchDrafts([]);
-              setBatchPText('');
-              setBatchGlobalError('');
-              setIsOpenBatchModal(true);
-            }}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-4.5 rounded-xl text-sm shadow-md shadow-emerald-600/10 flex items-center gap-2 transition duration-150 cursor-pointer"
-          >
-            <Sparkles className="w-4 h-4 animate-pulse text-emerald-100" />
-            <span>Importador Inteligente IA</span>
-          </button>
+          {!isEnfermeiro && (
+            <>
+              <button
+                onClick={() => {
+                  setModalMode('create');
+                  setEditingId('');
+                  setColaboradorNome('');
+                  setMatricula('');
+                  setCid('');
+                  setPatologia('');
+                  setInicio('');
+                  setTipo('Atestado');
+                  setExtractError('');
+                  setExtractSuccess(null);
+                  setIsExtracting(false);
+                  setIsOpenModal(true);
+                  if (colaboradores.length > 0) handleNomeSelectChange(colaboradores[0].nome);
+                }}
+                className="bg-sky-600 hover:bg-sky-700 text-white font-bold py-2.5 px-4.5 rounded-xl text-sm shadow-md shadow-sky-600/10 flex items-center gap-2 transition duration-150 cursor-pointer"
+              >
+                <PlusCircle className="w-4 h-4" />
+                <span>Lançar Afastamento</span>
+              </button>
+              
+              <button
+                onClick={() => {
+                  setBatchDrafts([]);
+                  setBatchPText('');
+                  setBatchGlobalError('');
+                  setIsOpenBatchModal(true);
+                }}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-4.5 rounded-xl text-sm shadow-md shadow-emerald-600/10 flex items-center gap-2 transition duration-150 cursor-pointer"
+              >
+                <Sparkles className="w-4 h-4 animate-pulse text-emerald-100" />
+                <span>Importador Inteligente IA</span>
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -1213,20 +1240,26 @@ export default function AbsenteismoView({
                     </td>
                     <td className="py-3 px-4 text-right">
                       <div className="flex gap-1.5 justify-end items-center">
-                        <button
-                          onClick={() => handleOpenEditModal(item)}
-                          className="p-2 text-sky-600 hover:bg-sky-50 border border-sky-100 rounded-lg transition-all cursor-pointer"
-                          title="Editar Afastamento"
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteAbs(item.id, item.colaborador)}
-                          className="p-2 text-rose-600 hover:bg-rose-50 border border-slate-200 hover:border-rose-100 rounded-lg transition-all cursor-pointer"
-                          title="Remover Afastamento"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        {!isEnfermeiro ? (
+                          <>
+                            <button
+                              onClick={() => handleOpenEditModal(item)}
+                              className="p-2 text-sky-600 hover:bg-sky-50 border border-sky-100 rounded-lg transition-all cursor-pointer"
+                              title="Editar Afastamento"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteAbs(item.id, item.colaborador)}
+                              className="p-2 text-rose-600 hover:bg-rose-50 border border-slate-200 hover:border-rose-100 rounded-lg transition-all cursor-pointer"
+                              title="Remover Afastamento"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </>
+                        ) : (
+                          <span className="text-[10px] text-slate-400 font-semibold bg-slate-50 px-2 py-1 rounded border">SOMENTE LEITURA</span>
+                        )}
                       </div>
                     </td>
                   </tr>

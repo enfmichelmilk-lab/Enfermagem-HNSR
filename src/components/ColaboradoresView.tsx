@@ -12,6 +12,7 @@ import {
 import { Colaborador, Usuario, Absenteismo, Curso, CertificadoCurso } from '../types';
 import { subscribeCollection, saveDocument } from '../lib/firebase';
 import { customAlert, customConfirm } from '../utils/customDialog';
+import { isUserSubordinate } from '../utils/userFilters';
 import { SETORES_HOSPITALARES, EQUIPES_ESCALA, CARGOS_ENFERMAGEM, CURSOS_INICIAIS } from '../data/mockData';
 
 interface ColaboradoresViewProps {
@@ -41,6 +42,11 @@ export default function ColaboradoresView({
     const perfil = usuarioLogado?.perfil ? usuarioLogado.perfil.toLowerCase() : "";
     const authList = ["supervisor(a)", "supervisor", "coordenador(a)", "coordenador", "gerente", "adm", "administrador"];
     return authList.some(role => perfil.includes(role));
+  };
+
+  const isAcessoPermitidoParaCargo = (cargoName: string) => {
+    const c = (cargoName || '').toLowerCase();
+    return c.includes('enfermeiro') || c.includes('supervisor') || c.includes('coordenador') || c.includes('gerente') || c.includes('adm');
   };
 
   // Lists and searching
@@ -154,6 +160,7 @@ export default function ColaboradoresView({
   const [nome, setNome] = useState('');
   const [matricula, setMatricula] = useState('');
   const [coren, setCoren] = useState('');
+  const [validadeCarteira, setValidadeCarteira] = useState('');
   const [cargo, setCargo] = useState('Enfermeiro(a)');
   const [setor, setSetor] = useState('2º ANDAR');
   const [equipe, setEquipe] = useState('Diurno A');
@@ -698,24 +705,7 @@ Atenciosamente,
       const matchEquipe = selectedEquipe === '' || c.equipe === selectedEquipe;
       const matchSetor = selectedSetor === '' || c.setor === selectedSetor;
       
-      let matchManager = true;
-      const perfil = usuarioLogado?.perfil ? usuarioLogado.perfil.toLowerCase() : "";
-      const isEnf = perfil === "enfermeiro(a)" || perfil === "enfermeiro" || perfil === "enfermeira";
-      if (isEnf) {
-        const uNome = usuarioLogado?.nome ? usuarioLogado.nome.trim().toLowerCase() : "";
-        const uEmail = usuarioLogado?.email ? usuarioLogado.email.trim().toLowerCase() : "";
-        
-        const colabGestorDireto = c.gestordireto ? c.gestordireto.trim().toLowerCase() : "";
-        const colabGestorIndireto = c.gestorindireto ? c.gestorindireto.trim().toLowerCase() : "";
-        const colabEmail = c.email ? c.email.trim().toLowerCase() : "";
-        const colabNome = c.nome ? c.nome.trim().toLowerCase() : "";
-        
-        matchManager = 
-          colabGestorDireto === uNome || 
-          colabGestorIndireto === uNome || 
-          colabEmail === uEmail ||
-          colabNome === uNome;
-      }
+      const matchManager = isUserSubordinate(c, usuarioLogado, colaboradores);
       
       return matchSearch && matchEquipe && matchSetor && matchManager;
     }).sort((a, b) => a.nome.localeCompare(b.nome));
@@ -764,6 +754,7 @@ Atenciosamente,
       setNome(colab.nome);
       setMatricula(colab.matricula);
       setCoren(colab.coren);
+      setValidadeCarteira(colab.validade_carteira || '');
       setCargo(colab.cargo);
       setSetor(colab.setor);
       setEquipe(colab.equipe);
@@ -796,7 +787,7 @@ Atenciosamente,
       setLocalSelosAdicionais(colab.selos_adicionais || []);
 
       const linkedUser = colab.email ? (usuarios || []).find(u => u.email && u.email.trim().toLowerCase() === colab.email.trim().toLowerCase()) : null;
-      if (linkedUser) {
+      if (linkedUser && isAcessoPermitidoParaCargo(colab.cargo)) {
         setHabilitarAcesso(true);
         setPerfilAcesso(linkedUser.perfil);
         setSenhaProvisoria(linkedUser.senha || '');
@@ -811,6 +802,7 @@ Atenciosamente,
       setNome('');
       setMatricula('');
       setCoren('');
+      setValidadeCarteira('');
       setCargo('Enfermeiro(a)');
       setSetor('2º ANDAR');
       setEquipe('Diurno A');
@@ -920,6 +912,7 @@ Atenciosamente,
       nome: nome.trim(),
       matricula: matricula.trim(),
       coren: coren.trim(),
+      validade_carteira: validadeCarteira,
       cargo,
       equipe,
       horario: horario.trim(),
@@ -1546,9 +1539,39 @@ Atenciosamente,
                             <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full border ${getCargoColorChip(c.cargo)}`}>
                               {c.cargo}
                             </span>
-                            {c.coren && (
-                              <span className="block text-[10px] font-mono text-slate-400">COREN: {c.coren}</span>
-                            )}
+                            {c.coren && (() => {
+                              let corenStatus = null;
+                              if (c.validade_carteira) {
+                                const partes = c.validade_carteira.split('-');
+                                if (partes.length === 3) {
+                                  const dtValidade = new Date(parseInt(partes[0]), parseInt(partes[1]) - 1, parseInt(partes[2]));
+                                  dtValidade.setHours(0,0,0,0);
+                                  const hoje = new Date();
+                                  hoje.setHours(0,0,0,0);
+                                  const difTempo = dtValidade.getTime() - hoje.getTime();
+                                  const difDias = Math.ceil(difTempo / (1000 * 3600 * 24));
+                                  if (difDias < 0) {
+                                    corenStatus = { status: 'vencido', text: 'VENCIDO' };
+                                  } else if (difDias <= 30) {
+                                    corenStatus = { status: 'expirando', text: `Vence em ${difDias}d` };
+                                  }
+                                }
+                              }
+                              return (
+                                <span className="block text-[10px] font-mono text-slate-400">
+                                  COREN: {c.coren} {c.validade_carteira && `| Validade: ${c.validade_carteira.split('-').reverse().join('/')}`}
+                                  {corenStatus && (
+                                    <span className={`ml-1 px-1 py-0.5 rounded text-[8.5px] font-black uppercase ${
+                                      corenStatus.status === 'vencido' 
+                                        ? 'bg-rose-100 text-rose-700 border border-rose-200' 
+                                        : 'bg-amber-100 text-amber-700 border border-amber-200'
+                                    }`}>
+                                      {corenStatus.text}
+                                    </span>
+                                  )}
+                                </span>
+                              );
+                            })()}
                           </div>
                         </td>
                         <td className="py-3.5 px-4">
@@ -1636,7 +1659,7 @@ Atenciosamente,
                   <span>Identificação e Cargo</span>
                 </h4>
                 
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                   <div className="md:col-span-2 space-y-1">
                     <label className="font-bold text-slate-600">Nome Completo</label>
                     <input
@@ -1669,6 +1692,15 @@ Atenciosamente,
                       className="w-full p-2 border border-slate-300 rounded-lg focus:outline-none focus:border-sky-500 font-mono"
                     />
                   </div>
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-600">Validade Carteirinha</label>
+                    <input
+                      type="date"
+                      value={validadeCarteira}
+                      onChange={(e) => setValidadeCarteira(e.target.value)}
+                      className="w-full p-2 border border-slate-300 rounded-lg focus:outline-none focus:border-sky-500 font-semibold"
+                    />
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -1676,7 +1708,13 @@ Atenciosamente,
                     <label className="font-bold text-slate-600">Cargo Padrão</label>
                     <select
                       value={cargo}
-                      onChange={(e) => setCargo(e.target.value)}
+                      onChange={(e) => {
+                        const newCargo = e.target.value;
+                        setCargo(newCargo);
+                        if (!isAcessoPermitidoParaCargo(newCargo)) {
+                          setHabilitarAcesso(false);
+                        }
+                      }}
                       className="w-full p-2.5 bg-white border border-slate-300 rounded-lg focus:outline-none focus:border-sky-500 font-semibold text-slate-700"
                     >
                       {CARGOS_ENFERMAGEM.map(c => (
@@ -1785,16 +1823,21 @@ Atenciosamente,
                       <p className="text-[10px] text-slate-500">Vincular credenciais administrativas de login ao e-mail deste colaborador</p>
                     </div>
                   </div>
-                  <label className="relative inline-flex items-center cursor-pointer select-none">
+                  <label className={`relative inline-flex items-center select-none ${!isAcessoPermitidoParaCargo(cargo) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
                     <input 
                       type="checkbox" 
                       className="sr-only peer"
                       checked={habilitarAcesso}
-                      onChange={(e) => setHabilitarAcesso(e.target.checked)}
+                      onChange={(e) => {
+                        if (isAcessoPermitidoParaCargo(cargo)) {
+                          setHabilitarAcesso(e.target.checked);
+                        }
+                      }}
+                      disabled={!isAcessoPermitidoParaCargo(cargo)}
                     />
                     <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-sky-600"></div>
                     <span className="ml-2 text-xs font-bold text-slate-700">
-                      {habilitarAcesso ? 'SISTEMA ATIVO' : 'SEM ACESSO'}
+                      {!isAcessoPermitidoParaCargo(cargo) ? 'ACESSO INDISPONÍVEL' : (habilitarAcesso ? 'SISTEMA ATIVO' : 'SEM ACESSO')}
                     </span>
                   </label>
                 </div>
@@ -2471,11 +2514,24 @@ Atenciosamente,
                         Ficha Cadastral Ativa
                       </span>
                     )}
-                    {selectedViewColab.coren && (
-                      <span className="text-xs bg-emerald-500 font-bold px-2 py-0.5 rounded-full">
-                        COREN: {selectedViewColab.coren}
-                      </span>
-                    )}
+                    {selectedViewColab.coren && (() => {
+                      const partes = selectedViewColab.validade_carteira ? selectedViewColab.validade_carteira.split('-') : [];
+                      const isVencido = partes.length === 3 && new Date(parseInt(partes[0]), parseInt(partes[1]) - 1, parseInt(partes[2])).getTime() < new Date().setHours(0,0,0,0);
+                      const isExpiring = partes.length === 3 && !isVencido && (new Date(parseInt(partes[0]), parseInt(partes[1]) - 1, parseInt(partes[2])).getTime() - new Date().setHours(0,0,0,0)) <= 30 * 24 * 3600 * 1000;
+                      return (
+                        <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1.5 ${
+                          isVencido 
+                            ? 'bg-rose-600 text-white animate-pulse border border-rose-500' 
+                            : isExpiring 
+                              ? 'bg-amber-400 text-slate-900 font-black border border-amber-300' 
+                              : 'bg-emerald-500 text-white'
+                        }`}>
+                          <span>COREN: {selectedViewColab.coren} {selectedViewColab.validade_carteira && `(Validade: ${selectedViewColab.validade_carteira.split('-').reverse().join('/')})`}</span>
+                          {isVencido && <span className="text-[8px] font-black bg-white text-rose-750 px-1 rounded">VENCIDO</span>}
+                          {isExpiring && <span className="text-[8px] font-black bg-slate-900 text-white px-1 rounded">PRÓXIMO VENCIMENTO</span>}
+                        </span>
+                      );
+                    })()}
                   </div>
                   <h3 className="font-extrabold text-2xl mt-1">{selectedViewColab.nome}</h3>
                   <p className="text-xs text-sky-100 font-medium">Matrícula: {selectedViewColab.matricula} • Admissão: {selectedViewColab.datainicio ? selectedViewColab.datainicio.split('-').reverse().join('/') : 'Não cadastrada'}</p>

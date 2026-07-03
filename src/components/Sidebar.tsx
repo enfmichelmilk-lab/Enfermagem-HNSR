@@ -186,45 +186,45 @@ export default function Sidebar({
           </button>
         </li>
 
-        {!isEnfermeiroProfile() && (
-          <li>
-            <button
-              onClick={() => onNavigate('absenteismo')}
-              title={isSidebarCollapsed ? 'Absenteísmo' : undefined}
-              className={`w-full flex items-center gap-3 transition-all duration-150 rounded-lg text-sm font-semibold cursor-pointer ${
-                isSidebarCollapsed 
-                  ? 'justify-center p-2.5 h-10 w-10 shrink-0' 
-                  : 'py-2.5 px-3.5 text-left'
-              } ${
-                activeView === 'absenteismo'
-                  ? 'bg-sky-600 text-white shadow-md shadow-sky-600/10'
-                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-              }`}
-            >
-              <Stethoscope className="w-4 h-4 shrink-0" />
-              {!isSidebarCollapsed && <span>Absenteísmo</span>}
-            </button>
-          </li>
-        )}
-
         <li>
           <button
-            onClick={() => onNavigate('chamada')}
-            title={isSidebarCollapsed ? 'Chamada Diária' : undefined}
+            onClick={() => onNavigate('absenteismo')}
+            title={isSidebarCollapsed ? 'Absenteísmo' : undefined}
             className={`w-full flex items-center gap-3 transition-all duration-150 rounded-lg text-sm font-semibold cursor-pointer ${
               isSidebarCollapsed 
                 ? 'justify-center p-2.5 h-10 w-10 shrink-0' 
                 : 'py-2.5 px-3.5 text-left'
             } ${
-              activeView === 'chamada'
+              activeView === 'absenteismo'
                 ? 'bg-sky-600 text-white shadow-md shadow-sky-600/10'
                 : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
             }`}
           >
-            <ClipboardCheck className={`w-4 h-4 shrink-0 ${activeView === 'chamada' ? 'text-white' : 'text-emerald-500'}`} />
-            {!isSidebarCollapsed && <span>Chamada Diária</span>}
+            <Stethoscope className="w-4 h-4 shrink-0" />
+            {!isSidebarCollapsed && <span>Absenteísmo</span>}
           </button>
         </li>
+
+        {!isEnfermeiroProfile() && (
+          <li>
+            <button
+              onClick={() => onNavigate('chamada')}
+              title={isSidebarCollapsed ? 'Chamada Diária' : undefined}
+              className={`w-full flex items-center gap-3 transition-all duration-150 rounded-lg text-sm font-semibold cursor-pointer ${
+                isSidebarCollapsed 
+                  ? 'justify-center p-2.5 h-10 w-10 shrink-0' 
+                  : 'py-2.5 px-3.5 text-left'
+              } ${
+                activeView === 'chamada'
+                  ? 'bg-sky-600 text-white shadow-md shadow-sky-600/10'
+                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+              }`}
+            >
+              <ClipboardCheck className={`w-4 h-4 shrink-0 ${activeView === 'chamada' ? 'text-white' : 'text-emerald-500'}`} />
+              {!isSidebarCollapsed && <span>Chamada Diária</span>}
+            </button>
+          </li>
+        )}
 
         <li>
           <button
@@ -283,24 +283,26 @@ export default function Sidebar({
           </button>
         </li>
 
-        <li>
-          <button
-            onClick={() => onNavigate('comissoes')}
-            title={isSidebarCollapsed ? 'Comissões (Selos)' : undefined}
-            className={`w-full flex items-center gap-3 transition-all duration-150 rounded-lg text-sm font-semibold cursor-pointer ${
-              isSidebarCollapsed 
-                ? 'justify-center p-2.5 h-10 w-10 shrink-0' 
-                : 'py-2.5 px-3.5 text-left'
-            } ${
-              activeView === 'comissoes'
-                ? 'bg-sky-600 text-white shadow-md shadow-sky-600/10'
-                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-            }`}
-          >
-            <Award className={`w-4 h-4 shrink-0 ${activeView === 'comissoes' ? 'text-white' : 'text-indigo-500'}`} />
-            {!isSidebarCollapsed && <span>Comissões (Selos)</span>}
-          </button>
-        </li>
+        {!isEnfermeiroProfile() && (
+          <li>
+            <button
+              onClick={() => onNavigate('comissoes')}
+              title={isSidebarCollapsed ? 'Comissões (Selos)' : undefined}
+              className={`w-full flex items-center gap-3 transition-all duration-150 rounded-lg text-sm font-semibold cursor-pointer ${
+                isSidebarCollapsed 
+                  ? 'justify-center p-2.5 h-10 w-10 shrink-0' 
+                  : 'py-2.5 px-3.5 text-left'
+              } ${
+                activeView === 'comissoes'
+                  ? 'bg-sky-600 text-white shadow-md shadow-sky-600/10'
+                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+              }`}
+            >
+              <Award className={`w-4 h-4 shrink-0 ${activeView === 'comissoes' ? 'text-white' : 'text-indigo-500'}`} />
+              {!isSidebarCollapsed && <span>Comissões (Selos)</span>}
+            </button>
+          </li>
+        )}
 
         <li>
           <button

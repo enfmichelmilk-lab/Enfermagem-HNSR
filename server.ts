@@ -958,7 +958,7 @@ Extraia os cursos e seus respectivos públicos-alvo de acordo com o texto ou a m
 
 
   // Hot Reload and Dev Server integrations or Static serving in production
-  if (process.env.NODE_ENV !== "production" && process.env.DISABLE_HMR !== "true") {
+  if (process.env.NODE_ENV !== "production") {
     // Dynamic import of development-only dependency Vite to prevent execution crashes on Hostinger
     const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({

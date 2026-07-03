@@ -163,6 +163,49 @@ export default function DashboardView({
     return alerts.slice(0, 4); // Limit to 4 alerts
   }, [colaboradores]);
 
+  // 2.5. Automated COREN expiration alerts (expired or expiring in next 30 days)
+  const corenAlerts = useMemo(() => {
+    const alerts: Array<{ colab: Colaborador; status: 'vencido' | 'expirando'; diasRestantes: number; validadeFormatada: string }> = [];
+    const hoje = new Date();
+    hoje.setHours(0,0,0,0);
+
+    colaboradores.forEach(c => {
+      if (!c.validade_carteira) return;
+      const partes = c.validade_carteira.split('-');
+      if (partes.length !== 3) return;
+      const dtValidade = new Date(parseInt(partes[0]), parseInt(partes[1]) - 1, parseInt(partes[2]));
+      dtValidade.setHours(0, 0, 0, 0);
+
+      const difTempo = dtValidade.getTime() - hoje.getTime();
+      const difDias = Math.ceil(difTempo / (1000 * 3600 * 24));
+
+      const validadeFormatada = `${partes[2]}/${partes[1]}/${partes[0]}`;
+
+      if (difDias < 0) {
+        alerts.push({
+          colab: c,
+          status: 'vencido',
+          diasRestantes: difDias,
+          validadeFormatada
+        });
+      } else if (difDias <= 30) {
+        alerts.push({
+          colab: c,
+          status: 'expirando',
+          diasRestantes: difDias,
+          validadeFormatada
+        });
+      }
+    });
+
+    return alerts.sort((a, b) => {
+      if (a.status !== b.status) {
+        return a.status === 'vencido' ? -1 : 1;
+      }
+      return a.diasRestantes - b.diasRestantes;
+    });
+  }, [colaboradores]);
+
   // 3. Recharts chart preparation
   // a. Lost days by department
   const chartSectorData = useMemo(() => {
@@ -468,6 +511,86 @@ export default function DashboardView({
               ) : (
                 <div className="p-4 bg-slate-50 border border-slate-100 rounded-lg text-center text-xs text-slate-400">
                   Nenhum aviso de experiência pendente hoje.
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Alertas de COREN (Vencidos e a vencer em 30 dias) */}
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+            <div className="border-b border-slate-100 pb-3 flex justify-between items-center">
+              <div>
+                <h3 className="text-sm font-bold text-slate-800 animate-pulse">Alertas de COREN</h3>
+                <p className="text-[11px] text-slate-400 font-sans">Carteiras vencidas ou com vencimento em 30 dias</p>
+              </div>
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+              </span>
+            </div>
+
+            <div className="space-y-3 max-h-[350px] overflow-y-auto pr-1">
+              {corenAlerts.length > 0 ? (
+                corenAlerts.map(alert => {
+                  const isVencido = alert.status === 'vencido';
+                  return (
+                    <div 
+                      key={alert.colab.matricula} 
+                      className={`p-3 border rounded-xl space-y-2.5 transition ${
+                        isVencido 
+                          ? 'bg-rose-50/40 hover:bg-rose-50 border-rose-100' 
+                          : 'bg-amber-50/30 hover:bg-amber-50 border-amber-100/75'
+                      }`}
+                    >
+                      <div className="flex justify-between items-start gap-2">
+                        <div>
+                          <span className="font-extrabold text-xs text-slate-900 block">{alert.colab.nome}</span>
+                          <span className="text-[10px] text-slate-500 font-bold block mt-0.5">
+                            COREN: {alert.colab.coren || 'Não informado'} &bull; {alert.colab.cargo}
+                          </span>
+                        </div>
+                        <span className={`text-[9px] font-black px-1.5 py-0.5 rounded border uppercase shrink-0 ${
+                          isVencido 
+                            ? 'bg-rose-100 text-rose-800 border-rose-200' 
+                            : 'bg-amber-100 text-amber-800 border-amber-200'
+                        }`}>
+                          {isVencido ? 'Vencido' : `${alert.diasRestantes} dias`}
+                        </span>
+                      </div>
+
+                      <div className="text-[10px] text-slate-600 flex justify-between items-center pt-2 border-t border-slate-100/80 font-semibold">
+                        <span>Validade: <b className="text-slate-800">{alert.validadeFormatada}</b></span>
+                        
+                        {alert.colab.whatsapp ? (
+                          <a
+                            href={`https://api.whatsapp.com/send?phone=${
+                              alert.colab.whatsapp.replace(/\D/g, '').startsWith('55') 
+                                ? alert.colab.whatsapp.replace(/\D/g, '') 
+                                : `55${alert.colab.whatsapp.replace(/\D/g, '')}`
+                            }&text=${encodeURIComponent(
+                              isVencido
+                                ? `Olá, ${alert.colab.nome}! Identificamos que a validade da sua carteira do COREN (${alert.validadeFormatada}) consta como vencida no nosso sistema. Solicitamos, por gentileza, o envio de uma foto legível da sua nova carteirinha atualizada para regularizarmos seu cadastro. Atenciosamente, Gestão de Enfermagem.`
+                                : `Olá, ${alert.colab.nome}! Identificamos que a sua carteira do COREN vencerá em breve, no dia ${alert.validadeFormatada} (${alert.diasRestantes} dias restantes). Solicitamos, por gentileza, que nos envie a foto da sua nova carteirinha atualizada assim que possível para regularizarmos seu cadastro. Atenciosamente, Gestão de Enfermagem.`
+                            )}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold px-2.5 py-1 rounded-lg text-[9px] flex items-center gap-1 transition shadow-xs"
+                          >
+                            <svg className="w-3 h-3 fill-current shrink-0" viewBox="0 0 24 24">
+                              <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.513 2.262 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.724-1.455L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.725 1.451 5.436 0 9.854-4.394 9.857-9.792.001-2.615-1.012-5.074-2.854-6.92A9.734 9.734 0 0 0 12.01 2.14c-5.438 0-9.854 4.397-9.858 9.793-.001 1.96.512 3.878 1.483 5.578l-.976 3.565 3.656-.959zM17.92 14.76c-.326-.164-1.93-.954-2.227-1.062-.297-.109-.514-.164-.73.164-.216.327-.838 1.062-1.027 1.28-.189.217-.378.244-.704.08-1.558-.779-2.62-1.343-3.666-3.143-.275-.473.275-.439.789-1.464.086-.174.043-.327-.021-.462-.065-.136-.514-1.24-.704-1.697-.185-.445-.37-.383-.514-.39-.133-.006-.285-.007-.438-.007a.84.84 0 0 0-.608.283c-.203.223-.773.755-.773 1.84 0 1.086.79 2.137.9 2.285.11.148 1.554 2.373 3.766 3.328 1.104.476 1.966.654 2.634.786.669.132 1.216.114 1.674.045.51-.077 1.571-.643 1.794-1.264.223-.62.223-1.153.156-1.264-.067-.111-.243-.175-.569-.339z"/>
+                            </svg>
+                            <span>WhatsApp</span>
+                          </a>
+                        ) : (
+                          <span className="text-slate-400 text-[9px] italic font-normal">Sem WhatsApp</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="p-4 bg-slate-50 border border-slate-100 rounded-lg text-center text-xs text-slate-400">
+                  Nenhum aviso de COREN vencido ou a vencer em 30 dias.
                 </div>
               )}
             </div>

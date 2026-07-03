@@ -17,6 +17,7 @@ import { SETORES_HOSPITALARES } from '../data/mockData';
 import { subscribeCollection, saveDocument, removeDocument } from '../lib/firebase';
 import HapvidaLogo from './HapvidaLogo';
 import { customAlert, customConfirm } from '../utils/customDialog';
+import { isUserSubordinate, checkIsActualSubordinate } from '../utils/userFilters';
 
 const equipesDisponiveis = ['Todos', 'Diurno A', 'Diurno B', 'Noturno A', 'Noturno B', 'Diarista'];
 
@@ -167,9 +168,9 @@ export default function FolgasView({
 }: FolgasViewProps) {
   
   // Date selection states
-  const [currentYear, setCurrentYear] = useState(2026);
-  // Default to June (6) since initial mock requests are in June 2026
-  const [currentMonth, setCurrentMonth] = useState(6);
+  const [currentYear, setCurrentYear] = useState(() => new Date().getFullYear());
+  // Default to current month dynamically
+  const [currentMonth, setCurrentMonth] = useState(() => new Date().getMonth() + 1);
   const [selectedSetor, setSelectedSetor] = useState('Todos');
 
   // Tab and Compare states
@@ -468,6 +469,38 @@ export default function FolgasView({
   const [modalTipoFolga, setModalTipoFolga] = useState<string>('Folga');
   const [modalImmediateApproval, setModalImmediateApproval] = useState(true);
   const [modalCustomRemSetor, setModalCustomRemSetor] = useState('');
+
+  const getSelectedTypeBalance = () => {
+    if (!modalTargetColab) return null;
+    switch (modalTipoFolga) {
+      case 'Folga': {
+        const parts = modalTargetDate.split('-');
+        const targetMonthPrefix = `${parts[0]}-${parts[1]}`;
+        const existingCount = solicitacoes.filter(s => 
+          s.matricula === modalTargetColab.matricula && 
+          (s.tipo === 'Folga' || s.tipo === 'Folga de Escala') && 
+          s.status === 'Aprovado' && 
+          s.data.startsWith(targetMonthPrefix)
+        ).length;
+        const remaining = Math.max(0, 2 - existingCount);
+        return `${remaining} de 2 restante(s) no mês`;
+      }
+      case 'Banco de Horas':
+        return `${formatBHValue(modalTargetColab.bancohoras) || '0h'} (${modalTargetColab.bancohoras}h)`;
+      case 'Folga Enfermagem':
+        return `${modalTargetColab.folgaenf} dia(s)`;
+      case 'Folga Feriado':
+        return `${modalTargetColab.folgaferiado} dia(s)`;
+      case 'Eleição':
+      case 'Folga Eleição':
+        return `${modalTargetColab.eleicao} dia(s)`;
+      case 'Brigada de Incêndio':
+      case 'Folga Brigada':
+        return `${modalTargetColab.brigada} dia(s)`;
+      default:
+        return null;
+    }
+  };
 
   // Toggle for extra metadata columns to adjust horizontal space
   const [showAppSupportColumns, setShowAppSupportColumns] = useState(true);
@@ -791,22 +824,17 @@ export default function FolgasView({
 
   // Role-Based Collaborators Filtering
   const filteredColaboradores = useMemo(() => {
-    let list = [];
+    let list = colaboradores.filter(c => isUserSubordinate(c, usuarioLogado, colaboradores));
     if (usuarioLogado.perfil === "Enfermeiro(a)") {
-      // Enfermeiro: sees themselves and direct reports (liderados)
-      list = colaboradores.filter(c => {
-        const isSelf = c.nome.toLowerCase() === usuarioLogado.nome.toLowerCase() || 
-                       c.email.toLowerCase() === usuarioLogado.email.toLowerCase();
-        const isDirectSubordinate = c.gestordireto.toLowerCase() === usuarioLogado.nome.toLowerCase();
-        const isIndirectSubordinate = c.gestorindireto.toLowerCase() === usuarioLogado.nome.toLowerCase();
-        return isSelf || isDirectSubordinate || isIndirectSubordinate;
-      });
+      // Also apply sector filter if specified
+      if (selectedSetor && selectedSetor !== 'Todos') {
+        list = list.filter(c => c.setor === selectedSetor);
+      }
     } else {
       // Supervisor(a), Coordenador(a), Gerente: see everyone, filterable by sector
+      // BUT always include their actual subordinates (so they see pending leaves in other sectors)
       if (selectedSetor && selectedSetor !== 'Todos') {
-        list = colaboradores.filter(c => c.setor === selectedSetor);
-      } else {
-        list = colaboradores;
+        list = list.filter(c => c.setor === selectedSetor || checkIsActualSubordinate(c, usuarioLogado, colaboradores));
       }
     }
     // Filter out if replacement is signaled
@@ -815,30 +843,13 @@ export default function FolgasView({
 
   // Role-Based Solicitations Filtering
   const filteredSolicitacoes = useMemo(() => {
-    const perfil = usuarioLogado?.perfil ? usuarioLogado.perfil.toLowerCase() : "";
-    const isEnfermeiro = perfil === "enfermeiro(a)" || perfil === "enfermeiro" || perfil === "enfermeira";
-    
-    if (isEnfermeiro) {
-      const uNome = usuarioLogado.nome ? usuarioLogado.nome.trim().toLowerCase() : "";
-      const uEmail = usuarioLogado.email ? usuarioLogado.email.trim().toLowerCase() : "";
-      
-      return solicitacoes.filter(s => {
-        const colab = colaboradores.find(c => c.matricula === s.matricula);
-        if (colab) {
-          const colabGestorDireto = colab.gestordireto ? colab.gestordireto.trim().toLowerCase() : "";
-          const colabGestorIndireto = colab.gestorindireto ? colab.gestorindireto.trim().toLowerCase() : "";
-          const colabEmail = colab.email ? colab.email.trim().toLowerCase() : "";
-          const colabNome = colab.nome ? colab.nome.trim().toLowerCase() : "";
-          
-          return colabGestorDireto === uNome || 
-                 colabGestorIndireto === uNome || 
-                 colabEmail === uEmail || 
-                 colabNome === uNome;
-        }
-        return false;
-      });
-    }
-    return solicitacoes;
+    return solicitacoes.filter(s => {
+      const colab = colaboradores.find(c => c.matricula === s.matricula);
+      if (colab) {
+        return isUserSubordinate(colab, usuarioLogado, colaboradores);
+      }
+      return false;
+    });
   }, [solicitacoes, colaboradores, usuarioLogado]);
 
   // Fast O(1) solicitations lookup map indexed by `${matricula}-${date_str}`
@@ -1028,6 +1039,22 @@ export default function FolgasView({
   const handleLaunchFolgaSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!modalTargetColab) return;
+
+    // Enforce 48h advance block for Enfermeiro(a) profile
+    if (usuarioLogado.perfil === "Enfermeiro(a)") {
+      const targetDateObj = new Date(modalTargetDate + 'T00:00:00');
+      const minAllowedDateObj = new Date(Date.now() + 48 * 60 * 60 * 1000);
+      if (targetDateObj.getTime() < minAllowedDateObj.getTime()) {
+        const earliestDay = new Date(minAllowedDateObj);
+        if (earliestDay.getHours() > 0 || earliestDay.getMinutes() > 0 || earliestDay.getSeconds() > 0 || earliestDay.getMilliseconds() > 0) {
+          earliestDay.setDate(earliestDay.getDate() + 1);
+        }
+        earliestDay.setHours(0, 0, 0, 0);
+        const formattedDateLimit = earliestDay.toLocaleDateString('pt-BR');
+        customAlert(`Erro: Como Enfermeiro(a), os pedidos de folga devem ser feitos com no mínimo 48 horas de antecedência. A primeira data permitida para solicitação é ${formattedDateLimit}.`);
+        return;
+      }
+    }
 
     // Balance checks if type is limited
     if (modalTargetColab) {
@@ -1236,6 +1263,69 @@ export default function FolgasView({
       onUpdateSolicitacoes(novasSols);
       customAlert("Folga removida com sucesso!");
       setIsModalOpen(false);
+    }
+  };
+
+  // Action: Clear all leave days for the selected month with balance restoration
+  const handleLimparFolgasDoMes = async () => {
+    const monthStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}`;
+    const targetSols = solicitacoes.filter(s => s.data.startsWith(monthStr));
+
+    if (targetSols.length === 0) {
+      customAlert(`Não há nenhuma folga cadastrada para o mês de ${monthNames[currentMonth - 1]} de ${currentYear}.`);
+      return;
+    }
+
+    const confirmMessage = `Atenção: Você tem certeza que deseja EXCLUIR/LIMPAR TODAS as ${targetSols.length} folgas/solicitações do mês de ${monthNames[currentMonth - 1]} de ${currentYear}? Todos os saldos debitados das folgas aprovadas serão devolvidos aos colaboradores.`;
+    
+    if (await customConfirm(confirmMessage)) {
+      // Create a map to keep track of updated collaborators to avoid duplicate updates
+      const updatedColabsMap = new Map<string, Colaborador>();
+
+      targetSols.forEach(sol => {
+        if (sol.status === 'Aprovado') {
+          const colabMatricula = sol.matricula;
+          // Get current state from map or our collaborators list
+          let targetColab = updatedColabsMap.get(colabMatricula) || colaboradores.find(c => c.matricula === colabMatricula);
+          if (targetColab) {
+            let updatedColab = { ...targetColab };
+            const carimbo = `[${new Date().toLocaleString('pt-BR')} - ${usuarioLogado.nome}]: Estornada/cancelada folga de ${sol.data.split('-').reverse().join('/')} devido a limpeza geral de folgas do mês. Saldo re-creditado.`;
+
+            const isBH = sol.tipo === 'Banco de Horas';
+            const isFE = sol.tipo === 'Folga Enfermagem';
+            const isFF = sol.tipo === 'Folga Feriado';
+            const isB = sol.tipo === 'Brigada de Incêndio' || sol.tipo === 'Folga Brigada';
+            const isE = sol.tipo === 'Eleição' || sol.tipo === 'Folga Eleição';
+
+            if (isBH) {
+              updatedColab.bancohoras = (updatedColab.bancohoras || 0) + 12;
+            } else if (isFE) {
+              updatedColab.folgaenf = (updatedColab.folgaenf || 0) + 1;
+            } else if (isFF) {
+              updatedColab.folgaferiado = (updatedColab.folgaferiado || 0) + 1;
+            } else if (isB) {
+              updatedColab.brigada = (updatedColab.brigada || 0) + 1;
+            } else if (isE) {
+              updatedColab.eleicao = (updatedColab.eleicao || 0) + 1;
+            }
+
+            updatedColab.historico = carimbo + (updatedColab.historico ? "\n\n" + updatedColab.historico : "");
+            updatedColabsMap.set(colabMatricula, updatedColab);
+          }
+        }
+      });
+
+      // Update collaborators list if we modified any
+      if (updatedColabsMap.size > 0) {
+        const novosColabs = colaboradores.map(c => updatedColabsMap.get(c.matricula) || c);
+        onUpdateColaboradores(novosColabs);
+      }
+
+      // Filter out all solicitations for this month
+      const novasSols = solicitacoes.filter(s => !s.data.startsWith(monthStr));
+      onUpdateSolicitacoes(novasSols);
+
+      customAlert(`Todas as folgas do mês de ${monthNames[currentMonth - 1]} foram limpas e os saldos foram estornados com sucesso!`);
     }
   };
 
@@ -1641,6 +1731,15 @@ export default function FolgasView({
             <Printer className="w-3.5 h-3.5 shrink-0" />
             <span>Exportar Escala (PDF)</span>
           </button>
+
+          <button
+            onClick={handleLimparFolgasDoMes}
+            className="bg-rose-600 hover:bg-rose-700 text-white font-extrabold py-2 px-4 rounded-xl text-xs shadow-xs hover:shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer border border-rose-500 shrink-0"
+            title="Excluir todas as folgas e estornar saldos de folgas do mês visualizado"
+          >
+            <Trash2 className="w-3.5 h-3.5 shrink-0" />
+            <span>Limpar Folgas do Mês</span>
+          </button>
         </div>
       </div>
 
@@ -1673,20 +1772,20 @@ export default function FolgasView({
 
           {/* Grouping Filters */}
           <div className="flex flex-wrap items-center gap-3 text-xs">
-            {usuarioLogado.perfil !== 'Enfermeiro(a)' ? (
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-slate-500">Filtrar por Setor:</span>
-                <select
-                  value={selectedSetor}
-                  onChange={(e) => setSelectedSetor(e.target.value)}
-                  className="p-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 font-bold focus:outline-none focus:bg-white focus:border-sky-500 transition-colors cursor-pointer"
-                >
-                  {setoresDisponiveis.map(setName => (
-                    <option key={setName} value={setName}>{setName}</option>
-                  ))}
-                </select>
-              </div>
-            ) : (
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-slate-500">Filtrar por Setor:</span>
+              <select
+                value={selectedSetor}
+                onChange={(e) => setSelectedSetor(e.target.value)}
+                className="p-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 font-bold focus:outline-none focus:bg-white focus:border-sky-500 transition-colors cursor-pointer"
+              >
+                {setoresDisponiveis.map(setName => (
+                  <option key={setName} value={setName}>{setName}</option>
+                ))}
+              </select>
+            </div>
+
+            {usuarioLogado.perfil === 'Enfermeiro(a)' && (
               <div className="bg-indigo-50/50 text-indigo-800 text-[11px] font-bold py-1.5 px-3 rounded-lg border border-indigo-100 flex items-center gap-1.5 leading-tight">
                 <Info className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
                 <span>Exibindo seu auto-registro e a equipe de técnicos sob sua liderança direta</span>
@@ -1696,8 +1795,8 @@ export default function FolgasView({
             {/* Clear reset helper */}
             <button 
               onClick={() => {
-                setCurrentMonth(6);
-                setCurrentYear(2026);
+                setCurrentMonth(new Date().getMonth() + 1);
+                setCurrentYear(new Date().getFullYear());
                 setSelectedSetor('Todos');
               }}
               className="p-2 hover:bg-slate-50 hover:text-slate-800 text-slate-400 rounded-lg transition-colors border border-transparent hover:border-slate-200 cursor-pointer flex items-center gap-1.5 font-bold"
@@ -1783,291 +1882,330 @@ export default function FolgasView({
         {/* Dynamic Skeleton table container */}
         {activeTab === 'escala' ? (
           usuarioLogado.perfil !== 'Enfermeiro(a)' ? (
-            <div className="space-y-10">
-              {['Diurno A', 'Diurno B', 'Noturno A', 'Noturno B', 'Diarista'].map((shiftName) => {
-                const belongsToShift = (colab: Colaborador, sName: string) => {
-                  const eq = colab.equipe?.toLowerCase() || '';
-                  if (sName === 'Diurno A') return eq === 'diurno a' || eq === 'turno diurno a' || eq.includes('diurno a');
-                  if (sName === 'Diurno B') return eq === 'diurno b' || eq === 'turno diurno b' || eq.includes('diurno b');
-                  if (sName === 'Noturno A') return eq === 'noturno a' || eq === 'turno noturno a' || eq.includes('noturno a');
-                  if (sName === 'Noturno B') return eq === 'noturno b' || eq === 'turno noturno b' || eq.includes('noturno b');
-                  if (sName === 'Diarista') return eq === 'diário' || eq === 'diario' || eq === 'diarista' || eq.includes('diário') || eq.includes('diario') || eq.includes('diarista');
-                  return false;
-                };
+            <div className="space-y-12">
+              {(() => {
+                const sectorsToRender = selectedSetor && selectedSetor !== 'Todos'
+                  ? [selectedSetor]
+                  : Array.from(new Set(filteredColaboradores.map(c => c.setor))).filter(Boolean).sort();
 
-                const shiftColabs = filteredColaboradores.filter(c => belongsToShift(c, shiftName));
-                const sortedShiftColabs = [...shiftColabs].sort((a, b) => {
-                  const aCargo = a.cargo?.toLowerCase() || '';
-                  const bCargo = b.cargo?.toLowerCase() || '';
-                  const aIsEnf = aCargo.includes('enfermeiro') || aCargo.includes('enfermeira') || aCargo.startsWith('enf') ? 1 : 0;
-                  const bIsEnf = bCargo.includes('enfermeiro') || bCargo.includes('enfermeira') || bCargo.startsWith('enf') ? 1 : 0;
-                  if (aIsEnf !== bIsEnf) {
-                    return bIsEnf - aIsEnf; // nurse first
-                  }
-                  return a.nome.localeCompare(b.nome);
-                });
+                if (sectorsToRender.length === 0) {
+                  return (
+                    <div className="p-8 text-center bg-white border border-slate-200 rounded-2xl text-slate-500 font-bold">
+                      Nenhum setor ou colaborador localizado para a visualização atual.
+                    </div>
+                  );
+                }
 
-                return (
-                  <div key={shiftName} className="space-y-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
-                    {/* Shift heading band */}
-                    <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                      <div className="flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full bg-sky-600 block" />
-                        <h3 className="text-sm font-extrabold text-slate-800 uppercase tracking-wider">
-                          Equipe {shiftName}
-                        </h3>
+                return sectorsToRender.map((sectorName) => {
+                  const sectorColabs = filteredColaboradores.filter(c => c.setor === sectorName);
+                  const shifts = ['Diurno A', 'Diurno B', 'Noturno A', 'Noturno B', 'Diarista'];
+
+                  const belongsToShift = (colab: Colaborador, sName: string) => {
+                    const eq = colab.equipe?.toLowerCase() || '';
+                    if (sName === 'Diurno A') return eq === 'diurno a' || eq === 'turno diurno a' || eq.includes('diurno a');
+                    if (sName === 'Diurno B') return eq === 'diurno b' || eq === 'turno diurno b' || eq.includes('diurno b');
+                    if (sName === 'Noturno A') return eq === 'noturno a' || eq === 'turno noturno a' || eq.includes('noturno a');
+                    if (sName === 'Noturno B') return eq === 'noturno b' || eq === 'turno noturno b' || eq.includes('noturno b');
+                    if (sName === 'Diarista') return eq === 'diário' || eq === 'diario' || eq === 'diarista' || eq.includes('diário') || eq.includes('diario') || eq.includes('diarista');
+                    return false;
+                  };
+
+                  const activeShifts = shifts.filter(shiftName => sectorColabs.some(c => belongsToShift(c, shiftName)));
+
+                  if (activeShifts.length === 0) return null;
+
+                  return (
+                    <div key={sectorName} className="space-y-6">
+                      {/* Sector section header */}
+                      <div className="bg-slate-100 p-4 rounded-xl border border-slate-200 flex flex-wrap items-center justify-between gap-4">
+                        <h2 className="text-sm font-black text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                          <span className="w-3 h-3 rounded-full bg-sky-600 block" />
+                          Setor: {sectorName}
+                        </h2>
+                        <span className="text-xs font-bold text-slate-500 bg-white py-1 px-3 rounded-lg border">
+                          {sectorColabs.length} Co-colaborador(es) no Setor
+                        </span>
                       </div>
-                      <span className="text-[11px] font-bold text-slate-500 bg-slate-50 py-0.5 px-2 rounded-lg border">
-                        {shiftColabs.length} Co-colaborador(es)
-                      </span>
-                    </div>
 
-                    {/* Table */}
-                    <div className="overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 max-w-full">
-                      <table 
-                        style={{ minWidth: showAppSupportColumns ? '1550px' : '1300px' }}
-                        className="border-collapse text-[11px] text-slate-600 table-fixed leading-tight"
-                      >
-                        
-                        <thead className="bg-slate-100 text-slate-700 tracking-wide font-extrabold border-b border-slate-200">
-                          <tr>
-                            <th className="w-44 text-left p-2.5 bg-slate-100 border-r border-slate-200 sticky left-0 z-15 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Colaborador</th>
-                            {showAppSupportColumns && (
-                              <>
-                                <th className="w-18 text-center p-2 border-r border-slate-200 static md:sticky md:left-[176px] z-15 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] bg-slate-100">Escala</th>
-                                <th className="w-20 text-center p-2 border-r border-slate-200 static md:sticky md:left-[248px] z-15 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] bg-slate-100">Matrícula</th>
-                                <th className="w-24 text-center p-2 border-r border-slate-200 static md:sticky md:left-[328px] z-15 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] bg-slate-100">Cargo</th>
-                              </>
-                            )}
-                            {Array.from({ length: daysInMonth }, (_, index) => {
-                              const dNum = index + 1;
-                              const { letter, isWeekend } = getDayOfWeekDetails(dNum);
-                              return (
-                                <th key={dNum} className={`w-9 text-center p-1 border-r border-slate-200 select-none ${isWeekend ? 'bg-rose-50 text-rose-600' : ''}`}>
-                                  <div className="text-[10px] opacity-75">{letter}</div>
-                                  <div className="text-[12px] font-extrabold">{dNum}</div>
-                                </th>
-                              );
-                            })}
-                          </tr>
-                        </thead>
+                      <div className="space-y-6 pl-0 md:pl-4">
+                        {activeShifts.map((shiftName) => {
+                          const shiftColabs = sectorColabs.filter(c => belongsToShift(c, shiftName));
+                          const sortedShiftColabs = [...shiftColabs].sort((a, b) => {
+                            const aCargo = a.cargo?.toLowerCase() || '';
+                            const bCargo = b.cargo?.toLowerCase() || '';
+                            const aIsEnf = aCargo.includes('enfermeiro') || aCargo.includes('enfermeira') || aCargo.startsWith('enf') ? 1 : 0;
+                            const bIsEnf = bCargo.includes('enfermeiro') || bCargo.includes('enfermeira') || bCargo.startsWith('enf') ? 1 : 0;
+                            if (aIsEnf !== bIsEnf) {
+                              return bIsEnf - aIsEnf; // nurse first
+                            }
+                            return a.nome.localeCompare(b.nome);
+                          });
 
-                        <tbody>
-                          {sortedShiftColabs.length > 0 ? (
-                            sortedShiftColabs.map((colab) => {
-                              const isManagerOrAdminSelf = colab.nome.toLowerCase() === usuarioLogado.nome.toLowerCase();
-                              
-                              return (
-                                <tr key={colab.matricula} className="hover:bg-slate-100/50 transition bg-white">
-                                  <td className="p-2.5 font-bold text-slate-800 border-b border-r border-slate-200 bg-white sticky left-0 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] overflow-hidden text-ellipsis whitespace-nowrap" title={colab.nome}>
-                                    <div className="flex items-center gap-1">
-                                      {isManagerOrAdminSelf && <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" title="Você" />}
-                                      <span className={`${isManagerOrAdminSelf ? 'text-emerald-700' : ''} ${colab.datarecisao ? 'text-rose-600 font-extrabold' : ''}`}>
-                                        {colab.datarecisao ? `VAGA (${colab.nome})` : colab.nome}
-                                      </span>
-                                    </div>
-                                    <div className="text-[9px] text-slate-400 font-medium tracking-tight mt-0.5">{colab.setor}</div>
-                                  </td>
-
-                                  {showAppSupportColumns && (
-                                    <>
-                                      <td className="p-2 text-center font-bold text-slate-600 border-b border-r border-slate-200 bg-white static md:sticky md:left-[176px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] whitespace-nowrap">
-                                        {colab.equipe.replace('Turno ', '').replace('Diurno', 'D').replace('Noturno', 'N')}
-                                      </td>
-
-                                      <td className="p-2 text-center text-slate-500 font-mono border-b border-r border-slate-200 bg-white static md:sticky md:left-[248px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] whitespace-nowrap">
-                                        {colab.matricula}
-                                      </td>
-
-                                      <td className="p-2 text-center text-slate-500 font-medium border-b border-r border-slate-200 bg-white static md:sticky md:left-[328px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] whitespace-nowrap text-ellipsis overflow-hidden">
-                                        {colab.cargo}
-                                      </td>
-                                    </>
-                                  )}
-
-                                  {Array.from({ length: daysInMonth }, (_, index) => {
-                                    const dNum = index + 1;
-                                    const dateStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(dNum).padStart(2, '0')}`;
-                                    const req = solicitacoesLookup[`${colab.matricula}-${dateStr}`];
-                                    const { isWorkDay } = checkRosteredStatus(colab, dNum);
-
-                                    const chStatus = chamadaStatusLookup[`${colab.matricula}-${dateStr}`];
-                                    if (chStatus) {
-                                      if (chStatus.status === 'Presente' && !isWorkDay) {
-                                        const cellTitle = `${colab.nome}\nData: ${dNum}/${currentMonth}/${currentYear}\nPlantão Adicional: ${chStatus.turno}`;
-                                        return (
-                                          <td key={dNum} onClick={() => handleCellClick(colab, dNum)} className="p-1 border-b border-r border-slate-200 text-center cursor-pointer align-middle bg-gradient-to-br from-emerald-50 to-sky-50" title={cellTitle}>
-                                            <div className="mx-auto w-7 h-7 bg-sky-500 hover:bg-sky-600 text-white font-extrabold text-[8px] rounded-lg shadow-sm flex flex-col items-center justify-center transition-all duration-150 hover:scale-105 select-none font-sans leading-none">
-                                              <span className="text-[6px] opacity-75">PL</span>
-                                              <span className="text-[7px] truncate max-w-full px-0.5">{chStatus.turno === 'Diurno A' ? 'DA' : chStatus.turno === 'Diurno B' ? 'DB' : chStatus.turno === 'Noturno A' ? 'NA' : chStatus.turno === 'Noturno B' ? 'NB' : 'DIR'}</span>
-                                            </div>
-                                          </td>
-                                        );
-                                      }
-                                      if (chStatus.status === 'Falta') {
-                                        const cellTitle = `${colab.nome}\nData: ${dNum}/${currentMonth}/${currentYear}\nFalta (Chamada Diária)`;
-                                        return (
-                                          <td key={dNum} onClick={() => handleCellClick(colab, dNum)} className="p-1 border-b border-r border-slate-200 text-center cursor-pointer align-middle bg-rose-50" title={cellTitle}>
-                                            <div className="mx-auto w-7 h-7 bg-red-150 text-red-600 border border-red-300 font-extrabold text-[10px] rounded-lg shadow-sm flex items-center justify-center transition-all duration-150 hover:scale-105 select-none font-sans">
-                                              A
-                                            </div>
-                                          </td>
-                                        );
-                                      }
-                                      if (chStatus.status === 'Folga') {
-                                        const cellTitle = `${colab.nome}\nData: ${dNum}/${currentMonth}/${currentYear}\nFolga (Chamada Diária)`;
-                                        return (
-                                          <td key={dNum} onClick={() => handleCellClick(colab, dNum)} className="p-1 border-b border-r border-slate-200 text-center cursor-pointer align-middle bg-emerald-50" title={cellTitle}>
-                                            <div className="mx-auto w-7 h-7 bg-emerald-600 text-white font-extrabold text-[10px] rounded-lg shadow-sm flex items-center justify-center transition-all duration-150 hover:scale-105 select-none font-sans">
-                                              F
-                                            </div>
-                                          </td>
-                                        );
-                                      }
-                                      if (chStatus.status === 'Atestado') {
-                                        const cellTitle = `${colab.nome}\nData: ${dNum}/${currentMonth}/${currentYear}\nAtestado (Chamada Diária)`;
-                                        return (
-                                          <td key={dNum} onClick={() => handleCellClick(colab, dNum)} className="p-1 border-b border-r border-slate-200 text-center cursor-pointer align-middle bg-rose-50" title={cellTitle}>
-                                            <div className="mx-auto w-7 h-7 bg-red-100 text-red-600 border border-red-300 font-extrabold text-[10px] rounded-lg shadow-sm flex items-center justify-center transition-all duration-150 hover:scale-105 select-none font-sans">
-                                              AT
-                                            </div>
-                                          </td>
-                                        );
-                                      }
-                                    }
-
-                                    const hasInss = isColabOnInssOnDay(colab, currentYear, currentMonth, dNum);
-                                    if (hasInss) {
-                                      const cellTitle = `${colab.nome}\nData: ${dNum}/${currentMonth}/${currentYear}\nAfastamento INSS / Licença Ativo`;
-                                      return (
-                                        <td key={dNum} onClick={() => handleCellClick(colab, dNum)} className="p-1 border-b border-r border-slate-200 text-center cursor-pointer align-middle bg-rose-50" title={cellTitle}>
-                                          <div className="mx-auto w-7 h-7 bg-red-650 text-white border border-red-500 font-extrabold text-[8px] rounded-lg shadow-sm flex items-center justify-center transition-all duration-150 hover:scale-105 select-none font-sans leading-none">
-                                            INSS
-                                          </div>
-                                        </td>
-                                      );
-                                    }
-
-                                    const hasAtestado = isColabOnAtestado(colab.matricula, currentYear, currentMonth, dNum, absenteismo);
-                                    if (hasAtestado) {
-                                      const cellTitle = `${colab.nome}\nData: ${dNum}/${currentMonth}/${currentYear}\nAtestado Médico Ativo`;
-                                      return (
-                                        <td key={dNum} onClick={() => handleCellClick(colab, dNum)} className="p-1 border-b border-r border-slate-200 text-center cursor-pointer align-middle bg-rose-50" title={cellTitle}>
-                                          <div className="mx-auto w-7 h-7 bg-red-100 text-red-600 border border-red-300 font-extrabold text-[10px] rounded-lg shadow-sm flex items-center justify-center transition-all duration-150 hover:scale-105 select-none font-sans">
-                                            AT
-                                          </div>
-                                        </td>
-                                      );
-                                    }
-
-                                    const hasFerias = isColabOnFeriasOnDay(colab.matricula, dNum);
-                                    if (hasFerias) {
-                                      const cellTitle = `${colab.nome}\nData: ${dNum}/${currentMonth}/${currentYear}\nFérias de Escala Ativa`;
-                                      return (
-                                        <td key={dNum} onClick={() => handleCellClick(colab, dNum)} className="p-1 border-b border-r border-slate-200 text-center cursor-pointer align-middle bg-purple-50" title={cellTitle}>
-                                          <div className="mx-auto w-7 h-7 bg-purple-600 hover:bg-purple-700 text-white border border-purple-500 font-extrabold text-[10px] rounded-lg shadow-sm flex items-center justify-center transition-all duration-150 hover:scale-105 select-none font-sans">
-                                            F
-                                          </div>
-                                        </td>
-                                      );
-                                    }
-
-                                    const remSector = remanejamentos[`${colab.matricula}-${dateStr}`];
-                                    if (remSector) {
-                                      const cellTitle = `${colab.nome}\nData: ${dNum}/${currentMonth}/${currentYear}\nRemanejado para o setor: ${remSector}`;
-                                      return (
-                                        <td key={dNum} onClick={() => handleCellClick(colab, dNum)} className="p-1 border-b border-r border-slate-200 text-center cursor-pointer align-middle bg-amber-50" title={cellTitle}>
-                                          <div className="mx-auto w-7 h-7 bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 font-bold text-[8px] rounded-lg shadow-sm flex flex-col items-center justify-center transition-all duration-150 hover:scale-105 select-none font-sans leading-none">
-                                            <span className="text-[6px] opacity-75">REM</span>
-                                            <span className="text-[7px] truncate max-w-full px-0.5">{remSector}</span>
-                                          </div>
-                                        </td>
-                                      );
-                                    }
-
-                                    if (req) {
-                                      const isApproved = req.status === 'Aprovado';
-                                      const shorthand = getShorthand(req.tipo);
-                                      const cellTitle = `${colab.nome}\nData: ${dNum}/${currentMonth}/${currentYear}\nTipo: ${req.tipo}\nStatus: ${req.status}\nSolicitado por: ${req.solicitante}`;
-
-                                      if (isApproved) {
-                                        return (
-                                          <td key={dNum} onClick={() => handleCellClick(colab, dNum)} className="p-1 border-b border-r border-slate-200 text-center cursor-pointer align-middle fill-slate-100" title={cellTitle}>
-                                            <div className="mx-auto w-7 h-7 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[10px] rounded-lg shadow-sm flex items-center justify-center transition-all duration-150 hover:scale-105 select-none">
-                                              {shorthand}
-                                            </div>
-                                          </td>
-                                        );
-                                      } else {
-                                        return (
-                                          <td key={dNum} onClick={() => handleCellClick(colab, dNum)} className="p-1 border-b border-r border-slate-200 text-center cursor-pointer align-middle" title={cellTitle}>
-                                            <div className="mx-auto w-7 h-7 bg-amber-400 hover:bg-amber-500 text-slate-900 font-extrabold text-[10px] rounded-lg shadow-xs flex items-center justify-center animate-pulse transition-all duration-150 hover:scale-105 select-none tracking-tighter" title="Pendente homologar">
-                                              {shorthand}?
-                                            </div>
-                                          </td>
-                                        );
-                                      }
-                                    }
-
-                                    const cellExplanation = `${colab.nome}\nData: ${dNum}/${currentMonth}/${currentYear}\nDia da semana: ${getDayOfWeekDetails(dNum).name}\nStatus: ${isWorkDay ? 'Plantão Escalado' : 'Folga Regular'}`;
-
-                                    return (
-                                      <td key={dNum} onClick={() => handleCellClick(colab, dNum)} className={`p-1 border-b border-r border-slate-200 text-center align-middle cursor-pointer transition-all select-none ${isWorkDay ? 'bg-white hover:bg-sky-50' : 'bg-slate-100/70 hover:bg-slate-200/50'}`} title={cellExplanation}>
-                                        <span className="text-[9px] opacity-0 hover:opacity-100 text-sky-600 font-bold transition-opacity">+</span>
-                                      </td>
-                                    );
-                                  })}
-                                </tr>
-                              );
-                            })
-                          ) : (
-                            <tr>
-                              <td colSpan={showAppSupportColumns ? 4 + daysInMonth : 1 + daysInMonth} className="p-6 text-center text-slate-450 font-bold bg-white leading-normal">
-                                <span>Nenhum profissional localizado nesta equipe para a visualização atual.</span>
-                              </td>
-                            </tr>
-                          )}
-
-                          {/* Combined Totals row for Técnicos + Auxiliares */}
-                          <tr className="bg-sky-50/80 select-none font-bold text-sky-900 border-t-2 border-sky-200">
-                            <td className="p-2.5 font-extrabold border-b border-r border-slate-200 bg-sky-50 sticky left-0 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] overflow-hidden text-ellipsis whitespace-nowrap">
-                              <div className="flex items-center gap-1.5">
-                                <span className="w-2 h-2 rounded-full bg-sky-600 animate-pulse animate-duration-1000" />
-                                <span>Total Técnico + Auxiliar</span>
+                          return (
+                            <div key={shiftName} className="space-y-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
+                              {/* Shift heading band */}
+                              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                                <div className="flex items-center gap-2">
+                                  <span className="w-2.5 h-2.5 rounded-full bg-sky-600 block" />
+                                  <h3 className="text-sm font-extrabold text-slate-800 uppercase tracking-wider">
+                                    Equipe {shiftName}
+                                  </h3>
+                                </div>
+                                <span className="text-[11px] font-bold text-slate-500 bg-slate-50 py-0.5 px-2 rounded-lg border">
+                                  {shiftColabs.length} Co-colaborador(es)
+                                </span>
                               </div>
-                            </td>
-                             {showAppSupportColumns && (
-                               <>
-                                 <td className="p-2 text-center border-b border-r border-slate-200 bg-sky-50 static md:sticky md:left-[176px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] font-extrabold font-sans">---</td>
-                                 <td className="p-2 text-center border-b border-r border-slate-200 bg-sky-50 static md:sticky md:left-[248px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] font-extrabold font-sans">---</td>
-                                 <td className="p-2 text-center border-b border-r border-slate-200 bg-sky-50 static md:sticky md:left-[328px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] font-extrabold overflow-hidden text-ellipsis whitespace-nowrap text-[10px] font-sans">Ativos no Dia</td>
-                               </>
-                             )}
-                            {Array.from({ length: daysInMonth }, (_, index) => {
-                              const dNum = index + 1;
-                              const count = shiftColabs.filter(colab => {
-                                const cargoLower = colab.cargo?.toLowerCase() || '';
-                                const isTec = cargoLower.includes('tec') || cargoLower.includes('tecnico') || cargoLower.includes('técnico');
-                                const isAux = cargoLower.includes('aux') || cargoLower.includes('auxiliar');
-                                if (!isTec && !isAux) return false;
 
-                                return isColabActiveOnDay(colab, dNum);
-                              }).length;
+                              {/* Table */}
+                              <div className="overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 max-w-full">
+                                <table 
+                                  style={{ minWidth: showAppSupportColumns ? '1550px' : '1300px' }}
+                                  className="border-collapse text-[11px] text-slate-600 table-fixed leading-tight"
+                                >
+                                  <thead className="bg-slate-100 text-slate-700 tracking-wide font-extrabold border-b border-slate-200">
+                                    <tr>
+                                      <th className="w-44 text-left p-2.5 bg-slate-100 border-r border-slate-200 sticky left-0 z-15 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Colaborador</th>
+                                      {showAppSupportColumns && (
+                                        <>
+                                          <th className="w-18 text-center p-2 border-r border-slate-200 static md:sticky md:left-[176px] z-15 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] bg-slate-100">Escala</th>
+                                          <th className="w-20 text-center p-2 border-r border-slate-200 static md:sticky md:left-[248px] z-15 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] bg-slate-100">Matrícula</th>
+                                          <th className="w-24 text-center p-2 border-r border-slate-200 static md:sticky md:left-[328px] z-15 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] bg-slate-100">Cargo</th>
+                                        </>
+                                      )}
+                                      {Array.from({ length: daysInMonth }, (_, index) => {
+                                        const dNum = index + 1;
+                                        const { letter, isWeekend } = getDayOfWeekDetails(dNum);
+                                        return (
+                                          <th key={dNum} className={`w-9 text-center p-1 border-r border-slate-200 select-none ${isWeekend ? 'bg-rose-50 text-rose-600' : ''}`}>
+                                            <div className="text-[10px] opacity-75">{letter}</div>
+                                            <div className="text-[12px] font-extrabold">{dNum}</div>
+                                          </th>
+                                        );
+                                      })}
+                                    </tr>
+                                  </thead>
 
-                              return (
-                                <td key={`joint-tot-${dNum}`} className="p-1 border-b border-r border-slate-200 text-center font-black text-xs text-sky-900 bg-sky-50/90 shadow-inner">
-                                  {count}
-                                </td>
-                              );
-                            })}
-                          </tr>
-                        </tbody>
+                                  <tbody>
+                                    {sortedShiftColabs.length > 0 ? (
+                                      sortedShiftColabs.map((colab) => {
+                                        const isManagerOrAdminSelf = colab.nome.toLowerCase() === usuarioLogado.nome.toLowerCase();
+                                        
+                                        return (
+                                          <tr key={colab.matricula} className="hover:bg-slate-100/50 transition bg-white">
+                                            <td className="p-2.5 font-bold text-slate-800 border-b border-r border-slate-200 bg-white sticky left-0 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] overflow-hidden text-ellipsis whitespace-nowrap" title={colab.nome}>
+                                              <div className="flex items-center gap-1">
+                                                {isManagerOrAdminSelf && <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" title="Você" />}
+                                                <span className={`${isManagerOrAdminSelf ? 'text-emerald-700' : ''} ${colab.datarecisao ? 'text-rose-600 font-extrabold' : ''}`}>
+                                                  {colab.datarecisao ? `VAGA (${colab.nome})` : colab.nome}
+                                                </span>
+                                              </div>
+                                              <div className="text-[9px] text-slate-400 font-medium tracking-tight mt-0.5">{colab.setor}</div>
+                                            </td>
 
-                      </table>
+                                            {showAppSupportColumns && (
+                                              <>
+                                                <td className="p-2 text-center font-bold text-slate-600 border-b border-r border-slate-200 bg-white static md:sticky md:left-[176px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] whitespace-nowrap">
+                                                  {colab.equipe.replace('Turno ', '').replace('Diurno', 'D').replace('Noturno', 'N')}
+                                                </td>
+
+                                                <td className="p-2 text-center text-slate-500 font-mono border-b border-r border-slate-200 bg-white static md:sticky md:left-[248px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] whitespace-nowrap">
+                                                  {colab.matricula}
+                                                </td>
+
+                                                <td className="p-2 text-center text-slate-500 font-medium border-b border-r border-slate-200 bg-white static md:sticky md:left-[328px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] whitespace-nowrap text-ellipsis overflow-hidden">
+                                                  {colab.cargo}
+                                                </td>
+                                              </>
+                                            )}
+
+                                            {Array.from({ length: daysInMonth }, (_, index) => {
+                                              const dNum = index + 1;
+                                              const dateStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(dNum).padStart(2, '0')}`;
+                                              const req = solicitacoesLookup[`${colab.matricula}-${dateStr}`];
+                                              const { isWorkDay } = checkRosteredStatus(colab, dNum);
+
+                                              const chStatus = chamadaStatusLookup[`${colab.matricula}-${dateStr}`];
+                                              if (chStatus) {
+                                                if (chStatus.status === 'Presente' && !isWorkDay) {
+                                                  const cellTitle = `${colab.nome}\nData: ${dNum}/${currentMonth}/${currentYear}\nPlantão Adicional: ${chStatus.turno}`;
+                                                  return (
+                                                    <td key={dNum} onClick={() => handleCellClick(colab, dNum)} className="p-1 border-b border-r border-slate-200 text-center cursor-pointer align-middle bg-gradient-to-br from-emerald-50 to-sky-50" title={cellTitle}>
+                                                      <div className="mx-auto w-7 h-7 bg-sky-500 hover:bg-sky-600 text-white font-extrabold text-[8px] rounded-lg shadow-sm flex flex-col items-center justify-center transition-all duration-150 hover:scale-105 select-none font-sans leading-none">
+                                                        <span className="text-[6px] opacity-75">PL</span>
+                                                        <span className="text-[7px] truncate max-w-full px-0.5">{chStatus.turno === 'Diurno A' ? 'DA' : chStatus.turno === 'Diurno B' ? 'DB' : chStatus.turno === 'Noturno A' ? 'NA' : chStatus.turno === 'Noturno B' ? 'NB' : 'DIR'}</span>
+                                                      </div>
+                                                    </td>
+                                                  );
+                                                }
+                                                if (chStatus.status === 'Falta') {
+                                                  const cellTitle = `${colab.nome}\nData: ${dNum}/${currentMonth}/${currentYear}\nFalta (Chamada Diária)`;
+                                                  return (
+                                                    <td key={dNum} onClick={() => handleCellClick(colab, dNum)} className="p-1 border-b border-r border-slate-200 text-center cursor-pointer align-middle bg-rose-50" title={cellTitle}>
+                                                      <div className="mx-auto w-7 h-7 bg-red-150 text-red-600 border border-red-300 font-extrabold text-[10px] rounded-lg shadow-sm flex items-center justify-center transition-all duration-150 hover:scale-105 select-none font-sans">
+                                                        A
+                                                      </div>
+                                                    </td>
+                                                  );
+                                                }
+                                                if (chStatus.status === 'Folga') {
+                                                  const cellTitle = `${colab.nome}\nData: ${dNum}/${currentMonth}/${currentYear}\nFolga (Chamada Diária)`;
+                                                  return (
+                                                    <td key={dNum} onClick={() => handleCellClick(colab, dNum)} className="p-1 border-b border-r border-slate-200 text-center cursor-pointer align-middle bg-emerald-50" title={cellTitle}>
+                                                      <div className="mx-auto w-7 h-7 bg-emerald-600 text-white font-extrabold text-[10px] rounded-lg shadow-sm flex items-center justify-center transition-all duration-150 hover:scale-105 select-none font-sans">
+                                                        F
+                                                      </div>
+                                                    </td>
+                                                  );
+                                                }
+                                                if (chStatus.status === 'Atestado') {
+                                                  const cellTitle = `${colab.nome}\nData: ${dNum}/${currentMonth}/${currentYear}\nAtestado (Chamada Diária)`;
+                                                  return (
+                                                    <td key={dNum} onClick={() => handleCellClick(colab, dNum)} className="p-1 border-b border-r border-slate-200 text-center cursor-pointer align-middle bg-rose-50" title={cellTitle}>
+                                                      <div className="mx-auto w-7 h-7 bg-red-100 text-red-600 border border-red-300 font-extrabold text-[10px] rounded-lg shadow-sm flex items-center justify-center transition-all duration-150 hover:scale-105 select-none font-sans">
+                                                        AT
+                                                      </div>
+                                                    </td>
+                                                  );
+                                                }
+                                              }
+
+                                              const hasInss = isColabOnInssOnDay(colab, currentYear, currentMonth, dNum);
+                                              if (hasInss) {
+                                                const cellTitle = `${colab.nome}\nData: ${dNum}/${currentMonth}/${currentYear}\nAfastamento INSS / Licença Ativo`;
+                                                return (
+                                                  <td key={dNum} onClick={() => handleCellClick(colab, dNum)} className="p-1 border-b border-r border-slate-200 text-center cursor-pointer align-middle bg-rose-50" title={cellTitle}>
+                                                    <div className="mx-auto w-7 h-7 bg-red-650 text-white border border-red-500 font-extrabold text-[8px] rounded-lg shadow-sm flex items-center justify-center transition-all duration-150 hover:scale-105 select-none font-sans leading-none">
+                                                      INSS
+                                                    </div>
+                                                  </td>
+                                                );
+                                              }
+
+                                              const hasAtestado = isColabOnAtestado(colab.matricula, currentYear, currentMonth, dNum, absenteismo);
+                                              if (hasAtestado) {
+                                                const cellTitle = `${colab.nome}\nData: ${dNum}/${currentMonth}/${currentYear}\nAtestado Médico Ativo`;
+                                                return (
+                                                  <td key={dNum} onClick={() => handleCellClick(colab, dNum)} className="p-1 border-b border-r border-slate-200 text-center cursor-pointer align-middle bg-rose-50" title={cellTitle}>
+                                                    <div className="mx-auto w-7 h-7 bg-red-100 text-red-600 border border-red-300 font-extrabold text-[10px] rounded-lg shadow-sm flex items-center justify-center transition-all duration-150 hover:scale-105 select-none font-sans">
+                                                      AT
+                                                    </div>
+                                                  </td>
+                                                );
+                                              }
+
+                                              const hasFerias = isColabOnFeriasOnDay(colab.matricula, dNum);
+                                              if (hasFerias) {
+                                                const cellTitle = `${colab.nome}\nData: ${dNum}/${currentMonth}/${currentYear}\nFérias de Escala Ativa`;
+                                                return (
+                                                  <td key={dNum} onClick={() => handleCellClick(colab, dNum)} className="p-1 border-b border-r border-slate-200 text-center cursor-pointer align-middle bg-purple-50" title={cellTitle}>
+                                                    <div className="mx-auto w-7 h-7 bg-purple-600 hover:bg-purple-700 text-white border border-purple-500 font-extrabold text-[10px] rounded-lg shadow-sm flex items-center justify-center transition-all duration-150 hover:scale-105 select-none font-sans">
+                                                      F
+                                                    </div>
+                                                  </td>
+                                                );
+                                              }
+
+                                              const remSector = remanejamentos[`${colab.matricula}-${dateStr}`];
+                                              if (remSector) {
+                                                const cellTitle = `${colab.nome}\nData: ${dNum}/${currentMonth}/${currentYear}\nRemanejado para o setor: ${remSector}`;
+                                                return (
+                                                  <td key={dNum} onClick={() => handleCellClick(colab, dNum)} className="p-1 border-b border-r border-slate-200 text-center cursor-pointer align-middle bg-amber-50" title={cellTitle}>
+                                                    <div className="mx-auto w-7 h-7 bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 font-bold text-[8px] rounded-lg shadow-sm flex flex-col items-center justify-center transition-all duration-150 hover:scale-105 select-none font-sans leading-none">
+                                                      <span className="text-[6px] opacity-75">REM</span>
+                                                      <span className="text-[7px] truncate max-w-full px-0.5">{remSector}</span>
+                                                    </div>
+                                                  </td>
+                                                );
+                                              }
+
+                                              if (req) {
+                                                const isApproved = req.status === 'Aprovado';
+                                                const shorthand = getShorthand(req.tipo);
+                                                const cellTitle = `${colab.nome}\nData: ${dNum}/${currentMonth}/${currentYear}\nTipo: ${req.tipo}\nStatus: ${req.status}\nSolicitado por: ${req.solicitante}`;
+
+                                                if (isApproved) {
+                                                  return (
+                                                    <td key={dNum} onClick={() => handleCellClick(colab, dNum)} className="p-1 border-b border-r border-slate-200 text-center cursor-pointer align-middle fill-slate-100" title={cellTitle}>
+                                                      <div className="mx-auto w-7 h-7 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[10px] rounded-lg shadow-sm flex items-center justify-center transition-all duration-150 hover:scale-105 select-none">
+                                                        {shorthand}
+                                                      </div>
+                                                    </td>
+                                                  );
+                                                } else {
+                                                  return (
+                                                    <td key={dNum} onClick={() => handleCellClick(colab, dNum)} className="p-1 border-b border-r border-slate-200 text-center cursor-pointer align-middle" title={cellTitle}>
+                                                      <div className="mx-auto w-7 h-7 bg-amber-400 hover:bg-amber-500 text-slate-900 font-extrabold text-[10px] rounded-lg shadow-xs flex items-center justify-center animate-pulse transition-all duration-150 hover:scale-105 select-none tracking-tighter" title="Pendente homologar">
+                                                        {shorthand}?
+                                                      </div>
+                                                    </td>
+                                                  );
+                                                }
+                                              }
+
+                                              const cellExplanation = `${colab.nome}\nData: ${dNum}/${currentMonth}/${currentYear}\nDia da semana: ${getDayOfWeekDetails(dNum).name}\nStatus: ${isWorkDay ? 'Plantão Escalado' : 'Folga Regular'}`;
+
+                                              return (
+                                                <td key={dNum} onClick={() => handleCellClick(colab, dNum)} className={`p-1 border-b border-r border-slate-200 text-center align-middle cursor-pointer transition-all select-none ${isWorkDay ? 'bg-white hover:bg-sky-50' : 'bg-slate-100/70 hover:bg-slate-200/50'}`} title={cellExplanation}>
+                                                  <span className="text-[9px] opacity-0 hover:opacity-100 text-sky-600 font-bold transition-opacity">+</span>
+                                                </td>
+                                              );
+                                            })}
+                                          </tr>
+                                        );
+                                      })
+                                    ) : (
+                                      <tr>
+                                        <td colSpan={showAppSupportColumns ? 4 + daysInMonth : 1 + daysInMonth} className="p-6 text-center text-slate-450 font-bold bg-white leading-normal">
+                                          <span>Nenhum profissional localizado nesta equipe para a visualização atual.</span>
+                                        </td>
+                                      </tr>
+                                    )}
+
+                                    {/* Combined Totals row for Técnicos + Auxiliares */}
+                                    <tr className="bg-sky-50/80 select-none font-bold text-sky-900 border-t-2 border-sky-200">
+                                      <td className="p-2.5 font-extrabold border-b border-r border-slate-200 bg-sky-50 sticky left-0 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] overflow-hidden text-ellipsis whitespace-nowrap">
+                                        <div className="flex items-center gap-1.5">
+                                          <span className="w-2 h-2 rounded-full bg-sky-600 animate-pulse animate-duration-1000" />
+                                          <span>Total Técnico + Auxiliar</span>
+                                        </div>
+                                      </td>
+                                      {showAppSupportColumns && (
+                                        <>
+                                          <td className="p-2 text-center border-b border-r border-slate-200 bg-sky-50 static md:sticky md:left-[176px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] font-extrabold font-sans">---</td>
+                                          <td className="p-2 text-center border-b border-r border-slate-200 bg-sky-50 static md:sticky md:left-[248px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] font-extrabold font-sans">---</td>
+                                          <td className="p-2 text-center border-b border-r border-slate-200 bg-sky-50 static md:sticky md:left-[328px] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] font-extrabold overflow-hidden text-ellipsis whitespace-nowrap text-[10px] font-sans">Ativos no Dia</td>
+                                        </>
+                                      )}
+                                      {Array.from({ length: daysInMonth }, (_, index) => {
+                                        const dNum = index + 1;
+                                        const count = shiftColabs.filter(colab => {
+                                          const cargoLower = colab.cargo?.toLowerCase() || '';
+                                          const isTec = cargoLower.includes('tec') || cargoLower.includes('tecnico') || cargoLower.includes('técnico');
+                                          const isAux = cargoLower.includes('aux') || cargoLower.includes('auxiliar');
+                                          if (!isTec && !isAux) return false;
+
+                                          return isColabActiveOnDay(colab, dNum);
+                                        }).length;
+
+                                        return (
+                                          <td key={`joint-tot-${dNum}`} className="p-1 border-b border-r border-slate-200 text-center font-black text-xs text-sky-900 bg-sky-50/90 shadow-inner">
+                                            {count}
+                                          </td>
+                                        );
+                                      })}
+                                    </tr>
+                                  </tbody>
+
+                                </table>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                });
+              })()}
             </div>
           ) : (
             /* Standard view for nurse */
@@ -2505,6 +2643,12 @@ export default function FolgasView({
                         <option value="Eleição">Eleição (E)</option>
                         <option value="Folga Troca de Plantão">Troca de Plantão (X)</option>
                       </select>
+                      {getSelectedTypeBalance() !== null && (
+                        <div className="mt-2 p-2 bg-sky-50 text-sky-900 border border-sky-200 rounded-lg text-[10px] font-extrabold flex items-center justify-between">
+                          <span>Saldo Disponível:</span>
+                          <span className="text-slate-800 font-black">{getSelectedTypeBalance()}</span>
+                        </div>
+                      )}
                     </div>
 
                     {canImmediateApprove && (
