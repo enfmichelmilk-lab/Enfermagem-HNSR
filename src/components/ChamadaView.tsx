@@ -27,6 +27,7 @@ import {
 import { subscribeCollection } from '../lib/firebase';
 import { Colaborador, Usuario, Absenteismo, Ferias, SolicitacaoFolga, Chamada, ColaboradorChamadaStatus, ChamadaSetorMetric } from '../types';
 import { customAlert, customConfirm } from '../utils/customDialog';
+import SearchableColaboradorSelect from './SearchableColaboradorSelect';
 
 interface ChamadaViewProps {
   colaboradores: Colaborador[];
@@ -1302,35 +1303,28 @@ export default function ChamadaView({
                           <div className="space-y-2">
                             <label className="text-[10px] font-black uppercase text-slate-500 block">Adicionar Colaborador de Outro Turno</label>
                             <div className="flex flex-col sm:flex-row gap-2">
-                              <select
-                                className="flex-1 p-2 border border-slate-250 bg-white rounded-lg text-xs font-bold text-slate-700 focus:outline-none focus:border-sky-500"
-                                onChange={(e) => {
-                                  const mat = e.target.value;
-                                  if (!mat) return;
-                                  const selectedCol = colaboradores.find(c => c.matricula === mat);
-                                  if (selectedCol) {
-                                    const newDraftColab: ColaboradorChamadaStatus = {
-                                      matricula: selectedCol.matricula,
-                                      nome: selectedCol.nome,
-                                      cargo: selectedCol.cargo,
-                                      setorOriginal: sectorName,
-                                      status: 'Presente',
-                                      isExtra: true
-                                    };
-                                    setDraftColaboradores(prev => [...prev, newDraftColab]);
-                                    setActiveAddSector(null);
-                                    setAddSearchQuery('');
-                                  }
-                                }}
-                                defaultValue=""
-                              >
-                                <option value="">-- Selecione o profissional para adicionar --</option>
-                                {availableColabsForAdd.map(c => (
-                                  <option key={c.matricula} value={c.matricula}>
-                                    {c.nome} ({c.cargo} - {c.setor} - {c.equipe})
-                                  </option>
-                                ))}
-                              </select>
+                              <div className="flex-1">
+                                <SearchableColaboradorSelect
+                                  colaboradores={availableColabsForAdd}
+                                  selectedMatricula=""
+                                  onSelect={(selectedCol) => {
+                                    if (selectedCol) {
+                                      const newDraftColab: ColaboradorChamadaStatus = {
+                                        matricula: selectedCol.matricula,
+                                        nome: selectedCol.nome,
+                                        cargo: selectedCol.cargo,
+                                        setorOriginal: sectorName,
+                                        status: 'Presente',
+                                        isExtra: true
+                                      };
+                                      setDraftColaboradores(prev => [...prev, newDraftColab]);
+                                      setActiveAddSector(null);
+                                      setAddSearchQuery('');
+                                    }
+                                  }}
+                                  placeholder="Selecione o profissional para adicionar..."
+                                />
+                              </div>
                               <button
                                 type="button"
                                 onClick={() => {

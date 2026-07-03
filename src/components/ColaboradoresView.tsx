@@ -14,6 +14,7 @@ import { subscribeCollection, saveDocument } from '../lib/firebase';
 import { customAlert, customConfirm } from '../utils/customDialog';
 import { isUserSubordinate } from '../utils/userFilters';
 import { SETORES_HOSPITALARES, EQUIPES_ESCALA, CARGOS_ENFERMAGEM, CURSOS_INICIAIS } from '../data/mockData';
+import SearchableColaboradorSelect from './SearchableColaboradorSelect';
 
 interface ColaboradoresViewProps {
   colaboradores: Colaborador[];
@@ -53,6 +54,7 @@ export default function ColaboradoresView({
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedEquipe, setSelectedEquipe] = useState('');
   const [selectedSetor, setSelectedSetor] = useState('');
+  const [mostrarDesligados, setMostrarDesligados] = useState(false);
 
   // Dialog controllers
   const [isOpenModal, setIsOpenModal] = useState(false);
@@ -167,6 +169,16 @@ export default function ColaboradoresView({
   const [horario, setHorario] = useState('');
   const [gestorDireto, setGestorDireto] = useState('');
   const [gestorIndireto, setGestorIndireto] = useState('');
+
+  const selectedDirectMatricula = useMemo(() => {
+    const colab = colaboradores.find(c => c.nome === gestorDireto);
+    return colab ? colab.matricula : '';
+  }, [colaboradores, gestorDireto]);
+
+  const selectedIndirectMatricula = useMemo(() => {
+    const colab = colaboradores.find(c => c.nome === gestorIndireto);
+    return colab ? colab.matricula : '';
+  }, [colaboradores, gestorIndireto]);
   const [email, setEmail] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
   const [bancoHoras, setBancoHoras] = useState(0);
@@ -704,29 +716,41 @@ Atenciosamente,
         c.matricula.includes(searchTerm);
       const matchEquipe = selectedEquipe === '' || c.equipe === selectedEquipe;
       const matchSetor = selectedSetor === '' || c.setor === selectedSetor;
+      const matchDesligado = mostrarDesligados || !c.datarecisao;
       
       const matchManager = isUserSubordinate(c, usuarioLogado, colaboradores);
       
-      return matchSearch && matchEquipe && matchSetor && matchManager;
+      return matchSearch && matchEquipe && matchSetor && matchManager && matchDesligado;
     }).sort((a, b) => a.nome.localeCompare(b.nome));
-  }, [colaboradores, searchTerm, selectedEquipe, selectedSetor, usuarioLogado]);
+  }, [colaboradores, searchTerm, selectedEquipe, selectedSetor, mostrarDesligados, usuarioLogado]);
 
   // Gestor lists builders (direct translation of Gas rules)
   // For Aux/Tec, direct managers are Enfermeiros
   // For others, direct managers are Coordenadores/Supervisores and Indirect are Gerentes etc.
-  const listEnfermeiros = useMemo(() => {
-    return colaboradores
-      .filter(c => c.cargo === 'Enfermeiro(a)' || c.cargo === 'Supervisor(a)')
-      .map(c => c.nome)
-      .sort();
+  const listEnfermeirosColabs = useMemo(() => {
+    return colaboradores.filter(c => c.cargo === 'Enfermeiro(a)' || c.cargo === 'Supervisor(a)');
   }, [colaboradores]);
 
-  const listGestoresCoordenadores = useMemo(() => {
-    return colaboradores
-      .filter(c => ['Supervisor(a)', 'Coordenador(a)', 'Gerente', 'Supervisor'].includes(c.cargo))
-      .map(c => c.nome)
-      .sort();
+  const listGestoresCoordenadoresColabs = useMemo(() => {
+    return colaboradores.filter(c => ['Supervisor(a)', 'Coordenador(a)', 'Gerente', 'Supervisor'].includes(c.cargo));
   }, [colaboradores]);
+
+  const eligibleDirectColabs = useMemo(() => {
+    if (['Aux. Enf.', 'Tec. Enf.'].includes(cargo)) {
+      return listEnfermeirosColabs;
+    }
+    return listGestoresCoordenadoresColabs;
+  }, [cargo, listEnfermeirosColabs, listGestoresCoordenadoresColabs]);
+
+  const eligibleIndirectColabs = listGestoresCoordenadoresColabs;
+
+  const listEnfermeiros = useMemo(() => {
+    return listEnfermeirosColabs.map(c => c.nome).sort();
+  }, [listEnfermeirosColabs]);
+
+  const listGestoresCoordenadores = useMemo(() => {
+    return listGestoresCoordenadoresColabs.map(c => c.nome).sort();
+  }, [listGestoresCoordenadoresColabs]);
 
   // Adjust direct manager lists reactively
   const directManagersList = useMemo(() => {
@@ -1289,9 +1313,22 @@ Atenciosamente,
           </select>
         </div>
 
-        {(searchTerm !== '' || selectedEquipe !== '' || selectedSetor !== '') && (
+        <div className="flex items-center gap-2 pb-2.5 h-10 select-none">
+          <input
+            type="checkbox"
+            id="checkbox-mostrar-desligados-main"
+            checked={mostrarDesligados}
+            onChange={(e) => setMostrarDesligados(e.target.checked)}
+            className="w-4 h-4 text-sky-600 border-slate-300 rounded focus:ring-sky-500 cursor-pointer"
+          />
+          <label htmlFor="checkbox-mostrar-desligados-main" className="text-xs font-bold text-slate-700 cursor-pointer whitespace-nowrap">
+            Mostrar Desligados
+          </label>
+        </div>
+
+        {(searchTerm !== '' || selectedEquipe !== '' || selectedSetor !== '' || mostrarDesligados) && (
           <button
-            onClick={() => { setSearchTerm(''); setSelectedEquipe(''); setSelectedSetor(''); }}
+            onClick={() => { setSearchTerm(''); setSelectedEquipe(''); setSelectedSetor(''); setMostrarDesligados(false); }}
             className="w-full sm:w-auto px-4 py-2 text-xs font-bold text-slate-500 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-xl border border-slate-200 transition"
           >
             Limpar Filtros
@@ -1764,29 +1801,21 @@ Atenciosamente,
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   <div className="space-y-1">
                     <label className="font-bold text-slate-600">Gestor Direto</label>
-                    <select
-                      value={gestorDireto}
-                      onChange={(e) => setGestorDireto(e.target.value)}
-                      className="w-full p-2.5 bg-white border border-slate-300 rounded-lg focus:outline-none focus:border-sky-500"
-                    >
-                      <option value="">Nenhum gestor</option>
-                      {directManagersList.map(nome => (
-                        <option key={nome} value={nome}>{nome}</option>
-                      ))}
-                    </select>
+                    <SearchableColaboradorSelect
+                      colaboradores={eligibleDirectColabs}
+                      selectedMatricula={selectedDirectMatricula}
+                      onSelect={(colab) => setGestorDireto(colab ? colab.nome : '')}
+                      placeholder="Nenhum gestor"
+                    />
                   </div>
                   <div className="space-y-1">
                     <label className="font-bold text-slate-600">Gestor Indireto (Supervisor/Gerência)</label>
-                    <select
-                      value={gestorIndireto}
-                      onChange={(e) => setGestorIndireto(e.target.value)}
-                      className="w-full p-2.5 bg-white border border-slate-300 rounded-lg focus:outline-none focus:border-sky-500"
-                    >
-                      <option value="">Nenhum gestor</option>
-                      {indirectManagersList.map(nome => (
-                        <option key={nome} value={nome}>{nome}</option>
-                      ))}
-                    </select>
+                    <SearchableColaboradorSelect
+                      colaboradores={eligibleIndirectColabs}
+                      selectedMatricula={selectedIndirectMatricula}
+                      onSelect={(colab) => setGestorIndireto(colab ? colab.nome : '')}
+                      placeholder="Nenhum gestor"
+                    />
                   </div>
                   <div className="space-y-1">
                     <label className="font-bold text-slate-600 text-sky-700">E-mail Corporativo</label>

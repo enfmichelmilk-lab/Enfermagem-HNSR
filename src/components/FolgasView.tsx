@@ -314,6 +314,81 @@ export default function FolgasView({
     });
   };
 
+  // Helper: check if a collaborator belongs to "Diarista" team
+  const isColabDiarista = (colab: Colaborador) => {
+    const eq = (colab.equipe || '').toLowerCase();
+    return eq === 'diário' || eq === 'diario' || eq === 'diarista' || eq.includes('diário') || eq.includes('diario') || eq.includes('diarista');
+  };
+
+  // Helper: get Brazilian national and mobile holidays for a year
+  const getFeriados = (year: number): { month: number; day: number }[] => {
+    const list = [
+      { month: 1, day: 1 },   // Ano Novo
+      { month: 4, day: 21 },  // Tiradentes
+      { month: 5, day: 1 },   // Dia do Trabalho
+      { month: 9, day: 7 },   // Independência
+      { month: 10, day: 12 }, // Padroeira
+      { month: 11, day: 2 },  // Finados
+      { month: 11, day: 15 }, // Proclamação
+      { month: 11, day: 20 }, // Dia da Consciência Negra
+      { month: 12, day: 25 }, // Natal
+    ];
+
+    // Easter algorithms
+    const a = year % 19;
+    const b = Math.floor(year / 100);
+    const c = year % 100;
+    const d = Math.floor(b / 4);
+    const e = b % 4;
+    const f = Math.floor((b + 8) / 25);
+    const g = Math.floor((b - f + 1) / 3);
+    const h = (19 * a + b - d - g + 15) % 30;
+    const i = Math.floor(c / 4);
+    const k = c % 4;
+    const l = (32 + 2 * e + 2 * i - h - k) % 7;
+    const m = Math.floor((a + 11 * h + 22 * l) / 451);
+    const easterMonth = Math.floor((h + l - 7 * m + 114) / 31);
+    const easterDay = ((h + l - 7 * m + 114) % 31) + 1;
+
+    const easterDate = new Date(year, easterMonth - 1, easterDay);
+
+    // Sexta-feira Santa: Easter - 2 days
+    const sextaSanta = new Date(easterDate);
+    sextaSanta.setDate(easterDate.getDate() - 2);
+    list.push({ month: sextaSanta.getMonth() + 1, day: sextaSanta.getDate() });
+
+    // Carnaval: Easter - 47 days
+    const carnaval = new Date(easterDate);
+    carnaval.setDate(easterDate.getDate() - 47);
+    list.push({ month: carnaval.getMonth() + 1, day: carnaval.getDate() });
+
+    // Corpus Christi: Easter + 60 days
+    const corpusChristi = new Date(easterDate);
+    corpusChristi.setDate(easterDate.getDate() + 60);
+    list.push({ month: corpusChristi.getMonth() + 1, day: corpusChristi.getDate() });
+
+    return list;
+  };
+
+  // Helper: count Saturdays, Sundays, and holidays in a month
+  const countSaturdaysSundaysHolidays = (year: number, month: number): number => {
+    const feriadosList = getFeriados(year);
+    const daysInM = new Date(year, month, 0).getDate();
+    let count = 0;
+
+    for (let day = 1; day <= daysInM; day++) {
+      const d = new Date(year, month - 1, day);
+      const dayOfWeek = d.getDay(); // 0 = Sunday, 6 = Saturday
+      const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+      const isHoliday = feriadosList.some(f => f.month === month && f.day === day);
+
+      if (isWeekend || isHoliday) {
+        count++;
+      }
+    }
+    return count;
+  };
+
   // Fast O(1) chamada status lookup map indexed by `${matricula}-${date_str}`
   const chamadaStatusLookup = useMemo(() => {
     const map: Record<string, { status: string; turno: string; remanejadoPara?: string }> = {};
@@ -1085,8 +1160,26 @@ export default function FolgasView({
         customAlert(`Aviso: Saldo insuficiente de Eleição (${modalTargetColab.eleicao} dia[s]).`);
         return;
       }
-      // Enforce at most 2 Folga de Escala (F) per month
-      if (isF && modalTipoFolga !== 'Férias') {
+      // Enforce limits
+      const isDiarista = isColabDiarista(modalTargetColab);
+      if (isDiarista && modalTipoFolga !== 'Férias') {
+        const parts = modalTargetDate.split('-');
+        const targetMonthPrefix = `${parts[0]}-${parts[1]}`;
+        const targetYearNum = parseInt(parts[0]);
+        const targetMonthNum = parseInt(parts[1]);
+        const maxFolgas = countSaturdaysSundaysHolidays(targetYearNum, targetMonthNum);
+        const existingCount = solicitacoes.filter(s => 
+          s.matricula === modalTargetColab.matricula && 
+          s.status === 'Aprovado' && 
+          s.tipo !== 'Férias' &&
+          s.data.startsWith(targetMonthPrefix)
+        ).length;
+
+        if (existingCount >= maxFolgas) {
+          customAlert(`Erro: Como Diarista, o limite máximo de ${maxFolgas} folgas (equivalente ao total de sábados, domingos e feriados do mês de ${monthNames[targetMonthNum - 1]} de ${targetYearNum}) foi atingido para este colaborador.`);
+          return;
+        }
+      } else if (!isDiarista && isF && modalTipoFolga !== 'Férias') {
         const parts = modalTargetDate.split('-');
         const targetMonthPrefix = `${parts[0]}-${parts[1]}`;
         const existingCount = solicitacoes.filter(s => 
@@ -1161,9 +1254,32 @@ export default function FolgasView({
 
   // Action: Approve leave request inline
   const handleApproveInline = (sol: SolicitacaoFolga) => {
-    // Enforce 2 Folga de Escala limit when approving
+    const targetColab = colaboradores.find(c => c.matricula === sol.matricula);
+    if (!targetColab) return;
+
+    // Enforce limits
     const isFS = sol.tipo === 'Folga' || sol.tipo === 'Folga de Escala';
-    if (isFS) {
+    const isDiarista = isColabDiarista(targetColab);
+
+    if (isDiarista && sol.tipo !== 'Férias') {
+      const parts = sol.data.split('-');
+      const targetMonthPrefix = `${parts[0]}-${parts[1]}`;
+      const targetYearNum = parseInt(parts[0]);
+      const targetMonthNum = parseInt(parts[1]);
+      const maxFolgas = countSaturdaysSundaysHolidays(targetYearNum, targetMonthNum);
+      const existingCount = solicitacoes.filter(s => 
+        s.matricula === sol.matricula && 
+        s.status === 'Aprovado' && 
+        s.tipo !== 'Férias' &&
+        s.data.startsWith(targetMonthPrefix) &&
+        s.id !== sol.id
+      ).length;
+
+      if (existingCount >= maxFolgas) {
+        customAlert(`Erro: Não é possível aprovar. Como Diarista, o colaborador já possui o limite máximo de ${maxFolgas} folgas aprovadas para este mês (${parts[1]}/${parts[0]}).`);
+        return;
+      }
+    } else if (!isDiarista && isFS) {
       const parts = sol.data.split('-');
       const targetMonthPrefix = `${parts[0]}-${parts[1]}`;
       const existingCount = solicitacoes.filter(s => 
@@ -1180,7 +1296,6 @@ export default function FolgasView({
       }
     }
 
-    const targetColab = colaboradores.find(c => c.matricula === sol.matricula);
     if (targetColab) {
       let updatedColab = { ...targetColab };
       const carimbo = `[${new Date().toLocaleString('pt-BR')} - ${usuarioLogado.nome}]: Folga concedida (${sol.tipo}) para o dia ${sol.data.split('-').reverse().join('/')}.`;
@@ -1520,10 +1635,10 @@ export default function FolgasView({
                             <td 
                               key={`td-${categoryKey}-${colab.matricula}-${dNum}`} 
                               onClick={() => handleCellClick(colab, dNum)} 
-                              className={`p-0.5 border-r border-slate-200 text-center align-middle font-black cursor-pointer shadow-2xs transition-all uppercase bg-purple-50`}
+                              className={`p-0.5 border-r border-slate-200 text-center align-middle font-black cursor-pointer shadow-2xs transition-all uppercase bg-slate-100`}
                               title="Férias de Escala Ativa"
                             >
-                              <span className="block py-0.5 rounded-sm border text-[8px] tracking-tight leading-none bg-purple-600 text-white border-purple-550 font-extrabold font-sans">
+                              <span className="block py-0.5 rounded-sm border text-[8px] tracking-tight leading-none bg-slate-600 text-white border-slate-700 font-extrabold font-sans">
                                 F
                               </span>
                             </td>
@@ -1536,6 +1651,9 @@ export default function FolgasView({
                           
                           if (isApproved) {
                             let badgeStyle = 'bg-emerald-100 text-emerald-850 border-emerald-250';
+                            if (req.tipo === 'Férias') {
+                              badgeStyle = 'bg-slate-600 text-white border-slate-700 font-black';
+                            }
                             if (shorthand === 'FF') {
                               badgeStyle = 'bg-sky-100 text-sky-850 border-sky-250 font-black';
                             } else if (shorthand === 'BH') {
@@ -2097,8 +2215,8 @@ export default function FolgasView({
                                               if (hasFerias) {
                                                 const cellTitle = `${colab.nome}\nData: ${dNum}/${currentMonth}/${currentYear}\nFérias de Escala Ativa`;
                                                 return (
-                                                  <td key={dNum} onClick={() => handleCellClick(colab, dNum)} className="p-1 border-b border-r border-slate-200 text-center cursor-pointer align-middle bg-purple-50" title={cellTitle}>
-                                                    <div className="mx-auto w-7 h-7 bg-purple-600 hover:bg-purple-700 text-white border border-purple-500 font-extrabold text-[10px] rounded-lg shadow-sm flex items-center justify-center transition-all duration-150 hover:scale-105 select-none font-sans">
+                                                  <td key={dNum} onClick={() => handleCellClick(colab, dNum)} className="p-1 border-b border-r border-slate-200 text-center cursor-pointer align-middle bg-slate-100" title={cellTitle}>
+                                                    <div className="mx-auto w-7 h-7 bg-slate-600 hover:bg-slate-700 text-white border border-slate-500 font-extrabold text-[10px] rounded-lg shadow-sm flex items-center justify-center transition-all duration-150 hover:scale-105 select-none font-sans">
                                                       F
                                                     </div>
                                                   </td>
@@ -2124,9 +2242,14 @@ export default function FolgasView({
                                                 const cellTitle = `${colab.nome}\nData: ${dNum}/${currentMonth}/${currentYear}\nTipo: ${req.tipo}\nStatus: ${req.status}\nSolicitado por: ${req.solicitante}`;
 
                                                 if (isApproved) {
+                                                  const isFeriasReq = req.tipo === 'Férias';
                                                   return (
-                                                    <td key={dNum} onClick={() => handleCellClick(colab, dNum)} className="p-1 border-b border-r border-slate-200 text-center cursor-pointer align-middle fill-slate-100" title={cellTitle}>
-                                                      <div className="mx-auto w-7 h-7 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[10px] rounded-lg shadow-sm flex items-center justify-center transition-all duration-150 hover:scale-105 select-none">
+                                                    <td key={dNum} onClick={() => handleCellClick(colab, dNum)} className={`p-1 border-b border-r border-slate-200 text-center cursor-pointer align-middle ${isFeriasReq ? 'bg-slate-100' : 'fill-slate-100'}`} title={cellTitle}>
+                                                      <div className={`mx-auto w-7 h-7 font-extrabold text-[10px] rounded-lg shadow-sm flex items-center justify-center transition-all duration-150 hover:scale-105 select-none ${
+                                                        isFeriasReq
+                                                          ? 'bg-slate-600 hover:bg-slate-700 text-white border border-slate-500'
+                                                          : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                                                      }`}>
                                                         {shorthand}
                                                       </div>
                                                     </td>
@@ -2950,12 +3073,29 @@ export default function FolgasView({
                                         );
                                       }
 
+                                      // Férias checking
+                                      const hasFerias = isColabOnFeriasOnDay(colab.matricula, dNum);
+                                      if (hasFerias) {
+                                        return (
+                                          <td key={`print-cell-${dNum}`} className="border border-slate-300 p-0 text-center align-middle bg-slate-100 text-slate-800 font-black text-[9px] select-none">
+                                            F
+                                          </td>
+                                        );
+                                      }
+
                                       // Check approved / pending leaves
                                       if (req) {
                                         const isApproved = req.status === 'Aprovado';
                                         const shorthand = getShorthand(req.tipo);
+                                        const isFerias = req.tipo === 'Férias';
                                         return (
-                                          <td key={`print-cell-${dNum}`} className={`border border-slate-300 p-0 text-center align-middle font-black text-[9px] select-none ${isApproved ? 'bg-emerald-50 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+                                          <td key={`print-cell-${dNum}`} className={`border border-slate-300 p-0 text-center align-middle font-black text-[9px] select-none ${
+                                            isApproved 
+                                              ? isFerias
+                                                ? 'bg-slate-100 text-slate-800'
+                                                : 'bg-emerald-50 text-emerald-800' 
+                                              : 'bg-amber-100 text-amber-800'
+                                          }`}>
                                             {shorthand}{isApproved ? '' : '?'}
                                           </td>
                                         );

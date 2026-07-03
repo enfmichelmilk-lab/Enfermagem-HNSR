@@ -43,6 +43,7 @@ import { Curso, CertificadoCurso, Colaborador, CourseTarget, Ferias, Usuario } f
 import { subscribeCollection, saveDocument, removeDocument } from '../lib/firebase';
 import { CARGOS_ENFERMAGEM, SETORES_HOSPITALARES, EQUIPES_ESCALA, CURSOS_INICIAIS } from '../data/mockData';
 import { customAlert, customConfirm } from '../utils/customDialog';
+import SearchableColaboradorSelect from './SearchableColaboradorSelect';
 import { isUserSubordinate } from '../utils/userFilters';
 
 interface UniversidadeViewProps {
@@ -2230,68 +2231,25 @@ export default function UniversidadeView({ colaboradores, ferias = [], usuarioLo
                     <div className="md:col-span-1 bg-slate-50 border border-slate-200/60 rounded-2xl p-5 space-y-4 h-fit">
                       <div className="space-y-1.5">
                         <label className="block text-xs font-extrabold text-slate-700 uppercase tracking-wide">
-                          1. Buscar Colaborador
-                        </label>
-                        <div className="relative">
-                          <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400 pointer-events-none" />
-                          <input
-                            type="text"
-                            placeholder="Pesquisar por nome, cargo ou matr..."
-                            value={manualColabSearch}
-                            onChange={(e) => setManualColabSearch(e.target.value)}
-                            className="w-full bg-white border border-slate-200 pl-9 pr-8 py-2 text-xs rounded-xl focus:outline-none focus:ring-1 focus:ring-sky-500 font-semibold"
-                          />
-                          {manualColabSearch && (
-                            <button
-                              type="button"
-                              onClick={() => setManualColabSearch('')}
-                              className="absolute right-3 top-2 text-slate-400 hover:text-slate-600 font-black cursor-pointer text-sm"
-                            >
-                              &times;
-                            </button>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <label className="block text-xs font-extrabold text-slate-700 uppercase tracking-wide">
                           Selecione o Colaborador
                         </label>
-                        <div className="relative">
-                          <select
-                            value={manualSelectedMatricula}
-                            onChange={(e) => {
-                              setManualSelectedMatricula(e.target.value);
-                              setManualFiles({});
-                              setManualCompletionDates({});
-                              setManualCheckedCourses({});
-                            }}
-                            className="w-full bg-white border border-slate-200 px-3 py-2 text-xs rounded-xl focus:outline-none focus:ring-1 focus:ring-sky-500 font-semibold appearance-none cursor-pointer"
-                          >
-                            <option value="">-- Escolha um colaborador --</option>
-                            {activeColaboradores
-                              .filter(c => {
-                                if (!manualColabSearch) return true;
-                                const s = manualColabSearch.toLowerCase();
-                                return c.nome.toLowerCase().includes(s) || 
-                                       c.matricula.toLowerCase().includes(s) || 
-                                       c.cargo.toLowerCase().includes(s);
-                              })
-                              .map(c => (
-                                <option key={c.matricula} value={c.matricula}>
-                                  {c.nome} ({c.cargo})
-                                </option>
-                              ))
-                            }
-                          </select>
-                          <div className="absolute right-3 top-3.5 w-0 h-0 border-l-[4px] border-l-transparent border-r-[4px] border-r-transparent border-t-[4px] border-t-slate-500 pointer-events-none"></div>
-                        </div>
+                        <SearchableColaboradorSelect
+                          colaboradores={colaboradores}
+                          selectedMatricula={manualSelectedMatricula}
+                          onSelect={(colab) => {
+                            setManualSelectedMatricula(colab ? colab.matricula : '');
+                            setManualFiles({});
+                            setManualCompletionDates({});
+                            setManualCheckedCourses({});
+                          }}
+                          placeholder="Escolha um colaborador..."
+                        />
                       </div>
 
                       {/* Selected Colaborador Profile Mini-card */}
                       {manualSelectedMatricula && (
                         (() => {
-                          const colab = activeColaboradores.find(c => c.matricula === manualSelectedMatricula);
+                          const colab = colaboradores.find(c => c.matricula === manualSelectedMatricula);
                           if (!colab) return null;
                           return (
                             <motion.div
@@ -2331,7 +2289,7 @@ export default function UniversidadeView({ colaboradores, ferias = [], usuarioLo
                         </div>
                       ) : (
                         (() => {
-                          const colab = activeColaboradores.find(c => c.matricula === manualSelectedMatricula);
+                          const colab = colaboradores.find(c => c.matricula === manualSelectedMatricula);
                           if (!colab) return null;
 
                           // Find all pending courses (no certificate registered yet)

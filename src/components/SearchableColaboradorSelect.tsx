@@ -23,7 +23,18 @@ export default function SearchableColaboradorSelect({
 }: SearchableColaboradorSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const [includeDesligados, setIncludeDesligados] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
+
+  // Auto-enable includeDesligados if current selection is a dismissed collaborator
+  useEffect(() => {
+    if (selectedMatricula) {
+      const isSelDesligado = colaboradores.some(c => c.matricula === selectedMatricula && c.datarecisao);
+      if (isSelDesligado) {
+        setIncludeDesligados(true);
+      }
+    }
+  }, [selectedMatricula, colaboradores]);
 
   // Close dropdown on click outside
   useEffect(() => {
@@ -40,7 +51,10 @@ export default function SearchableColaboradorSelect({
 
   // Filter and sort alphabetically by name (A-Z)
   const listColaboradores = useMemo(() => {
-    const list = [...colaboradores];
+    let list = [...colaboradores];
+    if (!includeDesligados) {
+      list = list.filter(c => !c.datarecisao);
+    }
     // Sort A-Z
     list.sort((a, b) => a.nome.localeCompare(b.nome));
 
@@ -53,7 +67,7 @@ export default function SearchableColaboradorSelect({
       c.setor.toLowerCase().includes(normalizedSearch) ||
       c.cargo.toLowerCase().includes(normalizedSearch)
     );
-  }, [colaboradores, search]);
+  }, [colaboradores, search, includeDesligados]);
 
   const selectedColab = useMemo(() => {
     return colaboradores.find(c => c.matricula === selectedMatricula) || null;
@@ -80,7 +94,7 @@ export default function SearchableColaboradorSelect({
       >
         <span className={`text-xs font-bold leading-normal truncate ${selectedColab ? 'text-slate-800' : 'text-slate-400'}`}>
           {selectedColab ? (
-            `${selectedColab.nome} (S: ${selectedColab.setor} • M: ${selectedColab.matricula} • Cargo: ${selectedColab.cargo})`
+            `${selectedColab.nome}${selectedColab.datarecisao ? ' (DESLIGADO)' : ''} (S: ${selectedColab.setor} • M: ${selectedColab.matricula} • Cargo: ${selectedColab.cargo})`
           ) : (
             colaboradores.length > 0 ? placeholder : disabledPlaceholder
           )}
@@ -114,6 +128,20 @@ export default function SearchableColaboradorSelect({
             />
           </div>
 
+          {/* Toggle include dismissed */}
+          <div className="px-3 py-1.5 bg-slate-50/85 border-b border-slate-100 flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="include-desligados-dropdown"
+              checked={includeDesligados}
+              onChange={(e) => setIncludeDesligados(e.target.checked)}
+              className="w-3.5 h-3.5 text-sky-650 border-slate-300 rounded focus:ring-sky-500 cursor-pointer"
+            />
+            <label htmlFor="include-desligados-dropdown" className="text-[10px] font-extrabold text-slate-600 cursor-pointer select-none">
+              Incluir desligados na busca
+            </label>
+          </div>
+
           {/* List Options */}
           <div className="max-h-60 overflow-y-auto divide-y divide-slate-100 py-1">
             {listColaboradores.length === 0 ? (
@@ -123,6 +151,7 @@ export default function SearchableColaboradorSelect({
             ) : (
               listColaboradores.map(c => {
                 const isSelected = c.matricula === selectedMatricula;
+                const isDesligado = !!c.datarecisao;
                 return (
                   <button
                     key={c.matricula}
@@ -133,7 +162,9 @@ export default function SearchableColaboradorSelect({
                     }`}
                   >
                     <div className="flex flex-col min-w-0 pr-2">
-                      <span className="font-extrabold truncate text-slate-800">{c.nome}</span>
+                      <span className="font-extrabold truncate text-slate-800">
+                        {c.nome} {isDesligado && <span className="text-rose-600 font-extrabold text-[8px] tracking-wide uppercase ml-1.5 px-1 py-0.2 bg-rose-50 border border-rose-100 rounded inline-block align-middle">DESLIGADO</span>}
+                      </span>
                       <span className="text-[10px] text-slate-450 font-semibold block uppercase">
                         S: {c.setor} &bull; M: {c.matricula} &bull; C: {c.cargo}
                       </span>
