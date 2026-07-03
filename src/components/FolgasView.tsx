@@ -18,6 +18,7 @@ import { subscribeCollection, saveDocument, removeDocument } from '../lib/fireba
 import HapvidaLogo from './HapvidaLogo';
 import { customAlert, customConfirm } from '../utils/customDialog';
 import { isUserSubordinate, checkIsActualSubordinate } from '../utils/userFilters';
+import SearchableColaboradorSelect from './SearchableColaboradorSelect';
 
 const equipesDisponiveis = ['Todos', 'Diurno A', 'Diurno B', 'Noturno A', 'Noturno B', 'Diarista'];
 
@@ -3405,19 +3406,13 @@ export default function FolgasView({
                                   </div>
                                   <div className="text-[9.5px] text-slate-400 font-mono font-bold">Lido: Mat {item.matricula || '---'}</div>
                                 </td>
-                                <td className="p-3 min-w-[180px]">
-                                  <select
-                                    value={item.matricula || ""}
-                                    onChange={(e) => handleUpdateLeafColab(index, e.target.value)}
-                                    className="w-full bg-white border border-slate-200 rounded-lg p-1.5 text-[11px] font-bold text-slate-700 outline-none focus:ring-1 focus:ring-sky-500 focus:border-sky-500"
-                                  >
-                                    <option value="">-- Escolher no Sistema --</option>
-                                    {colaboradores.map(c => (
-                                      <option key={c.matricula} value={c.matricula}>
-                                        {c.nome} ({c.cargo})
-                                      </option>
-                                    ))}
-                                  </select>
+                                <td className="p-3 min-w-[200px]">
+                                  <SearchableColaboradorSelect
+                                    colaboradores={colaboradores}
+                                    selectedMatricula={item.matricula || ""}
+                                    onSelect={(selectedCol) => handleUpdateLeafColab(index, selectedCol ? selectedCol.matricula : "")}
+                                    placeholder="Escolher no Sistema..."
+                                  />
                                 </td>
                                 <td className="p-3">
                                   <input
