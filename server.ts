@@ -536,32 +536,51 @@ Gere apenas o vetor JSON válido, seguindo o esquema abaixo. Caso a data de iní
             text: `Você é um robô de Inteligência Artificial especializado na leitura de tabelas e escalas de revezamento de profissionais de saúde de hospitais.
 Sua missão é extrair com PRECISÃO GEOMÉTRICA ABSOLUTA todas as FOLGAS e AFASTAMENTOS desta escala de revezamento de enfermagem para o mês ${month} de ${year}.
 
-Atenção, o usuário relatou que você "está colocando as folgas nos dias errados". Isso ocorre porque você está ignorando o alinhamento das colunas e apenas lendo os símbolos sequencialmente.
+Atenção, o usuário relatou que você "está colocando as folgas nos dias errados". Isso ocorre porque você está ignorando o alinhamento das colunas e apenas lendo os símbolos sequencialmente, sem considerar as células vazias (colunas em branco).
 
-REGRA DE ALINHAMENTO GEOMÉTRICO (COMPULSÓRIA):
-1. A escala de revezamento possui um cabeçalho no topo de cada tabela com os números de 1 a 31 representando os dias do mês de forma horizontal.
-2. Cada profissional tem uma linha correspondente na tabela.
-3. Para descobrir a qual dia do mês um símbolo (Ex: "F", "BH", "FF", "FE", "AT", "FÉRIAS") pertence, você DEVE alinhar verticalmente esse símbolo com o número do cabeçalho de 1 a 31.
-4. Por exemplo, se a linha do profissional possui traços ou símbolos de trabalho (M, T, D, N, U7, U9, etc.) nos primeiros 12 dias, e na 13ª célula houver um "F", isso significa que a folga é EXATAMENTE no DIA 13 de ${month}. Se você colocar que o profissional folgou no dia 1, a escala inteira estará incorreta.
-5. Siga estas posições de colunas, contando rigorosamente cada célula após a coluna "Horário":
-   - 1ª célula de escala = Dia 01
-   - 2ª célula de escala = Dia 02
-   - ...
-   - 31ª célula de escala = Dia 31
+Para resolver isso de forma 100% precisa, você DEVE seguir rigorosamente o método de "Reconstrução de Linha de 31 Células":
 
-MAPEAMENTO DE SÍMBOLOS:
+MÉTODO DE RECONSTRUÇÃO DE LINHA DE 31 CÉLULAS (OBRIGATÓRIO):
+1. Cada tabela tem no topo uma linha de cabeçalho com os dias de 1 a 31 organizados horizontalmente.
+2. Para cada colaborador na tabela, identifique a sua linha correspondente que vem logo após a coluna "Horário".
+3. Reconstrua mentalmente essa linha com exatamente 31 células, mapeando cada posição de coluna (1 a 31) ao seu conteúdo exato.
+   - Se uma coluna estiver em branco ou contiver apenas traços/pontos, preencha a posição com "".
+   - Se uma coluna contiver um turno de trabalho (ex: "UTI 7", "UTI 9", "M", "T", "D", "N", "19:00"), preencha com o nome do turno.
+   - Se uma coluna contiver um símbolo de folga ou afastamento (ex: "F", "FF", "FE", "BH", "AT", "Férias"), coloque o símbolo na posição correta correspondente ao dia.
+4. EXEMPLO DE RECONSTRUÇÃO CORRETA DA ADRIANA MAIA DE OLIVEIRA:
+   Se a linha dela tem "UTI 7" sob a coluna 8, "F" sob a coluna 10, "UTI 9" sob a coluna 12, "F" sob a coluna 14, "UTI 9" sob a coluna 16, "UTI 9" sob a coluna 18, "UTI 7" sob a coluna 20, "F" sob a coluna 22, "UTI 9" sob a coluna 24, "UTI 7" sob a coluna 26.
+   O array reconstruído de 31 posições DEVE ser exatamente:
+   [
+     "", "", "", "", "", "", "", "UTI 7", "", "F", 
+     "", "UTI 9", "", "F", "", "UTI 9", "", "UTI 9", "", "UTI 7", 
+     "", "F", "", "UTI 9", "", "UTI 7", "", "", "", "", ""
+   ]
+   Desta forma:
+   - "UTI 7" está na 8ª célula -> Dia 08.
+   - "F" está na 10ª célula -> Dia 10 (Data: ${year}-${month}-10).
+   - "UTI 9" está na 12ª célula -> Dia 12.
+   - "F" está na 14ª célula -> Dia 14 (Data: ${year}-${month}-14).
+   - "UTI 9" está na 16ª célula -> Dia 16.
+   - "UTI 9" está na 18ª célula -> Dia 18.
+   - "UTI 7" está na 20ª célula -> Dia 20.
+   - "F" está na 22ª célula -> Dia 22 (Data: ${year}-${month}-22).
+   - "UTI 9" está na 24ª célula -> Dia 24.
+   - "UTI 7" está na 26ª célula -> Dia 26.
+   Qualquer tentativa de pular as células em branco ou aproximar os dias resultará em erro grave. Você DEVE contar rigorosamente cada coluna da esquerda para a direita a partir do Dia 1 até o Dia 31.
+
+MAPEAMENTO DE SÍMBOLOS DE FOLGAS/AFASTAMENTOS:
 - "F" -> "Folga" (Dia único)
 - "BH" -> "Banco de Horas" (Dia único)
 - "FF" -> "Folga Feriado" (Dia único)
 - "FE" -> "Folga Enfermagem" (Dia único)
-- "FÉRIAS" ou "FERIAS" ou "ERIA" (se estendendo por várias colunas de dias) -> "Férias". Por exemplo, se a palavra "FÉRIAS" ou "FERIAS" ou letras "F", "E", "R", "I", "A", "S" cobrirem do dia 1 ao dia 17, você deve criar um registro de folga tipo "Férias" para CADA UM dos dias do intervalo (dia 01, 02, 03, ..., 17).
+- "FÉRIAS" ou "FERIAS" ou "ERIA" (se estendendo por várias colunas de dias) -> "Férias". Por exemplo, se a palavra "FÉRIAS" ou "FERIAS" ou as letras "F", "E", "R", "I", "A", "S" cobrirem do dia 1 ao dia 17, você deve criar um registro de folga tipo "Férias" para CADA UM dos dias do intervalo (dia 01, 02, 03, ..., 17).
 - "B" -> "Brigada de Incêndio"
 - "E" -> "Eleição"
 - "AT" -> "Atestado". Se estiver repetido em várias células seguidas (como "AT", "AT", "AT", "AT"), crie um registro individual do tipo "Atestado" para cada um desses dias específicos.
 - "I" -> "Integração"
 
 SÍMBOLOS QUE REPRESENTAM TRABALHO E DEVERÃO SER IGNORADOS:
-- Turnos de trabalho: "M", "T", "D", "N", "PS", "U7", "U9", "U12", "6", "5", "4", "2|3", "13:00", "07:00", "19:00", "TRS", "TOTAL", "X" (no caso do INSS).
+- Turnos de trabalho: "M", "T", "D", "N", "PS", "U7", "U9", "U12", "6", "5", "4", "2|3", "13:00", "07:00", "19:00", "TRS", "TOTAL", "X" (no caso do INSS), "UTI 7", "UTI 9", "UTI".
 - Células vazias ou preenchidas apenas com traços, pontos ou espaços.
 
 SAÍDA FORMATADA:
@@ -578,7 +597,7 @@ Retorne estritamente um objeto JSON com a seguinte estrutura:
   ]
 }
 
-Tenha extrema cautela com o alinhamento espacial de cada coluna de 1 a 31!`,
+Seja extremamente rigoroso e preciso no alinhamento espacial de cada coluna de 1 a 31!`,
           }
         ],
         config: {
