@@ -1048,7 +1048,7 @@ Atenciosamente,
 
       onUpdateUsuarios(novosUsuarios);
 
-      const formattedMessage = `*Hapvida - Hospital Nossa Senhora do Rosário* 🏥\nOlá, *${nome.trim()}*! 👋\n\nSeu perfil de acesso ao painel de gerenciamento de escalas foi criado com sucesso com as seguintes credenciais:\n\n👤 *Acesso Web*: Habilitado\n📧 *Login (E-mail)*: ${email.trim()}\n🔑 *Senha Provisória*: ${senhaProvisoria}\n🛡️ *Perfil de Acesso*: ${perfilAcesso}\n\n🌐 *Site*: EnfermagemHNSR.milksistemas.com\n\n_Por motivos de segurança, ao realizar seu primeiro acesso ao painel de escala, o sistema solicitará que você crie uma nova senha de segurança definitiva._`;
+      const formattedMessage = `*Hapvida - Hospital Nossa Senhora do Rosário* 🏥\nOlá, *${nome.trim()}*! 👋\n\nSeu perfil de acesso ao painel de gerenciamento de escalas foi criado com sucesso com as seguintes credenciais:\n\n👤 *Acesso Web*: Habilitado\n📧 *Login (E-mail)*: ${email.trim()}\n🔑 *Senha Provisória*: ${senhaProvisoria}\n🛡️ *Perfil de Acesso*: ${perfilAcesso}\n\n🌐 *Site*: https://sites.google.com/view/hapvida-enfermagem?usp=sharing\n\n_Por motivos de segurança, ao realizar seu primeiro acesso ao painel de escala, o sistema solicitará que você crie uma nova senha de segurança definitiva._`;
 
       setWhatsappNotification({
         phone: whatsapp.replace(/\D/g, ''),
@@ -1615,6 +1615,9 @@ Atenciosamente,
                           <div className="space-y-0.5">
                             <span className="text-xs font-bold text-slate-800 block truncate max-w-[150px]">{c.setor}</span>
                             <span className="text-[10px] text-slate-400 font-semibold block">{c.equipe}</span>
+                            <span className="text-[9px] text-slate-500 font-medium block truncate max-w-[180px]" title={`Gestor Direto: ${c.gestordireto || '---'} | Gestor Indireto: ${c.gestorindireto || '---'}`}>
+                              {c.gestordireto || '---'} | {c.gestorindireto || '---'}
+                            </span>
                           </div>
                         </td>
                         <td className="py-3.5 px-4 text-center">
